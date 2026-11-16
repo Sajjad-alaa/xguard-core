@@ -5,7 +5,12 @@ use std::{
     time::Duration,
 };
 
-use chrono::Utc;
+use sqlx::{PgPool, Postgres, pool::PoolConnection};
+use tokio::{
+    sync::{mpsc::UnboundedSender, oneshot},
+    time,
+};
+use tonic::{Code, Status};
 use xguard_common::{
     db::{
         Id,
@@ -13,13 +18,10 @@ use xguard_common::{
             Device, User, WireguardNetwork,
             device::WireguardNetworkDevice,
             mfa_flow::{MfaFlow, MfaFlowStep},
-            polling_token::PollingToken,
             vpn_client_mfa_session::{VpnClientMfaSession, VpnMfaFlowKind, hash_token},
-            vpn_client_session::{VpnClientMfaMethod, VpnClientSession, VpnClientSessionState},
+            vpn_client_session::VpnClientMfaMethod,
         },
-        wireguard_key::WireguardKey,
     },
-    secret::SecretStringWrapper,
     types::user_info::UserInfo,
 };
 use xguard_proto::{
@@ -35,30 +37,19 @@ use xguard_proto::{
         mfa_flow_remote_response, mfa_flow_start_response, mfa_flow_step_finish_request,
         mfa_step_result, mfa_step_started,
     },
-    enterprise::posture::{DevicePostureCheckRequest, DevicePostureData},
     proxy::{
         self, AwaitRemoteMfaFinishRequest, AwaitRemoteMfaFinishResponse,
         ClientMfaTokenValidationRequest, ClientMfaTokenValidationResponse, CoreResponse,
         core_response::Payload,
     },
 };
-use sqlx::{PgConnection, PgPool, Postgres, pool::PoolConnection};
-use tokio::{
-    sync::{mpsc::UnboundedSender, oneshot},
-    time,
-};
-use tonic::{Code, Status};
 
 use crate::{
-    enterprise::posture::{PostureCheckError, PostureResult, validate_posture},
     events::{BidiRequestContext, BidiStreamEvent, BidiStreamEventType, DesktopClientMfaEvent},
     grpc::{GatewayCommand, utils::parse_client_ip_agent},
     mfa_engine::{
         MfaEngine,
-        authorize::{
-            AuthorizeError, ClientMfaServerError, EventChannels,
-            build_authorized_gateway_network_info, create_new_session,
-        },
+        authorize::{AuthorizeError, ClientMfaServerError, EventChannels},
         error::StartError,
         legacy::{FinishError, LegacyProof},
         method::InitiateError,
@@ -106,12 +97,6 @@ struct ClientMfaStartContext {
     device: Device<Id>,
     user: User<Id>,
     ip: IpAddr,
-}
-
-#[allow(clippy::large_enum_variant)]
-enum ClientMfaStartPreparation {
-    Ready(ClientMfaStartContext),
-    PostureRejected { failed_checks: Vec<String> },
 }
 
 pub struct ClientMfaServer {
@@ -511,20 +496,9 @@ impl ClientMfaServer {
             device,
             user,
             ip,
-        } = match self
-            .prepare_client_mfa_start(
-                request.location_id,
-                &request.pubkey,
-                request.posture_data.as_ref(),
-                info,
-            )
-            .await?
-        {
-            ClientMfaStartPreparation::Ready(context) => context,
-            ClientMfaStartPreparation::PostureRejected { failed_checks } => {
-                return Err(MfaStartRejection::PostureFailed { failed_checks });
-            }
-        };
+        } = self
+            .prepare_client_mfa_start(request.location_id, &request.pubkey, info)
+            .await?;
 
         let (flow_id, step_methods) = self.resolve_legacy_mfa_flow(&location, &user).await?;
         let start_outcome = self
@@ -567,20 +541,9 @@ impl ClientMfaServer {
             device,
             user,
             ip,
-        } = match self
-            .prepare_client_mfa_start(
-                request.location_id,
-                &request.pubkey,
-                request.posture_data.as_ref(),
-                info,
-            )
-            .await?
-        {
-            ClientMfaStartPreparation::Ready(context) => context,
-            ClientMfaStartPreparation::PostureRejected { failed_checks } => {
-                return Err(MfaStartRejection::PostureFailed { failed_checks });
-            }
-        };
+        } = self
+            .prepare_client_mfa_start(request.location_id, &request.pubkey, info)
+            .await?;
 
         let (flow, steps) = self
             .resolve_mfa_flow(
@@ -707,9 +670,8 @@ impl ClientMfaServer {
         &self,
         location_id: Id,
         pubkey: &str,
-        posture_data: Option<&DevicePostureData>,
         info: Option<proxy::DeviceInfo>,
-    ) -> Result<ClientMfaStartPreparation, Status> {
+    ) -> Result<ClientMfaStartContext, Status> {
         let location = WireguardNetwork::find_by_id(&self.pool, location_id)
             .await
             .map_err(|err| {
@@ -754,70 +716,7 @@ impl ClientMfaServer {
 
         Self::validate_location_access(&self.pool, &location, &device, &user_info).await?;
 
-        // Parse device info before the posture block, the first thing here that can write.
         let (ip, _user_agent) = parse_client_ip_agent(&info).map_err(Status::internal)?;
-
-        let has_postures = location.has_postures(&self.pool).await.map_err(|err| {
-            error!(
-                "Failed to fetch postures for location {}({}): {err}",
-                location.name, location.id
-            );
-            Status::internal("unexpected error")
-        })?;
-        if has_postures {
-            let posture_result =
-                match validate_posture(&self.pool, location.id, pubkey, posture_data).await {
-                    Ok(result) => result,
-                    Err(PostureCheckError::NoActiveEnterpriseLicense) => {
-                        debug!(
-                            "No active license - skipping posture check for location {location}"
-                        );
-                        PostureResult::Pass
-                    }
-                    Err(PostureCheckError::DbError(e)) => {
-                        error!("DB error during posture validation: {e}");
-                        return Err(Status::internal("unexpected error"));
-                    }
-                };
-
-            let context =
-                BidiRequestContext::new(user.id, user.username.clone(), ip, device.name.clone());
-            match posture_result {
-                PostureResult::Fail(reasons) => {
-                    let failed_checks = reasons.iter().map(ToString::to_string).collect::<Vec<_>>();
-                    if let Err(err) = self.emit_event(BidiStreamEvent {
-                        context,
-                        event: BidiStreamEventType::DesktopClientMfa(Box::new(
-                            DesktopClientMfaEvent::PostureCheckFailed {
-                                device: device.clone(),
-                                location: location.clone(),
-                                device_posture_data: posture_data.cloned(),
-                                failed_checks: failed_checks.clone(),
-                            },
-                        )),
-                    }) {
-                        error!("Failed to emit DevicePostureCheckFailed event: {err}");
-                    }
-                    self.revoke_rejected_posture_sessions(&location, &user, &device, ip)
-                        .await?;
-                    return Ok(ClientMfaStartPreparation::PostureRejected { failed_checks });
-                }
-                PostureResult::Pass => {
-                    if let Err(err) = self.emit_event(BidiStreamEvent {
-                        context,
-                        event: BidiStreamEventType::DesktopClientMfa(Box::new(
-                            DesktopClientMfaEvent::PostureCheckPassed {
-                                device: device.clone(),
-                                location: location.clone(),
-                                device_posture_data: posture_data.cloned(),
-                            },
-                        )),
-                    }) {
-                        error!("Failed to emit DevicePostureCheckPassed event: {err}");
-                    }
-                }
-            }
-        }
 
         user.verify_mfa_state(&self.pool).await.map_err(|err| {
             error!(
@@ -827,12 +726,12 @@ impl ClientMfaServer {
             Status::internal("unexpected error")
         })?;
 
-        Ok(ClientMfaStartPreparation::Ready(ClientMfaStartContext {
+        Ok(ClientMfaStartContext {
             location,
             device,
             user,
             ip,
-        }))
+        })
     }
 
     /// Resolve a flow that can be represented by the legacy single-step contract.
@@ -1418,348 +1317,10 @@ impl ClientMfaServer {
         )
         .await
     }
-
-    /// Handles a `PostureCheck` request from the proxy bidi stream.
-    ///
-    /// Validates the posture data, and on success creates a new `VpnClientSession`
-    /// with a generated preshared key. Returns a typed outcome so the caller can
-    /// map it to the appropriate `CoreResponse` payload without needing to know about
-    /// session internals.
-    ///
-    /// A location with no postures assigned is approved with an *empty* preshared key and no
-    /// session, since its peers are handed to the gateway without one.
-    pub async fn handle_posture_check(
-        &self,
-        request: DevicePostureCheckRequest,
-        info: Option<proxy::DeviceInfo>,
-    ) -> Result<PostureCheckOutcome, Status> {
-        debug!(
-            "Handling posture check for device pubkey={} location_id={}",
-            request.pubkey, request.location_id
-        );
-
-        // Authenticate the caller before touching anything else.
-        // Validated first so that an unauthenticated caller cannot use the error codes below to
-        // probe which locations exist or which public keys are enrolled.
-        let Some(token) = request.token.as_deref().filter(|token| !token.is_empty()) else {
-            error!(
-                "Posture check: missing polling token for pubkey {}",
-                request.pubkey
-            );
-            return Err(Status::unauthenticated("missing token"));
-        };
-        let polling_token = PollingToken::find(&self.pool, token)
-            .await
-            .map_err(|err| {
-                error!("Posture check: failed to look up polling token: {err}");
-                Status::internal("unexpected error")
-            })?
-            .ok_or_else(|| {
-                error!(
-                    "Posture check: unknown polling token for claimed pubkey {}",
-                    request.pubkey
-                );
-                Status::unauthenticated("invalid token")
-            })?;
-
-        // Look up location, device, and user.
-        let Ok(Some(location)) =
-            WireguardNetwork::find_by_id(&self.pool, request.location_id).await
-        else {
-            error!("Posture check: location {} not found", request.location_id);
-            return Err(Status::invalid_argument("location not found"));
-        };
-
-        if location.mfa_enabled {
-            error!(
-                "Posture check: location {location} has MFA enabled, posture-only sessions are not allowed"
-            );
-            return Err(Status::invalid_argument("location has MFA enabled"));
-        }
-
-        let Ok(Some(device)) = Device::find_by_pubkey(&self.pool, &request.pubkey).await else {
-            error!(
-                "Posture check: device with pubkey {} not found",
-                request.pubkey
-            );
-            return Err(Status::invalid_argument("device not found"));
-        };
-
-        // Make sure caller owns the device.
-        if polling_token.device_id != device.id {
-            error!(
-                "Posture check: polling token belongs to device {} but request claims pubkey {} \
-                (device {})",
-                polling_token.device_id, request.pubkey, device.id
-            );
-            return Err(Status::unauthenticated("token does not match device"));
-        }
-
-        let Ok(Some(user)) = User::find_by_id(&self.pool, device.user_id).await else {
-            error!("Posture check: user {} not found", device.user_id);
-            return Err(Status::internal("user not found"));
-        };
-
-        // Ensure user is active
-        if !user.is_active {
-            error!("Posture check: user {} is inactive", device.user_id);
-            return Err(Status::invalid_argument("user is inactive"));
-        }
-
-        // Validate that the user is allowed to access this location.
-        // `password_management_disabled` is irrelevant here (internal access validation,
-        // not an API response), so the OIDC flag is not loaded.
-        let user_info = UserInfo::from_user(&self.pool, user.clone(), false)
-            .await
-            .map_err(|err| {
-                error!(
-                    username = %user.username,
-                    error = ?err,
-                    "Posture check: failed to fetch user info"
-                );
-                Status::internal("unexpected error")
-            })?;
-        Self::validate_location_access(&self.pool, &location, &device, &user_info).await?;
-
-        // If location has no postures assigned, approve the posture check returning empty string as PSK.
-        // This way the client can recover on it's own if the admin unassigns PCs from a location and the client
-        // didn't get the config yet. Matters especially for service locations where the client UI may not be
-        // running and therefore config is not being polled.
-        if !location.has_postures(&self.pool).await.map_err(|err| {
-            error!("Posture check: failed to fetch postures for location {location}: {err}");
-            Status::internal("unexpected error")
-        })? {
-            info!(
-                "Posture check: location {location} has no postures assigned, approving device {} \
-                with an empty preshared key without creating a session",
-                device.wireguard_pubkey
-            );
-            return Ok(PostureCheckOutcome::Approved {
-                preshared_key: String::new(),
-            });
-        }
-
-        let posture_result = match validate_posture(
-            &self.pool,
-            location.id,
-            &device.wireguard_pubkey,
-            request.device_posture_data.as_ref(),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(PostureCheckError::NoActiveEnterpriseLicense) => {
-                debug!("No active license - skipping posture check for location {location}");
-                PostureResult::Pass
-            }
-            Err(PostureCheckError::DbError(e)) => {
-                error!("DB error during posture validation: {e}");
-                return Err(Status::internal("unexpected error"));
-            }
-        };
-
-        let (ip, _user_agent) = parse_client_ip_agent(&info).map_err(Status::internal)?;
-        let context =
-            BidiRequestContext::new(user.id, user.username.clone(), ip, device.name.clone());
-
-        // Posture check failed - return payload with reasons
-        if let PostureResult::Fail(reasons) = posture_result {
-            let failed_checks = reasons.iter().map(ToString::to_string).collect::<Vec<_>>();
-            if let Err(err) = self.emit_event(BidiStreamEvent {
-                context,
-                event: BidiStreamEventType::DesktopClientMfa(Box::new(
-                    DesktopClientMfaEvent::PostureCheckFailed {
-                        device: device.clone(),
-                        location: location.clone(),
-                        device_posture_data: request.device_posture_data.clone(),
-                        failed_checks: failed_checks.clone(),
-                    },
-                )),
-            }) {
-                error!("Failed to emit DevicePostureCheckFailed event: {err}");
-            }
-
-            self.revoke_rejected_posture_sessions(&location, &user, &device, ip)
-                .await?;
-
-            return Ok(PostureCheckOutcome::Rejected { failed_checks });
-        }
-
-        if let Err(err) = self.emit_event(BidiStreamEvent {
-            context,
-            event: BidiStreamEventType::DesktopClientMfa(Box::new(
-                DesktopClientMfaEvent::PostureCheckPassed {
-                    device: device.clone(),
-                    location: location.clone(),
-                    device_posture_data: request.device_posture_data.clone(),
-                },
-            )),
-        }) {
-            error!("Failed to emit DevicePostureCheckPassed event: {err}");
-        }
-
-        // Posture check succeeded - create a VPN session.
-        let key = WireguardKey::generate();
-        let preshared_key = SecretStringWrapper::from(key.public());
-
-        let mut transaction = self.pool.begin().await.map_err(|err| {
-            error!("Failed to begin transaction for posture session: {err}");
-            Status::internal("unexpected error")
-        })?;
-
-        let Ok(Some(network_device)) =
-            WireguardNetworkDevice::find(&mut *transaction, device.id, location.id).await
-        else {
-            error!(
-                "Posture check: failed to fetch network config for device {device} and location {location}"
-            );
-            return Err(Status::internal("unexpected error"));
-        };
-
-        let gateway_network_info =
-            build_authorized_gateway_network_info(network_device, preshared_key.clone());
-
-        create_new_session(
-            &self.channels,
-            &mut transaction,
-            &location,
-            &user,
-            &device,
-            false,
-            preshared_key.clone(),
-        )
-        .await?;
-
-        transaction.commit().await.map_err(|err| {
-            error!("Failed to commit transaction for posture session: {err}");
-            Status::internal("unexpected error")
-        })?;
-
-        let event =
-            GatewayCommand::VpnSessionAuthorized(location.id, device.clone(), gateway_network_info);
-        self.channels.gateway_tx.send(event).map_err(|err| {
-            error!("Error sending WireGuard event: {err}");
-            Status::internal("unexpected error")
-        })?;
-
-        info!(
-            "Posture check passed for device {} (user {}) in location {}. Session created.",
-            device, user.username, location
-        );
-
-        Ok(PostureCheckOutcome::Approved {
-            preshared_key: key.public(),
-        })
-    }
-
-    /// Revokes sessions after a definitive posture rejection and publishes resulting events.
-    async fn revoke_rejected_posture_sessions(
-        &self,
-        location: &WireguardNetwork<Id>,
-        user: &User<Id>,
-        device: &Device<Id>,
-        ip: IpAddr,
-    ) -> Result<(), Status> {
-        let mut transaction = self.pool.begin().await.map_err(|err| {
-            error!("Failed to begin transaction for posture session rejection: {err}");
-            Status::internal("unexpected error")
-        })?;
-        let disconnect_events = self
-            .revoke_active_posture_sessions(&mut transaction, location, user, device, ip)
-            .await?;
-        transaction.commit().await.map_err(|err| {
-            error!("Failed to commit rejected posture session cleanup: {err}");
-            Status::internal("unexpected error")
-        })?;
-
-        let event = GatewayCommand::VpnSessionDeauthorized(location.id, device.clone());
-        if let Err(err) = self.channels.gateway_tx.send(event) {
-            error!("Error sending WireGuard event: {err}");
-        }
-        for event in disconnect_events {
-            if let Err(err) = self.emit_event(event) {
-                error!("Failed to emit VPN session disconnect event: {err}");
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Marks active posture sessions disconnected and returns their audit events.
-    async fn revoke_active_posture_sessions(
-        &self,
-        conn: &mut PgConnection,
-        location: &WireguardNetwork<Id>,
-        user: &User<Id>,
-        device: &Device<Id>,
-        ip: IpAddr,
-    ) -> Result<Vec<BidiStreamEvent>, Status> {
-        let active_sessions = VpnClientSession::get_all_active_device_sessions_in_location(
-            &mut *conn,
-            location.id,
-            device.id,
-        )
-        .await
-        .map_err(|err| {
-            error!(
-                "Failed to fetch active VPN sessions for device {device} in location {location}: {err}"
-            );
-            Status::internal("unexpected error")
-        })?;
-        if !active_sessions.is_empty() {
-            info!(
-                "Posture check rejected device {device} in location {location}. Disconnecting {} active sessions",
-                active_sessions.len()
-            );
-        }
-
-        let mut events = Vec::new();
-        for mut session in active_sessions {
-            let is_connected = session.state == VpnClientSessionState::Connected;
-            let is_mfa_session = session.is_mfa_session;
-            let disconnect_timestamp = Utc::now().naive_utc();
-            session.disconnected_at = Some(disconnect_timestamp);
-            session.state = VpnClientSessionState::Disconnected;
-            session.save(&mut *conn).await.map_err(|err| {
-                error!("Failed to revoke rejected posture session {session:?}: {err}");
-                Status::internal("unexpected error")
-            })?;
-
-            if is_connected {
-                events.push(BidiStreamEvent {
-                    context: BidiRequestContext {
-                        timestamp: disconnect_timestamp,
-                        user_id: user.id,
-                        username: user.username.clone(),
-                        ip: Some(ip),
-                        device_name: format!("{device}"),
-                    },
-                    event: BidiStreamEventType::DesktopClientMfa(Box::new(
-                        DesktopClientMfaEvent::Disconnected {
-                            location: location.clone(),
-                            device: device.clone(),
-                            is_mfa_session,
-                        },
-                    )),
-                });
-            }
-        }
-
-        Ok(events)
-    }
-}
-
-/// Result of a [`ClientMfaServer::handle_posture_check`] call.
-pub enum PostureCheckOutcome {
-    /// Posture evaluation passed; the contained key must be returned to the client.
-    Approved { preshared_key: String },
-    /// Posture evaluation failed; the contained list describes which checks failed.
-    Rejected { failed_checks: Vec<String> },
 }
 
 #[derive(Debug)]
 pub enum MfaStartRejection {
-    PostureFailed { failed_checks: Vec<String> },
     Status(Status),
 }
 

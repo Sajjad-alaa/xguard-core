@@ -5,8 +5,8 @@ import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import { FlowEndImageVariant } from '../../shared/components/FlowEndLayout/components/FlowEndImage/types';
 import { FlowEndLayout } from '../../shared/components/FlowEndLayout/FlowEndLayout';
-import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 import { useAuth } from '../../shared/hooks/useAuth';
+import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 
 export const ErrorMigrationInProgressPage = () => {
   const navigate = useNavigate();

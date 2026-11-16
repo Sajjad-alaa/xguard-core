@@ -11,6 +11,8 @@ import { useMemo, useState } from 'react';
 import { m } from '../../paraglide/messages';
 import type { MfaFlowListItemResponse } from '../../shared/api/types';
 import type { SelectionOption } from '../../shared/components/SelectionSection/type';
+import { closeModal, openModal } from '../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
@@ -30,8 +32,6 @@ import { TooltipProvider } from '../../shared/xguard-ui/providers/tooltip/Toolti
 import { TooltipTrigger } from '../../shared/xguard-ui/providers/tooltip/TooltipTrigger';
 import { ThemeVariable } from '../../shared/xguard-ui/types';
 import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
-import { closeModal, openModal } from '../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import {
   getDeleteMfaFlowModalData,
   getMfaFlowDeleteBlockingLocations,

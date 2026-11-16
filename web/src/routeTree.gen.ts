@@ -14,7 +14,6 @@ import { Route as R404RouteImport } from './routes/404'
 import { Route as AuthorizedRouteImport } from './routes/_authorized'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ConsentRouteImport } from './routes/consent'
-import { Route as SmtpOauthCallbackRouteImport } from './routes/smtp-oauth-callback'
 import { Route as SnackbarRouteImport } from './routes/snackbar'
 import { Route as AuthorizedDefaultRouteImport } from './routes/_authorized/_default'
 import { Route as AuthorizedPlaygroundRouteImport } from './routes/_authorized/playground'
@@ -22,7 +21,6 @@ import { Route as WizardSetupRouteImport } from './routes/_wizard/setup'
 import { Route as WizardSetupGatewayRouteImport } from './routes/_wizard/setup-gateway'
 import { Route as WizardSetupLoginRouteImport } from './routes/_wizard/setup-login'
 import { Route as AuthIndexRouteImport } from './routes/auth/index'
-import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AuthLoadingRouteImport } from './routes/auth/loading'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthMfaRouteImport } from './routes/auth/mfa'
@@ -36,9 +34,7 @@ import { Route as AuthorizedDefaultOpenidRouteImport } from './routes/_authorize
 import { Route as AuthorizedDefaultSupportRouteImport } from './routes/_authorized/_default/support'
 import { Route as AuthorizedDefaultUsersRouteImport } from './routes/_authorized/_default/users'
 import { Route as AuthorizedDefaultWebhooksRouteImport } from './routes/_authorized/_default/webhooks'
-import { Route as AuthorizedWizardAddExternalOpenidRouteImport } from './routes/_authorized/_wizard/add-external-openid'
 import { Route as AuthorizedWizardAddLocationRouteImport } from './routes/_authorized/_wizard/add-location'
-import { Route as AuthorizedWizardAddPostureCheckRouteImport } from './routes/_authorized/_wizard/add-posture-check'
 import { Route as AuthorizedWizardSettingsCoreCertificateRouteImport } from './routes/_authorized/_wizard/settings-core-certificate'
 import { Route as AuthorizedWizardSettingsEdgeCertificateRouteImport } from './routes/_authorized/_wizard/settings-edge-certificate'
 import { Route as AuthorizedWizardSetupEdgeRouteImport } from './routes/_authorized/_wizard/setup-edge'
@@ -48,28 +44,14 @@ import { Route as AuthMfaEmailRouteImport } from './routes/auth/mfa/email'
 import { Route as AuthMfaRecoveryRouteImport } from './routes/auth/mfa/recovery'
 import { Route as AuthMfaTotpRouteImport } from './routes/auth/mfa/totp'
 import { Route as AuthMfaWebauthnRouteImport } from './routes/auth/mfa/webauthn'
-import { Route as AuthorizedDefaultAclAddAliasRouteImport } from './routes/_authorized/_default/acl/add-alias'
-import { Route as AuthorizedDefaultAclAddDestinationRouteImport } from './routes/_authorized/_default/acl/add-destination'
-import { Route as AuthorizedDefaultAclAddRuleRouteImport } from './routes/_authorized/_default/acl/add-rule'
-import { Route as AuthorizedDefaultAclAliasesRouteImport } from './routes/_authorized/_default/acl/aliases'
-import { Route as AuthorizedDefaultAclDestinationsRouteImport } from './routes/_authorized/_default/acl/destinations'
-import { Route as AuthorizedDefaultAclEditAliasRouteImport } from './routes/_authorized/_default/acl/edit-alias'
-import { Route as AuthorizedDefaultAclEditDestinationRouteImport } from './routes/_authorized/_default/acl/edit-destination'
-import { Route as AuthorizedDefaultAclEditRuleRouteImport } from './routes/_authorized/_default/acl/edit-rule'
-import { Route as AuthorizedDefaultAclPostureChecksRouteImport } from './routes/_authorized/_default/acl/posture-checks'
-import { Route as AuthorizedDefaultAclRulesRouteImport } from './routes/_authorized/_default/acl/rules'
 import { Route as AuthorizedDefaultLocationsIndexRouteImport } from './routes/_authorized/_default/locations/index'
 import { Route as AuthorizedDefaultMfaIndexRouteImport } from './routes/_authorized/_default/mfa/index'
 import { Route as AuthorizedDefaultMfaAddFlowRouteImport } from './routes/_authorized/_default/mfa/add-flow'
 import { Route as AuthorizedDefaultSettingsIndexRouteImport } from './routes/_authorized/_default/settings/index'
 import { Route as AuthorizedDefaultSettingsCaRouteImport } from './routes/_authorized/_default/settings/ca'
 import { Route as AuthorizedDefaultSettingsCertsRouteImport } from './routes/_authorized/_default/settings/certs'
-import { Route as AuthorizedDefaultSettingsClientRouteImport } from './routes/_authorized/_default/settings/client'
-import { Route as AuthorizedDefaultSettingsEditOpenidRouteImport } from './routes/_authorized/_default/settings/edit-openid'
 import { Route as AuthorizedDefaultSettingsGatewayNotificationsRouteImport } from './routes/_authorized/_default/settings/gateway-notifications'
 import { Route as AuthorizedDefaultSettingsInstanceRouteImport } from './routes/_authorized/_default/settings/instance'
-import { Route as AuthorizedDefaultSettingsLdapRouteImport } from './routes/_authorized/_default/settings/ldap'
-import { Route as AuthorizedDefaultSettingsOpenidRouteImport } from './routes/_authorized/_default/settings/openid'
 import { Route as AuthorizedDefaultSettingsSmtpRouteImport } from './routes/_authorized/_default/settings/smtp'
 import { Route as AuthorizedDefaultUserUsernameRouteImport } from './routes/_authorized/_default/user/$username'
 import { Route as AuthorizedDefaultVpnOverviewIndexRouteImport } from './routes/_authorized/_default/vpn-overview/index'
@@ -78,7 +60,6 @@ import { Route as AuthorizedDefaultEdgeEdgeIdEditRouteImport } from './routes/_a
 import { Route as AuthorizedDefaultGatewayGatewayIdEditRouteImport } from './routes/_authorized/_default/gateway/$gatewayId/edit'
 import { Route as AuthorizedDefaultLocationsLocationIdEditRouteImport } from './routes/_authorized/_default/locations/$locationId/edit'
 import { Route as AuthorizedDefaultMfaFlowIdEditRouteImport } from './routes/_authorized/_default/mfa-flow/$id/edit'
-import { Route as AuthorizedDefaultAclPostureChecksPostureCheckIdEditRouteImport } from './routes/_authorized/_default/acl/posture-checks/$postureCheckId/edit'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -102,11 +83,6 @@ const AuthRoute = AuthRouteImport.update({
 const ConsentRoute = ConsentRouteImport.update({
   id: '/consent',
   path: '/consent',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SmtpOauthCallbackRoute = SmtpOauthCallbackRouteImport.update({
-  id: '/smtp-oauth-callback',
-  path: '/smtp-oauth-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SnackbarRoute = SnackbarRouteImport.update({
@@ -141,11 +117,6 @@ const WizardSetupLoginRoute = WizardSetupLoginRouteImport.update({
 const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthRoute,
-} as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/callback',
-  path: '/callback',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthLoadingRoute = AuthLoadingRouteImport.update({
@@ -218,22 +189,10 @@ const AuthorizedDefaultWebhooksRoute =
     path: '/webhooks',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
-const AuthorizedWizardAddExternalOpenidRoute =
-  AuthorizedWizardAddExternalOpenidRouteImport.update({
-    id: '/_wizard/add-external-openid',
-    path: '/add-external-openid',
-    getParentRoute: () => AuthorizedRoute,
-  } as any)
 const AuthorizedWizardAddLocationRoute =
   AuthorizedWizardAddLocationRouteImport.update({
     id: '/_wizard/add-location',
     path: '/add-location',
-    getParentRoute: () => AuthorizedRoute,
-  } as any)
-const AuthorizedWizardAddPostureCheckRoute =
-  AuthorizedWizardAddPostureCheckRouteImport.update({
-    id: '/_wizard/add-posture-check',
-    path: '/add-posture-check',
     getParentRoute: () => AuthorizedRoute,
   } as any)
 const AuthorizedWizardSettingsCoreCertificateRoute =
@@ -285,66 +244,6 @@ const AuthMfaWebauthnRoute = AuthMfaWebauthnRouteImport.update({
   path: '/webauthn',
   getParentRoute: () => AuthMfaRoute,
 } as any)
-const AuthorizedDefaultAclAddAliasRoute =
-  AuthorizedDefaultAclAddAliasRouteImport.update({
-    id: '/acl/add-alias',
-    path: '/acl/add-alias',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclAddDestinationRoute =
-  AuthorizedDefaultAclAddDestinationRouteImport.update({
-    id: '/acl/add-destination',
-    path: '/acl/add-destination',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclAddRuleRoute =
-  AuthorizedDefaultAclAddRuleRouteImport.update({
-    id: '/acl/add-rule',
-    path: '/acl/add-rule',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclAliasesRoute =
-  AuthorizedDefaultAclAliasesRouteImport.update({
-    id: '/acl/aliases',
-    path: '/acl/aliases',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclDestinationsRoute =
-  AuthorizedDefaultAclDestinationsRouteImport.update({
-    id: '/acl/destinations',
-    path: '/acl/destinations',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclEditAliasRoute =
-  AuthorizedDefaultAclEditAliasRouteImport.update({
-    id: '/acl/edit-alias',
-    path: '/acl/edit-alias',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclEditDestinationRoute =
-  AuthorizedDefaultAclEditDestinationRouteImport.update({
-    id: '/acl/edit-destination',
-    path: '/acl/edit-destination',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclEditRuleRoute =
-  AuthorizedDefaultAclEditRuleRouteImport.update({
-    id: '/acl/edit-rule',
-    path: '/acl/edit-rule',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclPostureChecksRoute =
-  AuthorizedDefaultAclPostureChecksRouteImport.update({
-    id: '/acl/posture-checks',
-    path: '/acl/posture-checks',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultAclRulesRoute =
-  AuthorizedDefaultAclRulesRouteImport.update({
-    id: '/acl/rules',
-    path: '/acl/rules',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
 const AuthorizedDefaultLocationsIndexRoute =
   AuthorizedDefaultLocationsIndexRouteImport.update({
     id: '/locations/',
@@ -381,18 +280,6 @@ const AuthorizedDefaultSettingsCertsRoute =
     path: '/settings/certs',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
-const AuthorizedDefaultSettingsClientRoute =
-  AuthorizedDefaultSettingsClientRouteImport.update({
-    id: '/settings/client',
-    path: '/settings/client',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultSettingsEditOpenidRoute =
-  AuthorizedDefaultSettingsEditOpenidRouteImport.update({
-    id: '/settings/edit-openid',
-    path: '/settings/edit-openid',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
 const AuthorizedDefaultSettingsGatewayNotificationsRoute =
   AuthorizedDefaultSettingsGatewayNotificationsRouteImport.update({
     id: '/settings/gateway-notifications',
@@ -403,18 +290,6 @@ const AuthorizedDefaultSettingsInstanceRoute =
   AuthorizedDefaultSettingsInstanceRouteImport.update({
     id: '/settings/instance',
     path: '/settings/instance',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultSettingsLdapRoute =
-  AuthorizedDefaultSettingsLdapRouteImport.update({
-    id: '/settings/ldap',
-    path: '/settings/ldap',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
-const AuthorizedDefaultSettingsOpenidRoute =
-  AuthorizedDefaultSettingsOpenidRouteImport.update({
-    id: '/settings/openid',
-    path: '/settings/openid',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
 const AuthorizedDefaultSettingsSmtpRoute =
@@ -465,25 +340,17 @@ const AuthorizedDefaultMfaFlowIdEditRoute =
     path: '/mfa-flow/$id/edit',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
-const AuthorizedDefaultAclPostureChecksPostureCheckIdEditRoute =
-  AuthorizedDefaultAclPostureChecksPostureCheckIdEditRouteImport.update({
-    id: '/$postureCheckId/edit',
-    path: '/$postureCheckId/edit',
-    getParentRoute: () => AuthorizedDefaultAclPostureChecksRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/404': typeof R404Route
   '/auth': typeof AuthRouteWithChildren
   '/consent': typeof ConsentRoute
-  '/smtp-oauth-callback': typeof SmtpOauthCallbackRoute
   '/snackbar': typeof SnackbarRoute
   '/playground': typeof AuthorizedPlaygroundRoute
   '/setup': typeof WizardSetupRoute
   '/setup-gateway': typeof WizardSetupGatewayRoute
   '/setup-login': typeof WizardSetupLoginRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/auth/loading': typeof AuthLoadingRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/mfa': typeof AuthMfaRouteWithChildren
@@ -498,9 +365,7 @@ export interface FileRoutesByFullPath {
   '/support': typeof AuthorizedDefaultSupportRoute
   '/users': typeof AuthorizedDefaultUsersRoute
   '/webhooks': typeof AuthorizedDefaultWebhooksRoute
-  '/add-external-openid': typeof AuthorizedWizardAddExternalOpenidRoute
   '/add-location': typeof AuthorizedWizardAddLocationRoute
-  '/add-posture-check': typeof AuthorizedWizardAddPostureCheckRoute
   '/settings-core-certificate': typeof AuthorizedWizardSettingsCoreCertificateRoute
   '/settings-edge-certificate': typeof AuthorizedWizardSettingsEdgeCertificateRoute
   '/setup-edge': typeof AuthorizedWizardSetupEdgeRoute
@@ -510,25 +375,11 @@ export interface FileRoutesByFullPath {
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
   '/migration/': typeof WizardMigrationIndexRoute
-  '/acl/add-alias': typeof AuthorizedDefaultAclAddAliasRoute
-  '/acl/add-destination': typeof AuthorizedDefaultAclAddDestinationRoute
-  '/acl/add-rule': typeof AuthorizedDefaultAclAddRuleRoute
-  '/acl/aliases': typeof AuthorizedDefaultAclAliasesRoute
-  '/acl/destinations': typeof AuthorizedDefaultAclDestinationsRoute
-  '/acl/edit-alias': typeof AuthorizedDefaultAclEditAliasRoute
-  '/acl/edit-destination': typeof AuthorizedDefaultAclEditDestinationRoute
-  '/acl/edit-rule': typeof AuthorizedDefaultAclEditRuleRoute
-  '/acl/posture-checks': typeof AuthorizedDefaultAclPostureChecksRouteWithChildren
-  '/acl/rules': typeof AuthorizedDefaultAclRulesRoute
   '/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
-  '/settings/client': typeof AuthorizedDefaultSettingsClientRoute
-  '/settings/edit-openid': typeof AuthorizedDefaultSettingsEditOpenidRoute
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
-  '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
-  '/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -540,19 +391,16 @@ export interface FileRoutesByFullPath {
   '/gateway/$gatewayId/edit': typeof AuthorizedDefaultGatewayGatewayIdEditRoute
   '/locations/$locationId/edit': typeof AuthorizedDefaultLocationsLocationIdEditRoute
   '/mfa-flow/$id/edit': typeof AuthorizedDefaultMfaFlowIdEditRoute
-  '/acl/posture-checks/$postureCheckId/edit': typeof AuthorizedDefaultAclPostureChecksPostureCheckIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/404': typeof R404Route
   '/consent': typeof ConsentRoute
-  '/smtp-oauth-callback': typeof SmtpOauthCallbackRoute
   '/snackbar': typeof SnackbarRoute
   '/playground': typeof AuthorizedPlaygroundRoute
   '/setup': typeof WizardSetupRoute
   '/setup-gateway': typeof WizardSetupGatewayRoute
   '/setup-login': typeof WizardSetupLoginRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/auth/loading': typeof AuthLoadingRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/mfa': typeof AuthMfaRouteWithChildren
@@ -567,9 +415,7 @@ export interface FileRoutesByTo {
   '/support': typeof AuthorizedDefaultSupportRoute
   '/users': typeof AuthorizedDefaultUsersRoute
   '/webhooks': typeof AuthorizedDefaultWebhooksRoute
-  '/add-external-openid': typeof AuthorizedWizardAddExternalOpenidRoute
   '/add-location': typeof AuthorizedWizardAddLocationRoute
-  '/add-posture-check': typeof AuthorizedWizardAddPostureCheckRoute
   '/settings-core-certificate': typeof AuthorizedWizardSettingsCoreCertificateRoute
   '/settings-edge-certificate': typeof AuthorizedWizardSettingsEdgeCertificateRoute
   '/setup-edge': typeof AuthorizedWizardSetupEdgeRoute
@@ -579,25 +425,11 @@ export interface FileRoutesByTo {
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
   '/migration': typeof WizardMigrationIndexRoute
-  '/acl/add-alias': typeof AuthorizedDefaultAclAddAliasRoute
-  '/acl/add-destination': typeof AuthorizedDefaultAclAddDestinationRoute
-  '/acl/add-rule': typeof AuthorizedDefaultAclAddRuleRoute
-  '/acl/aliases': typeof AuthorizedDefaultAclAliasesRoute
-  '/acl/destinations': typeof AuthorizedDefaultAclDestinationsRoute
-  '/acl/edit-alias': typeof AuthorizedDefaultAclEditAliasRoute
-  '/acl/edit-destination': typeof AuthorizedDefaultAclEditDestinationRoute
-  '/acl/edit-rule': typeof AuthorizedDefaultAclEditRuleRoute
-  '/acl/posture-checks': typeof AuthorizedDefaultAclPostureChecksRouteWithChildren
-  '/acl/rules': typeof AuthorizedDefaultAclRulesRoute
   '/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
-  '/settings/client': typeof AuthorizedDefaultSettingsClientRoute
-  '/settings/edit-openid': typeof AuthorizedDefaultSettingsEditOpenidRoute
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
-  '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
-  '/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -609,7 +441,6 @@ export interface FileRoutesByTo {
   '/gateway/$gatewayId/edit': typeof AuthorizedDefaultGatewayGatewayIdEditRoute
   '/locations/$locationId/edit': typeof AuthorizedDefaultLocationsLocationIdEditRoute
   '/mfa-flow/$id/edit': typeof AuthorizedDefaultMfaFlowIdEditRoute
-  '/acl/posture-checks/$postureCheckId/edit': typeof AuthorizedDefaultAclPostureChecksPostureCheckIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -618,14 +449,12 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/consent': typeof ConsentRoute
-  '/smtp-oauth-callback': typeof SmtpOauthCallbackRoute
   '/snackbar': typeof SnackbarRoute
   '/_authorized/_default': typeof AuthorizedDefaultRouteWithChildren
   '/_authorized/playground': typeof AuthorizedPlaygroundRoute
   '/_wizard/setup': typeof WizardSetupRoute
   '/_wizard/setup-gateway': typeof WizardSetupGatewayRoute
   '/_wizard/setup-login': typeof WizardSetupLoginRoute
-  '/auth/callback': typeof AuthCallbackRoute
   '/auth/loading': typeof AuthLoadingRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/mfa': typeof AuthMfaRouteWithChildren
@@ -640,9 +469,7 @@ export interface FileRoutesById {
   '/_authorized/_default/support': typeof AuthorizedDefaultSupportRoute
   '/_authorized/_default/users': typeof AuthorizedDefaultUsersRoute
   '/_authorized/_default/webhooks': typeof AuthorizedDefaultWebhooksRoute
-  '/_authorized/_wizard/add-external-openid': typeof AuthorizedWizardAddExternalOpenidRoute
   '/_authorized/_wizard/add-location': typeof AuthorizedWizardAddLocationRoute
-  '/_authorized/_wizard/add-posture-check': typeof AuthorizedWizardAddPostureCheckRoute
   '/_authorized/_wizard/settings-core-certificate': typeof AuthorizedWizardSettingsCoreCertificateRoute
   '/_authorized/_wizard/settings-edge-certificate': typeof AuthorizedWizardSettingsEdgeCertificateRoute
   '/_authorized/_wizard/setup-edge': typeof AuthorizedWizardSetupEdgeRoute
@@ -652,25 +479,11 @@ export interface FileRoutesById {
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
   '/_wizard/migration/': typeof WizardMigrationIndexRoute
-  '/_authorized/_default/acl/add-alias': typeof AuthorizedDefaultAclAddAliasRoute
-  '/_authorized/_default/acl/add-destination': typeof AuthorizedDefaultAclAddDestinationRoute
-  '/_authorized/_default/acl/add-rule': typeof AuthorizedDefaultAclAddRuleRoute
-  '/_authorized/_default/acl/aliases': typeof AuthorizedDefaultAclAliasesRoute
-  '/_authorized/_default/acl/destinations': typeof AuthorizedDefaultAclDestinationsRoute
-  '/_authorized/_default/acl/edit-alias': typeof AuthorizedDefaultAclEditAliasRoute
-  '/_authorized/_default/acl/edit-destination': typeof AuthorizedDefaultAclEditDestinationRoute
-  '/_authorized/_default/acl/edit-rule': typeof AuthorizedDefaultAclEditRuleRoute
-  '/_authorized/_default/acl/posture-checks': typeof AuthorizedDefaultAclPostureChecksRouteWithChildren
-  '/_authorized/_default/acl/rules': typeof AuthorizedDefaultAclRulesRoute
   '/_authorized/_default/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/_authorized/_default/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/_authorized/_default/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
-  '/_authorized/_default/settings/client': typeof AuthorizedDefaultSettingsClientRoute
-  '/_authorized/_default/settings/edit-openid': typeof AuthorizedDefaultSettingsEditOpenidRoute
   '/_authorized/_default/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/_authorized/_default/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
-  '/_authorized/_default/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
-  '/_authorized/_default/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
   '/_authorized/_default/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/_authorized/_default/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/_authorized/_default/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -682,7 +495,6 @@ export interface FileRoutesById {
   '/_authorized/_default/gateway/$gatewayId/edit': typeof AuthorizedDefaultGatewayGatewayIdEditRoute
   '/_authorized/_default/locations/$locationId/edit': typeof AuthorizedDefaultLocationsLocationIdEditRoute
   '/_authorized/_default/mfa-flow/$id/edit': typeof AuthorizedDefaultMfaFlowIdEditRoute
-  '/_authorized/_default/acl/posture-checks/$postureCheckId/edit': typeof AuthorizedDefaultAclPostureChecksPostureCheckIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -691,13 +503,11 @@ export interface FileRouteTypes {
     | '/404'
     | '/auth'
     | '/consent'
-    | '/smtp-oauth-callback'
     | '/snackbar'
     | '/playground'
     | '/setup'
     | '/setup-gateway'
     | '/setup-login'
-    | '/auth/callback'
     | '/auth/loading'
     | '/auth/login'
     | '/auth/mfa'
@@ -712,9 +522,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/users'
     | '/webhooks'
-    | '/add-external-openid'
     | '/add-location'
-    | '/add-posture-check'
     | '/settings-core-certificate'
     | '/settings-edge-certificate'
     | '/setup-edge'
@@ -724,25 +532,11 @@ export interface FileRouteTypes {
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
     | '/migration/'
-    | '/acl/add-alias'
-    | '/acl/add-destination'
-    | '/acl/add-rule'
-    | '/acl/aliases'
-    | '/acl/destinations'
-    | '/acl/edit-alias'
-    | '/acl/edit-destination'
-    | '/acl/edit-rule'
-    | '/acl/posture-checks'
-    | '/acl/rules'
     | '/mfa/add-flow'
     | '/settings/ca'
     | '/settings/certs'
-    | '/settings/client'
-    | '/settings/edit-openid'
     | '/settings/gateway-notifications'
     | '/settings/instance'
-    | '/settings/ldap'
-    | '/settings/openid'
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
@@ -754,19 +548,16 @@ export interface FileRouteTypes {
     | '/gateway/$gatewayId/edit'
     | '/locations/$locationId/edit'
     | '/mfa-flow/$id/edit'
-    | '/acl/posture-checks/$postureCheckId/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/404'
     | '/consent'
-    | '/smtp-oauth-callback'
     | '/snackbar'
     | '/playground'
     | '/setup'
     | '/setup-gateway'
     | '/setup-login'
-    | '/auth/callback'
     | '/auth/loading'
     | '/auth/login'
     | '/auth/mfa'
@@ -781,9 +572,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/users'
     | '/webhooks'
-    | '/add-external-openid'
     | '/add-location'
-    | '/add-posture-check'
     | '/settings-core-certificate'
     | '/settings-edge-certificate'
     | '/setup-edge'
@@ -793,25 +582,11 @@ export interface FileRouteTypes {
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
     | '/migration'
-    | '/acl/add-alias'
-    | '/acl/add-destination'
-    | '/acl/add-rule'
-    | '/acl/aliases'
-    | '/acl/destinations'
-    | '/acl/edit-alias'
-    | '/acl/edit-destination'
-    | '/acl/edit-rule'
-    | '/acl/posture-checks'
-    | '/acl/rules'
     | '/mfa/add-flow'
     | '/settings/ca'
     | '/settings/certs'
-    | '/settings/client'
-    | '/settings/edit-openid'
     | '/settings/gateway-notifications'
     | '/settings/instance'
-    | '/settings/ldap'
-    | '/settings/openid'
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
@@ -823,7 +598,6 @@ export interface FileRouteTypes {
     | '/gateway/$gatewayId/edit'
     | '/locations/$locationId/edit'
     | '/mfa-flow/$id/edit'
-    | '/acl/posture-checks/$postureCheckId/edit'
   id:
     | '__root__'
     | '/'
@@ -831,14 +605,12 @@ export interface FileRouteTypes {
     | '/_authorized'
     | '/auth'
     | '/consent'
-    | '/smtp-oauth-callback'
     | '/snackbar'
     | '/_authorized/_default'
     | '/_authorized/playground'
     | '/_wizard/setup'
     | '/_wizard/setup-gateway'
     | '/_wizard/setup-login'
-    | '/auth/callback'
     | '/auth/loading'
     | '/auth/login'
     | '/auth/mfa'
@@ -853,9 +625,7 @@ export interface FileRouteTypes {
     | '/_authorized/_default/support'
     | '/_authorized/_default/users'
     | '/_authorized/_default/webhooks'
-    | '/_authorized/_wizard/add-external-openid'
     | '/_authorized/_wizard/add-location'
-    | '/_authorized/_wizard/add-posture-check'
     | '/_authorized/_wizard/settings-core-certificate'
     | '/_authorized/_wizard/settings-edge-certificate'
     | '/_authorized/_wizard/setup-edge'
@@ -865,25 +635,11 @@ export interface FileRouteTypes {
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
     | '/_wizard/migration/'
-    | '/_authorized/_default/acl/add-alias'
-    | '/_authorized/_default/acl/add-destination'
-    | '/_authorized/_default/acl/add-rule'
-    | '/_authorized/_default/acl/aliases'
-    | '/_authorized/_default/acl/destinations'
-    | '/_authorized/_default/acl/edit-alias'
-    | '/_authorized/_default/acl/edit-destination'
-    | '/_authorized/_default/acl/edit-rule'
-    | '/_authorized/_default/acl/posture-checks'
-    | '/_authorized/_default/acl/rules'
     | '/_authorized/_default/mfa/add-flow'
     | '/_authorized/_default/settings/ca'
     | '/_authorized/_default/settings/certs'
-    | '/_authorized/_default/settings/client'
-    | '/_authorized/_default/settings/edit-openid'
     | '/_authorized/_default/settings/gateway-notifications'
     | '/_authorized/_default/settings/instance'
-    | '/_authorized/_default/settings/ldap'
-    | '/_authorized/_default/settings/openid'
     | '/_authorized/_default/settings/smtp'
     | '/_authorized/_default/user/$username'
     | '/_authorized/_default/vpn-overview/$locationId'
@@ -895,7 +651,6 @@ export interface FileRouteTypes {
     | '/_authorized/_default/gateway/$gatewayId/edit'
     | '/_authorized/_default/locations/$locationId/edit'
     | '/_authorized/_default/mfa-flow/$id/edit'
-    | '/_authorized/_default/acl/posture-checks/$postureCheckId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -904,7 +659,6 @@ export interface RootRouteChildren {
   AuthorizedRoute: typeof AuthorizedRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
   ConsentRoute: typeof ConsentRoute
-  SmtpOauthCallbackRoute: typeof SmtpOauthCallbackRoute
   SnackbarRoute: typeof SnackbarRoute
   WizardSetupRoute: typeof WizardSetupRoute
   WizardSetupGatewayRoute: typeof WizardSetupGatewayRoute
@@ -949,13 +703,6 @@ declare module '@tanstack/react-router' {
       path: '/consent'
       fullPath: '/consent'
       preLoaderRoute: typeof ConsentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/smtp-oauth-callback': {
-      id: '/smtp-oauth-callback'
-      path: '/smtp-oauth-callback'
-      fullPath: '/smtp-oauth-callback'
-      preLoaderRoute: typeof SmtpOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/snackbar': {
@@ -1005,13 +752,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/auth/'
       preLoaderRoute: typeof AuthIndexRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof AuthRoute
     }
     '/auth/loading': {
@@ -1105,25 +845,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultWebhooksRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
-    '/_authorized/_wizard/add-external-openid': {
-      id: '/_authorized/_wizard/add-external-openid'
-      path: '/add-external-openid'
-      fullPath: '/add-external-openid'
-      preLoaderRoute: typeof AuthorizedWizardAddExternalOpenidRouteImport
-      parentRoute: typeof AuthorizedRoute
-    }
     '/_authorized/_wizard/add-location': {
       id: '/_authorized/_wizard/add-location'
       path: '/add-location'
       fullPath: '/add-location'
       preLoaderRoute: typeof AuthorizedWizardAddLocationRouteImport
-      parentRoute: typeof AuthorizedRoute
-    }
-    '/_authorized/_wizard/add-posture-check': {
-      id: '/_authorized/_wizard/add-posture-check'
-      path: '/add-posture-check'
-      fullPath: '/add-posture-check'
-      preLoaderRoute: typeof AuthorizedWizardAddPostureCheckRouteImport
       parentRoute: typeof AuthorizedRoute
     }
     '/_authorized/_wizard/settings-core-certificate': {
@@ -1189,76 +915,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthMfaWebauthnRouteImport
       parentRoute: typeof AuthMfaRoute
     }
-    '/_authorized/_default/acl/add-alias': {
-      id: '/_authorized/_default/acl/add-alias'
-      path: '/acl/add-alias'
-      fullPath: '/acl/add-alias'
-      preLoaderRoute: typeof AuthorizedDefaultAclAddAliasRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/add-destination': {
-      id: '/_authorized/_default/acl/add-destination'
-      path: '/acl/add-destination'
-      fullPath: '/acl/add-destination'
-      preLoaderRoute: typeof AuthorizedDefaultAclAddDestinationRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/add-rule': {
-      id: '/_authorized/_default/acl/add-rule'
-      path: '/acl/add-rule'
-      fullPath: '/acl/add-rule'
-      preLoaderRoute: typeof AuthorizedDefaultAclAddRuleRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/aliases': {
-      id: '/_authorized/_default/acl/aliases'
-      path: '/acl/aliases'
-      fullPath: '/acl/aliases'
-      preLoaderRoute: typeof AuthorizedDefaultAclAliasesRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/destinations': {
-      id: '/_authorized/_default/acl/destinations'
-      path: '/acl/destinations'
-      fullPath: '/acl/destinations'
-      preLoaderRoute: typeof AuthorizedDefaultAclDestinationsRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/edit-alias': {
-      id: '/_authorized/_default/acl/edit-alias'
-      path: '/acl/edit-alias'
-      fullPath: '/acl/edit-alias'
-      preLoaderRoute: typeof AuthorizedDefaultAclEditAliasRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/edit-destination': {
-      id: '/_authorized/_default/acl/edit-destination'
-      path: '/acl/edit-destination'
-      fullPath: '/acl/edit-destination'
-      preLoaderRoute: typeof AuthorizedDefaultAclEditDestinationRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/edit-rule': {
-      id: '/_authorized/_default/acl/edit-rule'
-      path: '/acl/edit-rule'
-      fullPath: '/acl/edit-rule'
-      preLoaderRoute: typeof AuthorizedDefaultAclEditRuleRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/posture-checks': {
-      id: '/_authorized/_default/acl/posture-checks'
-      path: '/acl/posture-checks'
-      fullPath: '/acl/posture-checks'
-      preLoaderRoute: typeof AuthorizedDefaultAclPostureChecksRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/acl/rules': {
-      id: '/_authorized/_default/acl/rules'
-      path: '/acl/rules'
-      fullPath: '/acl/rules'
-      preLoaderRoute: typeof AuthorizedDefaultAclRulesRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
     '/_authorized/_default/locations/': {
       id: '/_authorized/_default/locations/'
       path: '/locations'
@@ -1301,20 +957,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultSettingsCertsRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
-    '/_authorized/_default/settings/client': {
-      id: '/_authorized/_default/settings/client'
-      path: '/settings/client'
-      fullPath: '/settings/client'
-      preLoaderRoute: typeof AuthorizedDefaultSettingsClientRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/settings/edit-openid': {
-      id: '/_authorized/_default/settings/edit-openid'
-      path: '/settings/edit-openid'
-      fullPath: '/settings/edit-openid'
-      preLoaderRoute: typeof AuthorizedDefaultSettingsEditOpenidRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
     '/_authorized/_default/settings/gateway-notifications': {
       id: '/_authorized/_default/settings/gateway-notifications'
       path: '/settings/gateway-notifications'
@@ -1327,20 +969,6 @@ declare module '@tanstack/react-router' {
       path: '/settings/instance'
       fullPath: '/settings/instance'
       preLoaderRoute: typeof AuthorizedDefaultSettingsInstanceRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/settings/ldap': {
-      id: '/_authorized/_default/settings/ldap'
-      path: '/settings/ldap'
-      fullPath: '/settings/ldap'
-      preLoaderRoute: typeof AuthorizedDefaultSettingsLdapRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
-    '/_authorized/_default/settings/openid': {
-      id: '/_authorized/_default/settings/openid'
-      path: '/settings/openid'
-      fullPath: '/settings/openid'
-      preLoaderRoute: typeof AuthorizedDefaultSettingsOpenidRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
     '/_authorized/_default/settings/smtp': {
@@ -1399,30 +1027,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultMfaFlowIdEditRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
-    '/_authorized/_default/acl/posture-checks/$postureCheckId/edit': {
-      id: '/_authorized/_default/acl/posture-checks/$postureCheckId/edit'
-      path: '/$postureCheckId/edit'
-      fullPath: '/acl/posture-checks/$postureCheckId/edit'
-      preLoaderRoute: typeof AuthorizedDefaultAclPostureChecksPostureCheckIdEditRouteImport
-      parentRoute: typeof AuthorizedDefaultAclPostureChecksRoute
-    }
   }
 }
-
-interface AuthorizedDefaultAclPostureChecksRouteChildren {
-  AuthorizedDefaultAclPostureChecksPostureCheckIdEditRoute: typeof AuthorizedDefaultAclPostureChecksPostureCheckIdEditRoute
-}
-
-const AuthorizedDefaultAclPostureChecksRouteChildren: AuthorizedDefaultAclPostureChecksRouteChildren =
-  {
-    AuthorizedDefaultAclPostureChecksPostureCheckIdEditRoute:
-      AuthorizedDefaultAclPostureChecksPostureCheckIdEditRoute,
-  }
-
-const AuthorizedDefaultAclPostureChecksRouteWithChildren =
-  AuthorizedDefaultAclPostureChecksRoute._addFileChildren(
-    AuthorizedDefaultAclPostureChecksRouteChildren,
-  )
 
 interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultActivityRoute: typeof AuthorizedDefaultActivityRoute
@@ -1434,25 +1040,11 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultSupportRoute: typeof AuthorizedDefaultSupportRoute
   AuthorizedDefaultUsersRoute: typeof AuthorizedDefaultUsersRoute
   AuthorizedDefaultWebhooksRoute: typeof AuthorizedDefaultWebhooksRoute
-  AuthorizedDefaultAclAddAliasRoute: typeof AuthorizedDefaultAclAddAliasRoute
-  AuthorizedDefaultAclAddDestinationRoute: typeof AuthorizedDefaultAclAddDestinationRoute
-  AuthorizedDefaultAclAddRuleRoute: typeof AuthorizedDefaultAclAddRuleRoute
-  AuthorizedDefaultAclAliasesRoute: typeof AuthorizedDefaultAclAliasesRoute
-  AuthorizedDefaultAclDestinationsRoute: typeof AuthorizedDefaultAclDestinationsRoute
-  AuthorizedDefaultAclEditAliasRoute: typeof AuthorizedDefaultAclEditAliasRoute
-  AuthorizedDefaultAclEditDestinationRoute: typeof AuthorizedDefaultAclEditDestinationRoute
-  AuthorizedDefaultAclEditRuleRoute: typeof AuthorizedDefaultAclEditRuleRoute
-  AuthorizedDefaultAclPostureChecksRoute: typeof AuthorizedDefaultAclPostureChecksRouteWithChildren
-  AuthorizedDefaultAclRulesRoute: typeof AuthorizedDefaultAclRulesRoute
   AuthorizedDefaultMfaAddFlowRoute: typeof AuthorizedDefaultMfaAddFlowRoute
   AuthorizedDefaultSettingsCaRoute: typeof AuthorizedDefaultSettingsCaRoute
   AuthorizedDefaultSettingsCertsRoute: typeof AuthorizedDefaultSettingsCertsRoute
-  AuthorizedDefaultSettingsClientRoute: typeof AuthorizedDefaultSettingsClientRoute
-  AuthorizedDefaultSettingsEditOpenidRoute: typeof AuthorizedDefaultSettingsEditOpenidRoute
   AuthorizedDefaultSettingsGatewayNotificationsRoute: typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   AuthorizedDefaultSettingsInstanceRoute: typeof AuthorizedDefaultSettingsInstanceRoute
-  AuthorizedDefaultSettingsLdapRoute: typeof AuthorizedDefaultSettingsLdapRoute
-  AuthorizedDefaultSettingsOpenidRoute: typeof AuthorizedDefaultSettingsOpenidRoute
   AuthorizedDefaultSettingsSmtpRoute: typeof AuthorizedDefaultSettingsSmtpRoute
   AuthorizedDefaultUserUsernameRoute: typeof AuthorizedDefaultUserUsernameRoute
   AuthorizedDefaultVpnOverviewLocationIdRoute: typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -1476,31 +1068,13 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
   AuthorizedDefaultSupportRoute: AuthorizedDefaultSupportRoute,
   AuthorizedDefaultUsersRoute: AuthorizedDefaultUsersRoute,
   AuthorizedDefaultWebhooksRoute: AuthorizedDefaultWebhooksRoute,
-  AuthorizedDefaultAclAddAliasRoute: AuthorizedDefaultAclAddAliasRoute,
-  AuthorizedDefaultAclAddDestinationRoute:
-    AuthorizedDefaultAclAddDestinationRoute,
-  AuthorizedDefaultAclAddRuleRoute: AuthorizedDefaultAclAddRuleRoute,
-  AuthorizedDefaultAclAliasesRoute: AuthorizedDefaultAclAliasesRoute,
-  AuthorizedDefaultAclDestinationsRoute: AuthorizedDefaultAclDestinationsRoute,
-  AuthorizedDefaultAclEditAliasRoute: AuthorizedDefaultAclEditAliasRoute,
-  AuthorizedDefaultAclEditDestinationRoute:
-    AuthorizedDefaultAclEditDestinationRoute,
-  AuthorizedDefaultAclEditRuleRoute: AuthorizedDefaultAclEditRuleRoute,
-  AuthorizedDefaultAclPostureChecksRoute:
-    AuthorizedDefaultAclPostureChecksRouteWithChildren,
-  AuthorizedDefaultAclRulesRoute: AuthorizedDefaultAclRulesRoute,
   AuthorizedDefaultMfaAddFlowRoute: AuthorizedDefaultMfaAddFlowRoute,
   AuthorizedDefaultSettingsCaRoute: AuthorizedDefaultSettingsCaRoute,
   AuthorizedDefaultSettingsCertsRoute: AuthorizedDefaultSettingsCertsRoute,
-  AuthorizedDefaultSettingsClientRoute: AuthorizedDefaultSettingsClientRoute,
-  AuthorizedDefaultSettingsEditOpenidRoute:
-    AuthorizedDefaultSettingsEditOpenidRoute,
   AuthorizedDefaultSettingsGatewayNotificationsRoute:
     AuthorizedDefaultSettingsGatewayNotificationsRoute,
   AuthorizedDefaultSettingsInstanceRoute:
     AuthorizedDefaultSettingsInstanceRoute,
-  AuthorizedDefaultSettingsLdapRoute: AuthorizedDefaultSettingsLdapRoute,
-  AuthorizedDefaultSettingsOpenidRoute: AuthorizedDefaultSettingsOpenidRoute,
   AuthorizedDefaultSettingsSmtpRoute: AuthorizedDefaultSettingsSmtpRoute,
   AuthorizedDefaultUserUsernameRoute: AuthorizedDefaultUserUsernameRoute,
   AuthorizedDefaultVpnOverviewLocationIdRoute:
@@ -1524,9 +1098,7 @@ const AuthorizedDefaultRouteWithChildren =
 interface AuthorizedRouteChildren {
   AuthorizedDefaultRoute: typeof AuthorizedDefaultRouteWithChildren
   AuthorizedPlaygroundRoute: typeof AuthorizedPlaygroundRoute
-  AuthorizedWizardAddExternalOpenidRoute: typeof AuthorizedWizardAddExternalOpenidRoute
   AuthorizedWizardAddLocationRoute: typeof AuthorizedWizardAddLocationRoute
-  AuthorizedWizardAddPostureCheckRoute: typeof AuthorizedWizardAddPostureCheckRoute
   AuthorizedWizardSettingsCoreCertificateRoute: typeof AuthorizedWizardSettingsCoreCertificateRoute
   AuthorizedWizardSettingsEdgeCertificateRoute: typeof AuthorizedWizardSettingsEdgeCertificateRoute
   AuthorizedWizardSetupEdgeRoute: typeof AuthorizedWizardSetupEdgeRoute
@@ -1535,10 +1107,7 @@ interface AuthorizedRouteChildren {
 const AuthorizedRouteChildren: AuthorizedRouteChildren = {
   AuthorizedDefaultRoute: AuthorizedDefaultRouteWithChildren,
   AuthorizedPlaygroundRoute: AuthorizedPlaygroundRoute,
-  AuthorizedWizardAddExternalOpenidRoute:
-    AuthorizedWizardAddExternalOpenidRoute,
   AuthorizedWizardAddLocationRoute: AuthorizedWizardAddLocationRoute,
-  AuthorizedWizardAddPostureCheckRoute: AuthorizedWizardAddPostureCheckRoute,
   AuthorizedWizardSettingsCoreCertificateRoute:
     AuthorizedWizardSettingsCoreCertificateRoute,
   AuthorizedWizardSettingsEdgeCertificateRoute:
@@ -1568,7 +1137,6 @@ const AuthMfaRouteWithChildren =
   AuthMfaRoute._addFileChildren(AuthMfaRouteChildren)
 
 interface AuthRouteChildren {
-  AuthCallbackRoute: typeof AuthCallbackRoute
   AuthLoadingRoute: typeof AuthLoadingRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthMfaRoute: typeof AuthMfaRouteWithChildren
@@ -1576,7 +1144,6 @@ interface AuthRouteChildren {
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
-  AuthCallbackRoute: AuthCallbackRoute,
   AuthLoadingRoute: AuthLoadingRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthMfaRoute: AuthMfaRouteWithChildren,
@@ -1591,7 +1158,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthorizedRoute: AuthorizedRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
   ConsentRoute: ConsentRoute,
-  SmtpOauthCallbackRoute: SmtpOauthCallbackRoute,
   SnackbarRoute: SnackbarRoute,
   WizardSetupRoute: WizardSetupRoute,
   WizardSetupGatewayRoute: WizardSetupGatewayRoute,

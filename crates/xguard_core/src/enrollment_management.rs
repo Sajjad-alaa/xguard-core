@@ -1,9 +1,9 @@
+use reqwest::Url;
+use sqlx::{PgConnection, PgExecutor, PgPool};
 use xguard_common::db::{
     Id,
     models::{Settings, user::User},
 };
-use reqwest::Url;
-use sqlx::{PgConnection, PgExecutor, PgPool};
 
 use crate::{
     db::models::enrollment::{ENROLLMENT_TOKEN_TYPE, Token, TokenError},

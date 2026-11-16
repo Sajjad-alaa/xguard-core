@@ -1,19 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use xguard_common::{
-    auth::claims::{Claims, ClaimsType},
-    db::{
-        models::{
-            Settings,
-            settings::{initialize_current_settings, update_current_settings},
-        },
-        setup_pool,
-    },
-};
-use xguard_core::{
-    db::AppEvent,
-    grpc::{AUTHORIZATION_HEADER, WorkerState, build_grpc_service_router},
-};
 use hyper_util::rt::TokioIo;
 use sqlx::{
     PgPool,
@@ -29,6 +15,20 @@ use tonic::{
     transport::{Channel, Endpoint, Server, Uri, server::Router},
 };
 use tower::service_fn;
+use xguard_common::{
+    auth::claims::{Claims, ClaimsType},
+    db::{
+        models::{
+            Settings,
+            settings::{initialize_current_settings, update_current_settings},
+        },
+        setup_pool,
+    },
+};
+use xguard_core::{
+    db::AppEvent,
+    grpc::{AUTHORIZATION_HEADER, WorkerState, build_grpc_service_router},
+};
 
 use crate::common::initialize_users;
 

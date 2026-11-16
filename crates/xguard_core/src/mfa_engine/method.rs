@@ -1,3 +1,5 @@
+use sqlx::PgPool;
+use thiserror::Error;
 use xguard_common::db::models::{
     ThrottleScope,
     biometric_auth::{BiometricAuth, BiometricAuthError, BiometricChallenge},
@@ -5,14 +7,9 @@ use xguard_common::db::models::{
     vpn_client_mfa_session::{EphemeralState, MfaSessionContext},
     vpn_client_session::VpnClientMfaMethod,
 };
-use sqlx::PgPool;
-use thiserror::Error;
 
 use super::types::VerificationProof;
-use crate::{
-    enterprise::fido2::{fido2_credential_ids, verify_vpn_fido2_step},
-    mail::templates::{TemplateError, mfa_code_mail},
-};
+use crate::mail::templates::{TemplateError, mfa_code_mail};
 
 /// Outcome of proof verification.
 #[derive(Debug, PartialEq)]
@@ -220,7 +217,7 @@ fn verify_oidc(ephemeral: &EphemeralState) -> Verdict {
 /// Read-only: never mutates the session. The caller owns every mutation (failure accounting,
 /// advance, delete).
 pub(super) async fn verify(
-    pool: &PgPool,
+    _pool: &PgPool,
     ctx: &MfaSessionContext,
     ephemeral: &EphemeralState,
     proof: Option<&VerificationProof>,
@@ -246,9 +243,7 @@ pub(super) async fn verify(
         (VpnClientMfaMethod::Oidc, None) => Ok(verify_oidc(ephemeral)),
         (VpnClientMfaMethod::Oidc, Some(_)) => Err(credential_method_mismatch().into()),
         (VpnClientMfaMethod::MobileApprove, _) => Err(VerifyError::UnsupportedMethod),
-        (VpnClientMfaMethod::Fido2, proof) => {
-            verify_vpn_fido2_step(pool, ctx, ephemeral, proof).await
-        }
+        (VpnClientMfaMethod::Fido2, _) => Err(VerifyError::UnsupportedMethod),
     }
 }
 
@@ -323,14 +318,13 @@ pub fn check_mobile_approval(ephemeral: &EphemeralState) -> Verdict {
     }
 }
 
-/// Empty unless the method is FIDO2.
+/// FIDO2 credential IDs offered to the client. Always empty: XGuard does not support FIDO2 VPN
+/// MFA.
+#[allow(clippy::unused_async)]
 pub async fn offered_credential_ids(
-    pool: &PgPool,
-    ctx: &MfaSessionContext,
-    method: VpnClientMfaMethod,
+    _pool: &PgPool,
+    _ctx: &MfaSessionContext,
+    _method: VpnClientMfaMethod,
 ) -> Result<Vec<String>, sqlx::Error> {
-    if method != VpnClientMfaMethod::Fido2 {
-        return Ok(Vec::new());
-    }
-    fido2_credential_ids(pool, ctx.user.id).await
+    Ok(Vec::new())
 }

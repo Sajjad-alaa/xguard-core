@@ -1,4 +1,3 @@
-use xguard_core::enterprise::firewall::FirewallError;
 use thiserror::Error;
 use tonic::{Code, Status};
 
@@ -15,8 +14,6 @@ pub(crate) enum GatewayError {
     // mpsc channel send/receive error
     #[error("Message channel error: {0}")]
     MessageChannelError(String),
-    #[error(transparent)]
-    FirewallError(#[from] FirewallError),
 }
 
 impl From<GatewayError> for Status {

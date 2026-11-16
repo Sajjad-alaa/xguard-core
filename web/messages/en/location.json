@@ -200,5 +200,6 @@
   "location_overview_connected_users_empty_title": "No connected users",
   "location_overview_connected_users_empty_subtitle": "Wait for a user to connect",
   "location_overview_connected_network_devices_empty_title": "No connected network devices",
-  "location_overview_connected_network_devices_empty_subtitle": "Wait for a device to connect"
+  "location_overview_connected_network_devices_empty_subtitle": "Wait for a device to connect",
+  "location_mfa_flow_unavailable_not_supported": "This flow uses an MFA method that is not available in XGuard"
 }

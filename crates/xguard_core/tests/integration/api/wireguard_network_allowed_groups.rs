@@ -1,6 +1,12 @@
 use std::{assert_matches, net::IpAddr};
 
 use claims::assert_err;
+use reqwest::StatusCode;
+use serde_json::json;
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
 use xguard_common::{
     csv::AsCsv,
     db::{
@@ -22,12 +28,6 @@ use xguard_core::{
         wireguard::{ImportedNetworkData, WireguardNetworkData},
     },
     location_management::allowed_peers::get_location_allowed_peers,
-};
-use reqwest::StatusCode;
-use serde_json::json;
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
 };
 
 use super::common::{authenticate_admin, fetch_user_details, make_test_client, setup_pool};

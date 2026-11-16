@@ -9,6 +9,9 @@ import { useMemo } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import type { OpenIdClient } from '../../shared/api/types';
+import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
+import { getOpenIdClientQueryOptions } from '../../shared/query';
 import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
@@ -21,9 +24,6 @@ import { TableEditCell } from '../../shared/xguard-ui/components/table/TableEdit
 import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
 import { useClipboard } from '../../shared/xguard-ui/hooks/useClipboard';
 import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
-import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
-import { getOpenIdClientQueryOptions } from '../../shared/query';
 
 type RowData = OpenIdClient;
 

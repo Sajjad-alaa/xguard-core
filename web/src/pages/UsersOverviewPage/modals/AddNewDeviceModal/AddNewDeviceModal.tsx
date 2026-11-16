@@ -7,6 +7,15 @@ import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import type { StartEnrollmentResponse, User } from '../../../../shared/api/types';
 import { Controls } from '../../../../shared/components/Controls/Controls';
+import { useAppForm } from '../../../../shared/form';
+import { formChangeLogic } from '../../../../shared/formLogic';
+import {
+  closeModal,
+  subscribeCloseModal,
+  subscribeOpenModal,
+} from '../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
+import { useApp } from '../../../../shared/hooks/useApp';
 import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import { Fold } from '../../../../shared/xguard-ui/components/Fold/Fold';
@@ -20,15 +29,6 @@ import {
   ThemeVariable,
 } from '../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
-import { useAppForm } from '../../../../shared/form';
-import { formChangeLogic } from '../../../../shared/formLogic';
-import {
-  closeModal,
-  subscribeCloseModal,
-  subscribeOpenModal,
-} from '../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
-import { useApp } from '../../../../shared/hooks/useApp';
 import { DeliverTokenStep } from './steps/DeliverTokenStep/DeliverTokenStep';
 
 const modalName = ModalName.AddNewDevice;

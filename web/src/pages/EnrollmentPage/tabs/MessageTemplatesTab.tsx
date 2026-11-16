@@ -10,6 +10,9 @@ import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCa
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
 import { Suggestion } from '../../../shared/components/Suggestion/Suggestion';
+import { useAppForm } from '../../../shared/form';
+import { formChangeLogic } from '../../../shared/formLogic';
+import { getSettingsQueryOptions } from '../../../shared/query';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
 import { Fold } from '../../../shared/xguard-ui/components/Fold/Fold';
@@ -18,9 +21,6 @@ import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
 import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
-import { useAppForm } from '../../../shared/form';
-import { formChangeLogic } from '../../../shared/formLogic';
-import { getSettingsQueryOptions } from '../../../shared/query';
 
 const messageTemplatesHelpVariables = [
   ['{{ first_name }}', m.settings_enrollment_template_help_first_name()],

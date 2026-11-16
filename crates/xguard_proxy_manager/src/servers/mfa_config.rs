@@ -1,30 +1,19 @@
-use xguard_common::{
-    db::{
-        Id,
-        models::{
-            Device, MFAMethod, Settings, User, biometric_auth::BiometricChallenge,
-            polling_token::PollingToken, vpn_client_session::VpnClientMfaMethod,
-        },
+use sqlx::PgPool;
+use tokio::sync::mpsc::UnboundedSender;
+use tonic::Status;
+use xguard_common::db::{
+    Id,
+    models::{
+        Device, MFAMethod, Settings, User, polling_token::PollingToken,
+        vpn_client_session::VpnClientMfaMethod,
     },
-    random::gen_alphanumeric,
-    types::AuthFlowType,
 };
 use xguard_core::{
     db::models::enrollment::{
         MFA_CONFIG_SESSION_TIMEOUT, MFA_CONFIG_TOKEN_TYPE, MfaConfigAuthState, Token, TokenError,
     },
-    enterprise::{
-        db::models::openid_provider::OpenIdProvider,
-        fido2::{fido2_credential_ids, verify_mfa_config_fido2_assertion},
-        handlers::openid_login::{
-            ClaimsUserResolution, MfaOidcState, extract_state_data, user_from_claims,
-        },
-        is_business_license_active, is_oidc_mfa_available,
-    },
     events::{ApiEvent, ApiEventType},
-    grpc::utils::parse_client_ip_agent,
     mail::templates::mfa_code_mail,
-    mfa_engine::method::VerifyError,
 };
 use xguard_proto::{
     client_types::{
@@ -32,12 +21,8 @@ use xguard_proto::{
         MfaConfigFido2ChallengeRequest, MfaConfigFido2ChallengeResponse, MfaConfigSendCodeRequest,
         MfaConfigSendCodeResponse, MfaConfigStartRequest, MfaConfigStartResponse, MfaMethod,
     },
-    proxy::{ClientMfaOidcAuthenticateRequest, CoreError, CoreErrorCode, DeviceInfo},
+    proxy::DeviceInfo,
 };
-use openidconnect::{AuthorizationCode, Nonce};
-use sqlx::PgPool;
-use tokio::sync::mpsc::UnboundedSender;
-use tonic::Status;
 
 use super::mfa_setup::{RecoveryCodesPolicy, finalize_mfa_factor};
 
@@ -63,16 +48,10 @@ impl MfaConfigSession {
     }
 }
 
-/// Whether this setup lets OIDC authorize: a business license and a configured provider.
-async fn oidc_available(pool: &PgPool) -> Result<bool, Status> {
-    if !is_business_license_active() {
-        return Ok(false);
-    }
-    let provider = OpenIdProvider::get_current(pool).await.map_err(|err| {
-        error!("MFA config: failed to read the OpenID provider: {err}");
-        Status::internal("unexpected error")
-    })?;
-    Ok(is_oidc_mfa_available(provider.is_some()))
+/// OIDC authorization needs an external identity provider integration (not in XGuard).
+#[allow(clippy::unused_async)]
+async fn oidc_available(_pool: &PgPool) -> Result<bool, Status> {
+    Ok(false)
 }
 
 async fn is_configured(
@@ -93,14 +72,6 @@ async fn is_configured(
             );
             Status::internal("unexpected error")
         })
-}
-
-async fn is_mfa_config_token(pool: &PgPool, token: &str) -> Result<bool, Status> {
-    match Token::find_by_id(pool, token).await {
-        Ok(token) => Ok(token.token_type.as_deref() == Some(MFA_CONFIG_TOKEN_TYPE)),
-        Err(TokenError::NotFound) => Ok(false),
-        Err(err) => Err(err.into()),
-    }
 }
 
 /// Loads an unauthorized MFA configuration session and its user's current factor state.
@@ -161,78 +132,6 @@ async fn load_session(pool: &PgPool, session_token: &str) -> Result<MfaConfigSes
         fido2_configured,
         oidc_configured,
     })
-}
-
-/// Starts an OIDC attempt when `token` names an MFA configuration session. Returns the state
-/// payload binding the callback to it, or `None` for another flow's token.
-pub(crate) async fn mfa_config_oidc_begin(
-    pool: &PgPool,
-    token: &str,
-) -> Result<Option<String>, Status> {
-    if !is_mfa_config_token(pool, token).await? {
-        return Ok(None);
-    }
-    let mut session = load_session(pool, token).await?;
-    if !session.oidc_configured {
-        error!(
-            "MFA config OIDC begin: user {} cannot use OIDC",
-            session.user.username
-        );
-        return Err(Status::permission_denied("method not configured"));
-    }
-    let attempt_id = gen_alphanumeric(16);
-    if !session
-        .token
-        .replace_mfa_config_auth_state(
-            pool,
-            &MfaConfigAuthState::Oidc {
-                attempt_id: attempt_id.clone(),
-                completed: false,
-            },
-        )
-        .await?
-    {
-        debug!(
-            "MFA config OIDC begin: user {} already completed OIDC authentication",
-            session.user.username
-        );
-        return Err(Status::failed_precondition(
-            "OIDC authentication already completed",
-        ));
-    }
-    debug!(
-        "User {} started an OIDC MFA configuration authorization",
-        session.user.username
-    );
-
-    Ok(Some(MfaOidcState::build(token, &attempt_id)))
-}
-
-/// Decodes an OIDC callback state, returning it only when it names an MFA configuration session.
-pub(crate) async fn mfa_config_oidc_state(
-    pool: &PgPool,
-    state: &str,
-) -> Result<Option<MfaOidcState>, Status> {
-    let Some(state) = extract_state_data(state).and_then(|data| MfaOidcState::parse(&data)) else {
-        return Ok(None);
-    };
-    if is_mfa_config_token(pool, &state.token).await? {
-        Ok(Some(state))
-    } else {
-        Ok(None)
-    }
-}
-
-/// Ends the session of a failed OIDC attempt, unless a newer attempt or session replaced it
-/// during the OIDC round trip.
-async fn end_oidc_attempt(pool: &PgPool, token: &Token, attempt_id: &str) -> Result<(), Status> {
-    if !token
-        .delete_pending_mfa_config_oidc_attempt(pool, attempt_id)
-        .await?
-    {
-        debug!("MFA config OIDC: attempt superseded during the OIDC round trip");
-    }
-    Ok(())
 }
 
 /// Handles MFA factor configuration requested by an already enrolled desktop client.
@@ -432,54 +331,10 @@ impl MfaConfigServer {
         &self,
         request: MfaConfigFido2ChallengeRequest,
     ) -> Result<MfaConfigFido2ChallengeResponse, Status> {
-        debug!("Issuing MFA configuration FIDO2 challenge");
-        let MfaConfigSession {
-            mut token,
-            user,
-            fido2_configured,
-            ..
-        } = load_session(&self.pool, &request.session_token).await?;
-        if !fido2_configured {
-            error!(
-                "MFA config FIDO2 challenge: user {} has no security key",
-                user.username
-            );
-            return Err(Status::permission_denied("method not configured"));
-        }
-
-        let challenge = BiometricChallenge::new().challenge;
-        if !token
-            .replace_mfa_config_auth_state(
-                &self.pool,
-                &MfaConfigAuthState::Fido2 {
-                    challenge: challenge.clone(),
-                },
-            )
-            .await?
-        {
-            debug!(
-                "MFA config FIDO2 challenge: user {} already completed OIDC authentication",
-                user.username
-            );
-            return Err(Status::failed_precondition(
-                "OIDC authentication already completed",
-            ));
-        }
-        let credential_ids = fido2_credential_ids(&self.pool, user.id)
-            .await
-            .map_err(|err| {
-                error!("MFA config FIDO2 challenge: failed to read security keys: {err}");
-                Status::internal("unexpected error")
-            })?;
-        info!(
-            "Issued MFA configuration FIDO2 challenge to user {}",
-            user.username
-        );
-
-        Ok(MfaConfigFido2ChallengeResponse {
-            challenge,
-            credential_ids,
-        })
+        // FIDO2 MFA is not supported by XGuard.
+        let _ = request;
+        debug!("Rejecting MFA configuration FIDO2 challenge: FIDO2 MFA is not supported");
+        Err(Status::unimplemented("FIDO2 MFA is not supported"))
     }
 
     /// Authorizes an MFA configuration session with a TOTP or email code, a FIDO2 assertion
@@ -531,32 +386,7 @@ impl MfaConfigServer {
         let valid = match method {
             MfaMethod::Totp => user.verify_totp_code(&request.code),
             MfaMethod::Fido2 => {
-                // Taking the challenge consumes it, so every attempt needs a fresh one.
-                let Some(challenge) = token.take_fido2_challenge(&self.pool).await? else {
-                    error!(
-                        "MFA config authorize: user {} has no pending FIDO2 challenge",
-                        user.username
-                    );
-                    return Err(Status::failed_precondition("no FIDO2 challenge"));
-                };
-                verify_mfa_config_fido2_assertion(
-                    &self.pool,
-                    user.id,
-                    &challenge,
-                    request.signature.as_deref(),
-                    request.auth_data.as_deref(),
-                    request.credential_id.as_deref(),
-                )
-                .await
-                .map_err(|err| {
-                    error!("MFA config authorize: failed to verify FIDO2 assertion: {err}");
-                    match err {
-                        VerifyError::MalformedProof { message, .. } => {
-                            Status::invalid_argument(message)
-                        }
-                        _ => Status::internal("unexpected error"),
-                    }
-                })?
+                return Err(Status::unimplemented("FIDO2 MFA is not supported"));
             }
             MfaMethod::Oidc => {
                 if !matches!(
@@ -642,106 +472,6 @@ impl MfaConfigServer {
             deadline_timestamp: deadline.and_utc().timestamp(),
             recovery_codes,
         })
-    }
-
-    /// Completes an OIDC authorization attempt from the Edge callback.
-    ///
-    /// The session itself is authorized by the client's next `mfa_config_authorize` poll.
-    /// A failed or foreign-identity authentication ends the session while its attempt is current.
-    #[instrument(skip_all)]
-    pub(crate) async fn mfa_config_oidc_authenticate(
-        &self,
-        state: MfaOidcState,
-        request: ClientMfaOidcAuthenticateRequest,
-        device_info: Option<DeviceInfo>,
-    ) -> Result<(), CoreError> {
-        debug!("Completing MFA configuration OIDC authentication");
-        if !is_business_license_active() {
-            error!("MFA config OIDC: OIDC MFA requires an active business license");
-            return Err(CoreError::invalid_argument(
-                "OIDC MFA method is not supported",
-            ));
-        }
-        let MfaConfigSession {
-            mut token,
-            user,
-            oidc_configured,
-            ..
-        } = load_session(&self.pool, &state.token).await?;
-        if !oidc_configured {
-            error!("MFA config OIDC: user {} cannot use OIDC", user.username);
-            return Err(Status::permission_denied("method not configured").into());
-        }
-        // Turn a callback for a superseded attempt away before anything can end the session.
-        if !matches!(
-            token.get_mfa_config_auth_state(),
-            Some(MfaConfigAuthState::Oidc { attempt_id, completed: false })
-                if attempt_id == state.attempt_id
-        ) {
-            debug!("MFA config OIDC: callback arrived for a superseded attempt");
-            return Err(CoreError::invalid_argument("stale OIDC MFA attempt")
-                .with_code(CoreErrorCode::MfaSessionExpired));
-        }
-
-        let (ip, user_agent) = parse_client_ip_agent(&device_info).map_err(|err| {
-            error!("MFA config OIDC: failed to parse client IP and agent: {err}");
-            Status::internal("unexpected error")
-        })?;
-        let url = Settings::get_current_settings()
-            .edge_callback_url(AuthFlowType::Mfa)
-            .map_err(|err| {
-                error!("MFA config OIDC: invalid callback URL configuration: {err}");
-                Status::invalid_argument("invalid callback URL")
-            })?;
-        // Re-verifies an existing link, so it must neither link nor create an account.
-        let claims_user = match user_from_claims(
-            &self.pool,
-            Nonce::new(request.nonce),
-            AuthorizationCode::new(request.code),
-            url,
-            Some(ip),
-            Some(&user_agent),
-            None,
-            ClaimsUserResolution::LookupOnly,
-        )
-        .await
-        {
-            Ok(claims_user) => claims_user,
-            Err(err) => {
-                info!(
-                    "MFA config OIDC: failed to verify OIDC code for user {}: {err}",
-                    user.username
-                );
-                end_oidc_attempt(&self.pool, &token, &state.attempt_id).await?;
-                return Err(CoreError::unauthenticated("unauthorized")
-                    .with_code(CoreErrorCode::OidcVerificationFailed));
-            }
-        };
-        if claims_user.id != user.id {
-            info!(
-                "User {claims_user} tried to authorize MFA configuration for another user: {user}"
-            );
-            end_oidc_attempt(&self.pool, &token, &state.attempt_id).await?;
-            return Err(CoreError::unauthenticated("unauthorized")
-                .with_code(CoreErrorCode::OidcAccountMismatch));
-        }
-
-        // The attempt is checked again under a row lock, catching one re-issued mid round trip.
-        if !token
-            .mark_mfa_config_oidc_completed(&self.pool, &state.attempt_id)
-            .await
-            .map_err(Status::from)?
-        {
-            debug!("MFA config OIDC: attempt superseded during the OIDC round trip");
-            return Err(CoreError::invalid_argument("stale OIDC MFA attempt")
-                .with_code(CoreErrorCode::MfaSessionExpired));
-        }
-        info!(
-            "User {} completed OIDC authentication for MFA configuration",
-            user.username
-        );
-
-        Ok(())
     }
 
     /// Ends the user's MFA configuration session.

@@ -6,12 +6,12 @@ use std::{
 };
 
 use anyhow::{Context, bail};
-use xguard_common::config::LogFileRotation;
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt},
 };
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use xguard_common::config::LogFileRotation;
 
 const LOG_TAIL_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const BACKUP_EXTENSION: &str = "bak";
@@ -264,11 +264,8 @@ mod tests {
             ("xguard.log.2026-10-16", "newer\n"),
             ("xguard.log.1760000000.bak", "backup\n"),
         ]);
-        std::os::unix::fs::symlink(
-            dir.join("xguard.log.2026-10-16"),
-            dir.join("xguard.log"),
-        )
-        .expect("create log symlink");
+        std::os::unix::fs::symlink(dir.join("xguard.log.2026-10-16"), dir.join("xguard.log"))
+            .expect("create log symlink");
 
         let tail = read_log_tail(dir.join("xguard.log").to_str().expect("utf-8 path")).await;
         fs::remove_dir_all(&dir).expect("remove log dir");

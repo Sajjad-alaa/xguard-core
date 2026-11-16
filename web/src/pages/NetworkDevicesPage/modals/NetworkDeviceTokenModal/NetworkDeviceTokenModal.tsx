@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
+import {
+  closeModal,
+  subscribeCloseModal,
+  subscribeOpenModal,
+} from '../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
+import type { OpenNetworkDeviceTokenModal } from '../../../../shared/hooks/modalControls/types';
 import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
 import { CopyField } from '../../../../shared/xguard-ui/components/CopyField/CopyField';
 import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
@@ -11,13 +18,6 @@ import {
   ThemeVariable,
 } from '../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
-import {
-  closeModal,
-  subscribeCloseModal,
-  subscribeOpenModal,
-} from '../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
-import type { OpenNetworkDeviceTokenModal } from '../../../../shared/hooks/modalControls/types';
 
 const modalNameValue = ModalName.NetworkDeviceToken;
 

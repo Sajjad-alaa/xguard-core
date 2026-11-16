@@ -5,15 +5,22 @@ use std::{
 };
 
 use base64::{Engine, prelude::BASE64_STANDARD};
+use ed25519_dalek::{Signer, SigningKey};
+use getrandom::{SysRng, rand_core::UnwrapErr};
+use ipnetwork::IpNetwork;
+use sqlx::PgPool;
+use tokio::{sync::mpsc::UnboundedReceiver, time::timeout};
+use tonic::Code;
+use totp_lite::{Sha1, totp_custom};
 use xguard_common::{
     db::{
-        Id, NoId,
+        Id,
         models::{
             Device, DeviceType, User, WireguardNetwork,
             biometric_auth::BiometricAuth,
             mfa_flow::{LocationMfaFlowAssignment, MfaFlow},
             polling_token::PollingToken,
-            settings::{Settings, update_current_settings},
+            settings::Settings,
             user::{TOTP_CODE_DIGITS, TOTP_CODE_VALIDITY_PERIOD},
             vpn_client_session::{VpnClientMfaMethod, VpnClientSession},
             webauthn::AuthenticatorKind,
@@ -26,15 +33,6 @@ use xguard_common::{
 use xguard_core::{
     db::models::enrollment::{ENROLLMENT_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TYPE, Token},
     device_access::join_device_to_all_networks,
-    enterprise::{
-        db::models::{
-            acl::{AclRule, AclRuleNetwork, RuleState},
-            openid_provider::{
-                DirectorySyncTarget, DirectorySyncUserBehavior, OpenIdProvider, OpenIdProviderKind,
-            },
-        },
-        license::{License, LicenseTier, SupportType, set_cached_license},
-    },
     events::{BidiStreamEvent, BidiStreamEventType, DesktopClientMfaEvent},
 };
 use xguard_proto::{
@@ -42,7 +40,7 @@ use xguard_proto::{
         ActivateUserRequest, ClientMfaFinishRequest, ClientMfaStartRequest,
         CodeMfaSetupFinishRequest, CodeMfaSetupStartRequest, DeviceConfigResponse,
         EnrollmentStartRequest, MfaConfigAuthorizeRequest, MfaConfigEndRequest,
-        MfaConfigFido2ChallengeRequest, MfaConfigSendCodeRequest, MfaConfigStartRequest, MfaMethod,
+        MfaConfigSendCodeRequest, MfaConfigStartRequest, MfaMethod,
     },
     proxy::{
         ClientMfaTokenValidationRequest, CoreErrorCode, CoreRequest, CoreResponse, DeviceInfo,
@@ -50,15 +48,8 @@ use xguard_proto::{
         core_request, core_response,
     },
 };
-use ed25519_dalek::{Signer, SigningKey};
-use getrandom::{SysRng, rand_core::UnwrapErr};
-use ipnetwork::IpNetwork;
-use sqlx::PgPool;
-use tokio::{sync::mpsc::UnboundedReceiver, time::timeout};
-use tonic::Code;
-use totp_lite::{Sha1, totp_custom};
 
-use crate::tests::common::{HandlerTestContext, MockOidcProvider, RECEIVE_TIMEOUT};
+use crate::tests::common::{HandlerTestContext, RECEIVE_TIMEOUT};
 
 /// A strong password satisfying all `check_password_strength` requirements:
 /// ≥8 chars, digit, upper, lower, special character.
@@ -129,40 +120,12 @@ pub(crate) fn assert_error_response_full(response: &CoreResponse) -> (Code, &str
 
 /// Install a Business-tier license into the global cache for the duration of a
 /// test.
-pub(crate) fn set_test_license_business() {
-    let license = License {
-        customer_id: "test-customer-id".into(),
-        subscription: false,
-        valid_until: None,
-        limits: None,
-        version_date_limit: None,
-        tier: LicenseTier::Business,
-        support_type: SupportType::Basic,
-        features: Vec::new(),
-    };
-    set_cached_license(Some(license));
-}
-
-/// Install an Enterprise-tier license into the global cache for the duration
-/// of a test.
-pub(crate) fn set_test_license_enterprise() {
-    set_cached_license(Some(License {
-        customer_id: "test-customer-id".into(),
-        subscription: false,
-        valid_until: None,
-        limits: None,
-        version_date_limit: None,
-        tier: LicenseTier::Enterprise,
-        support_type: SupportType::Basic,
-        features: Vec::new(),
-    }));
-}
+/// No-op: XGuard has no license tiers.
+pub(crate) fn set_test_license_business() {}
 
 /// Remove the global license (so tests that require no license can clear one
 /// that was previously set).
-pub(crate) fn clear_test_license() {
-    set_cached_license(None);
-}
+pub(crate) fn clear_test_license() {}
 
 /// Return a minimal `DeviceInfo` suitable for test requests.
 ///
@@ -218,50 +181,6 @@ pub(crate) async fn create_network(pool: &PgPool) -> WireguardNetwork<Id> {
     .save(pool)
     .await
     .expect("failed to save test wireguard network")
-}
-
-/// Create a network with ACL enabled, the ACL AllowedIPs toggle on, and
-/// a manual allowed_ips entry so that the test can verify ACL-derived IPs
-/// are merged alongside the manual ones.
-pub(crate) async fn create_acl_network(pool: &PgPool) -> WireguardNetwork<Id> {
-    let mut network = create_network(pool).await;
-    network.acl_enabled = true;
-    network.allowed_ips_from_acl = true;
-    network.allowed_ips = vec!["10.100.0.0/16".parse::<IpNetwork>().unwrap()];
-    network.save(pool).await.unwrap();
-    WireguardNetwork::find_by_id(pool, network.id)
-        .await
-        .unwrap()
-        .unwrap()
-}
-
-/// Insert an applied ACL rule that allows all users and targets a specific
-/// location with the given destination address.
-pub(crate) async fn insert_acl_rule_for_network(
-    pool: &PgPool,
-    network_id: Id,
-    destination: IpNetwork,
-) {
-    let mut conn = pool.acquire().await.unwrap();
-    let rule = AclRule {
-        name: "test-acl-rule".into(),
-        state: RuleState::Applied,
-        enabled: true,
-        allow_all_users: true,
-        addresses: vec![destination],
-        any_address: false,
-        any_port: true,
-        any_protocol: true,
-        use_manual_destination_settings: true,
-        ..Default::default()
-    }
-    .save(&mut *conn)
-    .await
-    .unwrap();
-    AclRuleNetwork::new(rule.id, network_id)
-        .save(&mut *conn)
-        .await
-        .unwrap();
 }
 
 /// Pre-generated valid 32-byte WireGuard public keys (base64, 44 chars each).
@@ -533,71 +452,6 @@ pub(crate) async fn create_mfa_network(pool: &PgPool) -> WireguardNetwork<Id> {
     .await
 }
 
-/// Insert a WireGuard network that derives the legacy `External` MFA mode.
-pub(crate) async fn create_external_mfa_network(pool: &PgPool) -> WireguardNetwork<Id> {
-    static NET_CTR: AtomicU16 = AtomicU16::new(0);
-    let network_number = NET_CTR.fetch_add(1, Ordering::Relaxed);
-    let network = WireguardNetwork::new(
-        format!("test-ext-mfa-network-{network_number}"),
-        31820 + i32::from(network_number % 10_000),
-        "10.2.0.1".to_owned(),
-        None,
-        Vec::<IpNetwork>::new(),
-        true,  // allow_all_groups
-        false, // acl_enabled
-        false, // acl_default_allow
-        false,
-        true, // mfa_enabled
-        ServiceLocationMode::default(),
-    )
-    .try_set_address("10.2.0.1/24")
-    .expect("failed to set ext mfa network address")
-    .save(pool)
-    .await
-    .expect("failed to save test external mfa wireguard network");
-
-    // A lone OIDC method is what derives `LocationMfaMode::External`.
-    assign_mfa_flow(
-        pool,
-        network.id,
-        &format!("test-external-mfa-flow-{network_number}"),
-        vec![VpnClientMfaMethod::Oidc],
-    )
-    .await;
-
-    network
-}
-
-/// Configure the minimum provider record required for OIDC MFA availability checks.
-pub(crate) async fn configure_oidc_provider(pool: &PgPool) {
-    OpenIdProvider::new(
-        "Test".to_owned(),
-        "https://idp.example.com".to_owned(),
-        OpenIdProviderKind::Google,
-        "client_id".to_owned(),
-        "client_secret".to_owned().into(),
-        None,
-        None,
-        None,
-        None,
-        true,
-        60,
-        DirectorySyncUserBehavior::Keep,
-        DirectorySyncUserBehavior::Keep,
-        DirectorySyncTarget::All,
-        None,
-        None,
-        Vec::new(),
-        None,
-        false,
-        false,
-        None,
-    )
-    .save(pool)
-    .await
-    .expect("failed to configure OIDC provider");
-}
-
 /// Insert a WireGuard network whose MFA flow has two steps, so
 /// `derive_legacy_mode` yields `None` (no legacy equivalent). Use this to test
 /// omission of multi-step locations for legacy clients.
@@ -676,13 +530,6 @@ pub(crate) async fn setup_user_email_mfa(pool: &PgPool, user: &mut User<Id>) -> 
     // caller should call this helper before start and pass the code to finish.
     user.generate_email_mfa_code()
         .expect("generate_email_mfa_code")
-}
-
-/// Link `user` to the identity the mock presents, which OIDC MFA requires before offering the
-/// method. `sub` is the email because that is what [`make_oidc_code`] is called with here.
-pub(crate) async fn link_user_oidc_identity(pool: &PgPool, user: &mut User<Id>) {
-    user.openid_sub = Some(user.email.clone());
-    user.save(pool).await.expect("failed to link OIDC identity");
 }
 
 /// Enable TOTP for `user` and persist the secret.  Call `generate_totp_code`
@@ -767,7 +614,6 @@ pub(crate) async fn send_mfa_start_raw(
                 location_id,
                 pubkey: pubkey.to_owned(),
                 method: method as i32,
-                posture_data: None,
             },
         )),
     });
@@ -987,80 +833,6 @@ pub(crate) async fn assert_vpn_session_exists(
         })
 }
 
-/// Insert a test `OpenIdProvider` backed by the given mock into the database.
-pub(crate) async fn create_oidc_provider(
-    pool: &PgPool,
-    mock: &MockOidcProvider,
-) -> OpenIdProvider<Id> {
-    OpenIdProvider::<NoId> {
-        id: NoId,
-        name: "test-oidc".to_owned(),
-        base_url: mock.base_url.clone(),
-        kind: OpenIdProviderKind::Custom,
-        client_id: mock.client_id.clone(),
-        client_secret: mock.client_secret.clone().into(),
-        display_name: Some("Test OIDC".to_owned()),
-        google_service_account_key: None,
-        google_service_account_email: None,
-        admin_email: None,
-        directory_sync_enabled: false,
-        directory_sync_interval: 600,
-        directory_sync_user_behavior: DirectorySyncUserBehavior::Keep,
-        directory_sync_admin_behavior: DirectorySyncUserBehavior::Keep,
-        directory_sync_target: DirectorySyncTarget::All,
-        okta_private_jwk: None,
-        okta_dirsync_client_id: None,
-        directory_sync_group_match: Vec::new(),
-        jumpcloud_api_key: None,
-        prefetch_users: false,
-        disable_password_management: false,
-        directory_sync_user_groups: None,
-    }
-    .save(pool)
-    .await
-    .expect("failed to save test OpenIdProvider")
-}
-
-/// Set `Settings.public_proxy_url` in the DB (and in the global cache) so
-/// that `edge_callback_url` returns a valid URL during tests.
-pub(crate) async fn set_public_proxy_url(pool: &PgPool, url: &str) {
-    let mut settings = Settings::get_current_settings();
-    settings.public_proxy_url = url.to_owned();
-    update_current_settings(pool, settings)
-        .await
-        .expect("failed to update public_proxy_url in settings");
-}
-
-/// The `email_verified` claim a mock ID token should carry.
-pub(crate) enum EmailVerified {
-    /// `"email_verified": true`.
-    Verified,
-    /// `"email_verified": false`.
-    Unverified,
-    /// The claim is omitted, as many providers do.
-    Absent,
-}
-
-/// Build the authorization code expected by `MockOidcProvider`'s `/token`
-/// endpoint, with the email marked as verified.
-pub(crate) fn make_oidc_code(sub: &str, email: &str, nonce: &str) -> String {
-    make_oidc_code_with_email_verified(sub, email, nonce, EmailVerified::Verified)
-}
-
-/// Build an authorization code carrying the given `email_verified` claim.
-pub(crate) fn make_oidc_code_with_email_verified(
-    sub: &str,
-    email: &str,
-    nonce: &str,
-    email_verified: EmailVerified,
-) -> String {
-    match email_verified {
-        EmailVerified::Verified => format!("{sub}:{email}:{nonce}:true"),
-        EmailVerified::Unverified => format!("{sub}:{email}:{nonce}:false"),
-        EmailVerified::Absent => format!("{sub}:{email}:{nonce}"),
-    }
-}
-
 /// Send an `ActivateUser` request through the handler and return the raw
 /// `CoreResponse`.  The caller must have already started an enrollment session.
 pub(crate) async fn send_activate_user(
@@ -1225,31 +997,6 @@ pub(crate) async fn send_code_mfa_setup_finish(
     context.mock_proxy_mut().recv_outbound().await
 }
 
-/// Send a `CodeMfaSetupFinish` request carrying a FIDO2 attestation instead of a code.
-pub(crate) async fn send_code_mfa_setup_finish_fido2(
-    context: &mut HandlerTestContext,
-    token: &str,
-    name: Option<&str>,
-    attestation: Option<&str>,
-) -> CoreResponse {
-    static MFA_FINISH_FIDO2_CTR: AtomicU64 = AtomicU64::new(3700);
-    let id = MFA_FINISH_FIDO2_CTR.fetch_add(1, Ordering::Relaxed);
-    context.mock_proxy().send_request(CoreRequest {
-        id,
-        device_info: Some(make_device_info()),
-        payload: Some(core_request::Payload::CodeMfaSetupFinish(
-            CodeMfaSetupFinishRequest {
-                code: String::new(),
-                token: token.to_owned(),
-                method: MfaMethod::Fido2 as i32,
-                name: name.map(str::to_owned),
-                fido2_attestation: attestation.map(str::to_owned),
-            },
-        )),
-    });
-    context.mock_proxy_mut().recv_outbound().await
-}
-
 /// Send an `MfaConfigStart` request for the given polling token and device key.
 pub(crate) async fn send_mfa_config_start(
     context: &mut HandlerTestContext,
@@ -1310,52 +1057,6 @@ pub(crate) async fn send_mfa_config_authorize(
                 signature: None,
                 auth_data: None,
                 credential_id: None,
-            },
-        )),
-    });
-    context.mock_proxy_mut().recv_outbound().await
-}
-
-/// Request a FIDO2 challenge for an MFA configuration session.
-pub(crate) async fn send_mfa_config_fido2_challenge(
-    context: &mut HandlerTestContext,
-    session_token: &str,
-) -> CoreResponse {
-    static MFA_CONFIG_FIDO2_CHALLENGE_CTR: AtomicU64 = AtomicU64::new(5000);
-    let id = MFA_CONFIG_FIDO2_CHALLENGE_CTR.fetch_add(1, Ordering::Relaxed);
-    context.mock_proxy().send_request(CoreRequest {
-        id,
-        device_info: Some(make_device_info()),
-        payload: Some(core_request::Payload::MfaConfigFido2Challenge(
-            MfaConfigFido2ChallengeRequest {
-                session_token: session_token.to_owned(),
-            },
-        )),
-    });
-    context.mock_proxy_mut().recv_outbound().await
-}
-
-/// Send an `MfaConfigAuthorize` request carrying a FIDO2 assertion.
-pub(crate) async fn send_mfa_config_authorize_fido2(
-    context: &mut HandlerTestContext,
-    session_token: &str,
-    signature: Option<Vec<u8>>,
-    auth_data: Option<Vec<u8>>,
-    credential_id: Option<Vec<u8>>,
-) -> CoreResponse {
-    static MFA_CONFIG_AUTH_FIDO2_CTR: AtomicU64 = AtomicU64::new(5250);
-    let id = MFA_CONFIG_AUTH_FIDO2_CTR.fetch_add(1, Ordering::Relaxed);
-    context.mock_proxy().send_request(CoreRequest {
-        id,
-        device_info: Some(make_device_info()),
-        payload: Some(core_request::Payload::MfaConfigAuthorize(
-            MfaConfigAuthorizeRequest {
-                session_token: session_token.to_owned(),
-                method: MfaMethod::Fido2 as i32,
-                code: String::new(),
-                signature,
-                auth_data,
-                credential_id,
             },
         )),
     });

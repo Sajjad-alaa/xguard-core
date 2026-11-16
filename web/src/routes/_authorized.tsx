@@ -2,12 +2,6 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { DisplayListModal } from '../shared/components/DisplayListModal/DisplayListModal';
 import { AppUpdateModal } from '../shared/components/modals/AppUpdateModal/AppUpdateModal';
 import { ConfirmActionModal } from '../shared/components/modals/ConfirmActionModal/ConfirmActionModal';
-import { LicenseExpiredModal } from '../shared/components/modals/license/LicenseExpiredModal/LicenseExpiredModal';
-import { LicenseLimitConflictModal } from '../shared/components/modals/license/LicenseLimitConflictModal/LicenseLimitConflictModal';
-import { LicenseReactivatedModal } from '../shared/components/modals/license/LicenseReactivatedModal/LicenseReactivatedModal';
-import { LimitReachedModal } from '../shared/components/modals/license/LimitReachedModal/LimitReachedModal';
-import { UpgradeBusinessModal } from '../shared/components/modals/license/UpgradeBusinessModal/UpgradeBusinessModal';
-import { UpgradeEnterpriseModal } from '../shared/components/modals/license/UpgradeEnterpriseModal/UpgradeEnterpriseModal';
 import { SelectionModal } from '../shared/components/modals/SelectionModal/SelectionModal';
 import { AppInfoProvider } from '../shared/providers/AppInfoProvider';
 import { AppUserProvider } from '../shared/providers/AppUserProvider';
@@ -58,12 +52,6 @@ function RouteComponent() {
     <AppUserProvider>
       <AppInfoProvider>
         <Outlet />
-        <LimitReachedModal />
-        <LicenseLimitConflictModal />
-        <UpgradeBusinessModal />
-        <UpgradeEnterpriseModal />
-        <LicenseExpiredModal />
-        <LicenseReactivatedModal />
         <DisplayListModal />
         <SelectionModal />
         <ConfirmActionModal />

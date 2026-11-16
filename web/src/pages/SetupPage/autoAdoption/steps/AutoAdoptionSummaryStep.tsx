@@ -67,7 +67,8 @@ export const AutoAdoptionSummaryStep = () => {
       kicker: m.initial_setup_auto_adoption_summary_support_kicker(),
       title: m.initial_setup_auto_adoption_summary_support_title(),
       buttonText: m.initial_setup_auto_adoption_summary_support_button(),
-      onButtonClick: () => window.open('https://github.com/Sajjad-alaa/xguard-core', '_blank'),
+      onButtonClick: () =>
+        window.open('https://github.com/Sajjad-alaa/xguard-core', '_blank'),
     },
   ];
 

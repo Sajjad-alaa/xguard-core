@@ -16,8 +16,8 @@ use tower::Service;
 use tracing::{debug, error};
 
 use crate::{
-    ComponentInfo, XGuardComponent, SYSTEM_INFO_HEADER, VERSION_HEADER, Version,
-    is_version_lower, server::XGuardVersionService,
+    ComponentInfo, SYSTEM_INFO_HEADER, VERSION_HEADER, Version, XGuardComponent, is_version_lower,
+    server::XGuardVersionService,
 };
 
 impl<S, B> Service<Request<Body>> for XGuardVersionService<S>

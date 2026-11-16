@@ -13,6 +13,8 @@ import { SettingsHeader } from '../../shared/components/SettingsHeader/SettingsH
 import { SettingsLayout } from '../../shared/components/SettingsLayout/SettingsLayout';
 import { SettingsCardSkeleton } from '../../shared/components/skeleton/SettingsCardSkeleton/SettingsCardSkeleton';
 import { externalLink } from '../../shared/constants';
+import { getLicenseInfoQueryOptions } from '../../shared/query';
+import { downloadFile } from '../../shared/utils/download';
 import { AppText } from '../../shared/xguard-ui/components/AppText/AppText';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import { ButtonMenu } from '../../shared/xguard-ui/components/ButtonMenu/MenuButton';
@@ -23,8 +25,6 @@ import { MarkedSectionHeader } from '../../shared/xguard-ui/components/MarkedSec
 import docIllustration from '../../shared/xguard-ui/components/SectionSelect/assets/manual-user.png';
 import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { TextStyle, ThemeSpacing, ThemeVariable } from '../../shared/xguard-ui/types';
-import { getLicenseInfoQueryOptions } from '../../shared/query';
-import { downloadFile } from '../../shared/utils/download';
 
 export const SupportPage = () => {
   return (

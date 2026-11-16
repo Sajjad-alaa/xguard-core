@@ -1,5 +1,9 @@
 use std::{assert_matches, net::IpAddr};
 
+use reqwest::StatusCode;
+use serde_json::json;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::sync::mpsc::error::TryRecvError;
 use xguard_common::db::models::{
     Device, DeviceType, User, WireguardNetwork, device::UserDevice, wireguard::ServiceLocationMode,
 };
@@ -8,10 +12,6 @@ use xguard_core::{
     grpc::GatewayCommand,
     handlers::{Auth, wireguard::ImportedNetworkData},
 };
-use reqwest::StatusCode;
-use serde_json::json;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::sync::mpsc::error::TryRecvError;
 
 use super::common::{fetch_user_details, make_test_client, setup_pool};
 

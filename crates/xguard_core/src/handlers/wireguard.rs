@@ -4,6 +4,9 @@ use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
+use ipnetwork::IpNetwork;
+use serde_json::{Value, json};
+use sqlx::{PgConnection, PgPool, error::ErrorKind};
 use xguard_common::{
     csv::AsCsv,
     db::{
@@ -17,9 +20,6 @@ use xguard_common::{
     },
     utils::parse_network_address_list,
 };
-use ipnetwork::IpNetwork;
-use serde_json::{Value, json};
-use sqlx::{PgConnection, PgPool, error::ErrorKind};
 
 use super::{ApiResponse, ApiResult, WebError, device_for_admin_or_self, user_for_admin_or_self};
 #[cfg(feature = "openapi")]
@@ -28,18 +28,8 @@ use crate::{
     appstate::AppState,
     auth::{AdminRole, SessionInfo},
     device_access::{build_device_config, join_device_to_all_networks},
-    enterprise::{
-        db::models::{
-            device_posture::DevicePostureLocation, enterprise_settings::EnterpriseSettings,
-        },
-        firewall::try_get_location_firewall_config,
-        handlers::CanManageDevices,
-        has_enterprise_access, is_business_license_active,
-        license::{LicenseFeature, LicenseTier, get_cached_license},
-        limits::{get_counts, update_counts},
-    },
     events::{ApiEvent, ApiEventType, ApiRequestContext},
-    grpc::{GatewayCommand, location_mfa_required_tier},
+    grpc::GatewayCommand,
     handlers::{
         gateway::GatewayInfo,
         mfa_flow::{assignment_error_response, license_error_response},
@@ -61,11 +51,9 @@ pub(crate) struct WireguardNetworkInfo {
     gateways: Vec<GatewayInfo>,
     allowed_groups: Vec<String>,
     has_devices: bool,
+    /// Always empty: device posture checks are not supported.
     posture_checks: Vec<Id>,
     group_client_mtus: Vec<GroupClientMtu>,
-    /// Minimum license tier required by saved MFA assignments. `null` means MFA is disabled or the
-    /// assignments fit the Free tier.
-    mfa_required_tier: Option<LicenseTier>,
 }
 
 #[derive(Serialize)]
@@ -339,8 +327,7 @@ fn normalize_mfa_flow_assignments(
         (status = 500, description = "Unable to create network.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn create_network(
@@ -356,28 +343,14 @@ pub(crate) async fn create_network(
         session.user.username
     );
 
-    // check if adding new network will go over license limits
-    let location_count = get_counts().location();
-
-    if get_cached_license()
-        .as_ref()
-        .and_then(|l| l.limits.as_ref())
-        .is_some_and(|l| location_count >= l.locations)
-    {
-        error!("Adding location {network_name} blocked! License limit reached.");
-        return Ok(WebError::Forbidden("License limit reached").into());
-    }
-
-    // check if tries to add service location without active enterprise
-    if data.service_location_mode != ServiceLocationMode::Disabled
-        && !has_enterprise_access(Some(LicenseFeature::ServiceLocations))
-    {
-        error!("Adding location {network_name} blocked! Enterprise license required.");
+    // service locations need the desktop client's service-location module (not in XGuard)
+    if data.service_location_mode != ServiceLocationMode::Disabled {
+        error!("Adding location {network_name} blocked! Service locations are not supported.");
         return Ok(ApiResponse {
             json: json!({
-                "msg": "Enterprise license required.",
+                "msg": "Service locations are not supported.",
             }),
-            status: StatusCode::FORBIDDEN,
+            status: StatusCode::BAD_REQUEST,
         });
     }
 
@@ -385,10 +358,9 @@ pub(crate) async fn create_network(
         .group_client_mtus
         .as_ref()
         .is_some_and(|overrides| !overrides.is_empty())
-        && !has_enterprise_access(Some(LicenseFeature::GroupMTUOverride))
     {
-        error!("Adding location {network_name} blocked! Group MTU requires Enterprise license.");
-        return Ok(WebError::Forbidden("Group MTU requires an Enterprise license.").into());
+        error!("Adding location {network_name} blocked! Group MTU overrides are not supported.");
+        return Ok(WebError::BadRequest("Group MTU overrides are not supported.".into()).into());
     }
 
     data.validate_peer_disconnect_threshold()?;
@@ -432,34 +404,17 @@ pub(crate) async fn create_network(
     network.add_all_allowed_devices(&mut transaction).await?;
     info!("Assigning IPs for existing devices in network {network}");
 
-    debug!(
-        "Assigning posture checks {:?} to {network}",
-        data.posture_checks
-    );
-    if !has_enterprise_access(Some(LicenseFeature::DevicePosture))
-        && !data.posture_checks.is_empty()
-    {
-        error!(
-            "Cannot assign posture checks to new location {network}: Enterprise license required."
-        );
-        return Ok(WebError::Forbidden(
-            "Cannot assign posture checks to new location: Enterprise license required.",
-        )
-        .into());
+    if !data.posture_checks.is_empty() {
+        error!("Cannot assign posture checks to new location {network}: not supported.");
+        return Ok(WebError::BadRequest("Device posture checks are not supported.".into()).into());
     }
-    DevicePostureLocation::set_for_location(&mut transaction, network.id, &data.posture_checks)
-        .await?;
-    info!(
-        "Assigned posture checks {:?} to new location {network}",
-        data.posture_checks
-    );
 
     let mfa_assignments: Vec<LocationMfaFlowAssignment> = data.mfa_flows.clone();
     if let Err(error) = MfaFlow::validate_mfa_flow_assignments_license(
         &mut transaction,
         &mfa_assignments,
-        has_enterprise_access(None),
-        is_business_license_active(),
+        true,
+        true,
     )
     .await
     {
@@ -479,15 +434,6 @@ pub(crate) async fn create_network(
         session.user.username
     );
 
-    if !data.posture_checks.is_empty() {
-        appstate.emit_event(ApiEvent {
-            context: context.clone(),
-            event: Box::new(ApiEventType::LocationPosturesAssigned {
-                location: network.clone(),
-                posture_ids: data.posture_checks.clone(),
-            }),
-        })?;
-    }
     if !mfa_assignments.is_empty() {
         appstate.emit_event(ApiEvent {
             context: context.clone(),
@@ -504,7 +450,6 @@ pub(crate) async fn create_network(
             location: network.clone(),
         }),
     })?;
-    update_counts(&appstate.pool).await?;
 
     Ok(ApiResponse::json(network, StatusCode::CREATED))
 }
@@ -533,8 +478,7 @@ async fn find_network(id: Id, pool: &PgPool) -> Result<WireguardNetwork<Id>, Web
         (status = 500, description = "Unable to update network.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn modify_network(
@@ -550,15 +494,13 @@ pub(crate) async fn modify_network(
         session.user.username
     );
 
-    // check if tries to configure service location without active enterprise
-    if data.service_location_mode != ServiceLocationMode::Disabled
-        && !has_enterprise_access(Some(LicenseFeature::ServiceLocations))
-    {
+    // service locations need the desktop client's service-location module (not in XGuard)
+    if data.service_location_mode != ServiceLocationMode::Disabled {
         let name = data.name;
-        error!("Modification of location {name} blocked! Enterprise license required.");
+        error!("Modification of location {name} blocked! Service locations are not supported.");
         return Ok(ApiResponse {
             json: json!({
-                "msg": "Enterprise license required.",
+                "msg": "Service locations are not supported.",
             }),
             status: StatusCode::BAD_REQUEST,
         });
@@ -600,47 +542,18 @@ pub(crate) async fn modify_network(
     network
         .set_allowed_groups(&mut transaction, &data.allowed_groups)
         .await?;
-    // Without a license, keep saved overrides.
-    if let Some(overrides) = &data.group_client_mtus {
-        if has_enterprise_access(Some(LicenseFeature::GroupMTUOverride)) {
-            save_group_client_mtus(&network, &mut transaction, overrides).await?;
-        } else {
-            warn!(
-                location_id = network.id,
-                "Ignoring group MTU overrides: Enterprise license inactive"
-            );
-        }
-    }
-
-    // Don't error out on no license - otherwise users won't be able to update other location fields.
-    let postures_changed = if has_enterprise_access(Some(LicenseFeature::DevicePosture)) {
-        let mut current_postures =
-            DevicePostureLocation::find_by_location(&mut *transaction, network.id).await?;
-        let mut requested_postures = data.posture_checks.clone();
-
-        current_postures.sort_unstable();
-        requested_postures.sort_unstable();
-
-        if current_postures != requested_postures {
-            DevicePostureLocation::set_for_location(
-                &mut transaction,
-                network.id,
-                &data.posture_checks,
-            )
-            .await?;
-        }
-        current_postures != requested_postures
-    } else {
+    if data
+        .group_client_mtus
+        .as_ref()
+        .is_some_and(|overrides| !overrides.is_empty())
+    {
         warn!(
             location_id = network.id,
-            "Ignoring posture check assignments because the Enterprise license is inactive"
+            "Ignoring group MTU overrides: not supported"
         );
-        false
-    };
+    }
 
-    // Only changed assignments can be written with a Business license; otherwise, preserve the
-    // existing assignments so a license downgrade does not block unrelated location updates. Flow
-    // order is significant, but group order is not, so normalize group IDs before comparing.
+    // Flow order is significant, but group order is not, so normalize group IDs before comparing.
     let current_mfa_assignments = normalize_mfa_flow_assignments(
         MfaFlow::for_location(&mut *transaction, network.id)
             .await?
@@ -658,24 +571,14 @@ pub(crate) async fn modify_network(
         match MfaFlow::validate_mfa_flow_assignments_license(
             &mut transaction,
             &mfa_assignments,
-            has_enterprise_access(None),
-            is_business_license_active(),
+            true,
+            true,
         )
         .await
         {
             Ok(()) => true,
             Err(MfaFlowAssignmentLicenseError::Database(error)) => return Err(error.into()),
-            Err(error) if is_business_license_active() => {
-                return assignment_license_error_response(error);
-            }
-            Err(error) => {
-                warn!(
-                    location_id = network.id,
-                    error = %error,
-                    "Ignoring MFA flow assignments because of license limits"
-                );
-                false
-            }
+            Err(error) => return assignment_license_error_response(error),
         }
     } else {
         false
@@ -699,10 +602,7 @@ pub(crate) async fn modify_network(
     sync_location_allowed_devices(&network, &mut transaction, None, &mut events).await?;
 
     let peers = get_location_allowed_peers(&network, &mut transaction).await?;
-    let maybe_firewall_config =
-        try_get_location_firewall_config(&network, &mut transaction).await?;
-    let gateway_command =
-        GatewayCommand::NetworkModified(network.clone(), peers, maybe_firewall_config);
+    let gateway_command = GatewayCommand::NetworkModified(network.clone(), peers);
 
     // commit DB transaction
     transaction.commit().await?;
@@ -712,15 +612,6 @@ pub(crate) async fn modify_network(
         "User {} updated WireGuard network {network_id}",
         session.user.username,
     );
-    if postures_changed {
-        appstate.emit_event(ApiEvent {
-            context: context.clone(),
-            event: Box::new(ApiEventType::LocationPosturesAssigned {
-                location: network.clone(),
-                posture_ids: data.posture_checks.clone(),
-            }),
-        })?;
-    }
     if mfa_assignments_updated {
         appstate.emit_event(ApiEvent {
             context: context.clone(),
@@ -757,8 +648,7 @@ pub(crate) async fn modify_network(
         (status = 500, description = "Unable to delete network.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_network(
@@ -792,7 +682,6 @@ pub(crate) async fn delete_network(
         context,
         event: Box::new(ApiEventType::VpnLocationRemoved { location: network }),
     })?;
-    update_counts(&appstate.pool).await?;
 
     Ok(ApiResponse::default())
 }
@@ -809,8 +698,7 @@ pub(crate) async fn delete_network(
         (status = 500, description = "Unable to list networks.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn list_networks(_role: AdminRole, State(appstate): State<AppState>) -> ApiResult {
@@ -823,18 +711,14 @@ pub async fn list_networks(_role: AdminRole, State(appstate): State<AppState>) -
         let gateways = GatewayInfo::find_by_location_id(&appstate.pool, network.id).await?;
         let has_devices =
             WireguardNetworkDevice::has_devices_in_network(&appstate.pool, network.id).await?;
-        let posture_checks =
-            DevicePostureLocation::find_by_location(&appstate.pool, network.id).await?;
         let group_client_mtus = network.fetch_group_client_mtus(&appstate.pool).await?;
-        let mfa_required_tier = location_mfa_required_tier(&appstate.pool, &network).await?;
         network_info.push(WireguardNetworkInfo {
             network,
             gateways,
             allowed_groups,
             has_devices,
-            posture_checks,
+            posture_checks: Vec::new(),
             group_client_mtus,
-            mfa_required_tier,
         });
     }
     network_info.sort_by(|a, b| a.network.name.cmp(&b.network.name));
@@ -856,8 +740,7 @@ pub async fn list_networks(_role: AdminRole, State(appstate): State<AppState>) -
         (status = 500, description = "Unable to count networks.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn count_networks(_role: AdminRole, State(appstate): State<AppState>) -> ApiResult {
@@ -887,8 +770,7 @@ pub async fn count_networks(_role: AdminRole, State(appstate): State<AppState>) 
         (status = 500, description = "Unable to get network.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn network_details(
@@ -905,18 +787,14 @@ pub(crate) async fn network_details(
             let gateways = GatewayInfo::find_by_location_id(&appstate.pool, network_id).await?;
             let has_devices =
                 WireguardNetworkDevice::has_devices_in_network(&appstate.pool, network_id).await?;
-            let posture_checks =
-                DevicePostureLocation::find_by_location(&appstate.pool, network_id).await?;
             let group_client_mtus = network.fetch_group_client_mtus(&appstate.pool).await?;
-            let mfa_required_tier = location_mfa_required_tier(&appstate.pool, &network).await?;
             let network_info = WireguardNetworkInfo {
                 network,
                 gateways,
                 allowed_groups,
                 has_devices,
-                posture_checks,
+                posture_checks: Vec::new(),
                 group_client_mtus,
-                mfa_required_tier,
             };
             ApiResponse::json(network_info, StatusCode::OK)
         }
@@ -943,8 +821,7 @@ pub(crate) async fn network_details(
         (status = 500, description = "Unable to get gateway status.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn gateway_status(
@@ -975,8 +852,7 @@ pub(crate) async fn gateway_status(
         (status = 500, description = "Unable to get gateway status.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn all_gateways_status(
@@ -1008,8 +884,7 @@ pub(crate) async fn all_gateways_status(
         (status = 500, description = "Unable to import network.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn import_network(
@@ -1067,7 +942,6 @@ pub(crate) async fn import_network(
             location: network.clone(),
         }),
     })?;
-    update_counts(&appstate.pool).await?;
 
     Ok(ApiResponse::json(
         ImportedNetworkData { network, devices },
@@ -1097,8 +971,7 @@ pub(crate) async fn import_network(
         (status = 500, description = "Unable to assign devices.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn add_user_devices(
@@ -1134,7 +1007,6 @@ pub(crate) async fn add_user_devices(
             "User {} mapped {device_count} devices for {network_id} network",
             user.username,
         );
-        update_counts(&appstate.pool).await?;
 
         Ok(ApiResponse::with_status(StatusCode::CREATED))
     } else {
@@ -1202,12 +1074,10 @@ pub(crate) struct AddDeviceResult {
         (status = 500, description = "Unable to add device.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn add_device(
-    _can_manage_devices: CanManageDevices,
     session: SessionInfo,
     context: ApiRequestContext,
     State(appstate): State<AppState>,
@@ -1222,15 +1092,6 @@ pub(crate) async fn add_device(
     );
 
     let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
-
-    let settings = EnterpriseSettings::get(&appstate.pool).await?;
-    if settings.only_client_activation && !session.is_admin {
-        warn!(
-            "User {} tried to add a device, but manual device management is disaled",
-            session.user.username
-        );
-        return Err(WebError::Forbidden("Manual device management is disabled"));
-    }
 
     // Disabled users' devices never get network access (see
     // `is_device_allowed_in_network`), and get stripped on the next sync even if
@@ -1279,38 +1140,11 @@ pub(crate) async fn add_device(
     let (network_info, configs) =
         join_device_to_all_networks(&mut transaction, &device, &user).await?;
 
-    // prepare a list of gateway commands to be sent
-    let mut events = Vec::new();
-
-    // get all locations affected by device being added
-    let mut affected_location_ids = HashSet::new();
-    for network_info_item in network_info.clone() {
-        affected_location_ids.insert(network_info_item.network_id);
-    }
-
-    // send firewall config updates to affected locations
-    // if they have ACL enabled & enterprise features are active
-    for location_id in affected_location_ids {
-        if let Some(location) = WireguardNetwork::find_by_id(&mut *transaction, location_id).await?
-            && let Some(firewall_config) =
-                try_get_location_firewall_config(&location, &mut transaction).await?
-        {
-            debug!(
-                "Sending firewall config update for location {location} affected by adding new \
-                    user {username} devices"
-            );
-            events.push(GatewayCommand::FirewallConfigChanged(
-                location_id,
-                firewall_config,
-            ));
-        }
-    }
-
     // add peer on relevant gateways
-    events.push(GatewayCommand::DeviceCreated(DeviceInfo {
+    let events = vec![GatewayCommand::DeviceCreated(DeviceInfo {
         device: device.clone(),
         network_info: network_info.clone(),
-    }));
+    })];
 
     appstate.send_multiple_gateway_commands(events);
 
@@ -1354,8 +1188,6 @@ pub(crate) async fn add_device(
         device: device.clone(),
     };
 
-    update_counts(&appstate.pool).await?;
-
     appstate.emit_event(ApiEvent {
         context,
         event: Box::new(ApiEventType::UserDeviceAdded {
@@ -1398,12 +1230,10 @@ pub(crate) async fn add_device(
         (status = 500, description = "Unable to update device.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn modify_device(
-    _can_manage_devices: CanManageDevices,
     session: SessionInfo,
     context: ApiRequestContext,
     Path(device_id): Path<Id>,
@@ -1412,32 +1242,8 @@ pub(crate) async fn modify_device(
 ) -> ApiResult {
     debug!("User {} updating device {device_id}", session.user.username);
 
-    let settings = EnterpriseSettings::get(&appstate.pool).await?;
-    if settings.admin_device_management && !session.is_admin {
-        warn!(
-            "User {} tried to edit a device, but manual device management is disaled",
-            session.user.username
-        );
-        return Err(WebError::Forbidden("Manual device management is disabled"));
-    }
-
     let mut device = device_for_admin_or_self(&appstate.pool, &session, device_id).await?;
     let before = device.clone();
-
-    if settings.only_client_activation
-        && !session.is_admin
-        && (data.wireguard_pubkey != before.wireguard_pubkey
-            || data.description != before.description)
-    {
-        warn!(
-            "User {} tried to modify fields other than device name for device {device_id}, but \
-            only client activation is enabled",
-            session.user.username
-        );
-        return Err(WebError::BadRequest(
-            "Only the device name can be edited when only client activation is enabled".into(),
-        ));
-    }
 
     let networks = WireguardNetwork::all(&appstate.pool).await?;
 
@@ -1524,8 +1330,7 @@ pub(crate) async fn modify_device(
         (status = 500, description = "Unable to get device.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn get_device(
@@ -1557,12 +1362,10 @@ pub(crate) async fn get_device(
         (status = 500, description = "Unable to delete device.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_device(
-    _can_manage_devices: CanManageDevices,
     session: SessionInfo,
     context: ApiRequestContext,
     Path(device_id): Path<Id>,
@@ -1581,27 +1384,7 @@ pub(crate) async fn delete_device(
     // prepare device info
     let device_info = DeviceInfo::from_device(&mut *transaction, device.clone()).await?;
 
-    // delete device before firewall config is generated
     device.clone().delete(&mut *transaction).await?;
-
-    update_counts(&mut *transaction).await?;
-
-    // prepare firewall update for affected networks if ACL & enterprise features are enabled
-    for info in &device_info.network_info {
-        if let Some(location) =
-            WireguardNetwork::find_by_id(&mut *transaction, info.network_id).await?
-            && let Some(firewall_config) =
-                try_get_location_firewall_config(&location, &mut transaction).await?
-        {
-            debug!(
-                "Sending firewall config update for location {location} affected by deleting user {username} device"
-            );
-            events.push(GatewayCommand::FirewallConfigChanged(
-                location.id,
-                firewall_config,
-            ));
-        }
-    }
 
     let device_id = device_info.device.id;
     events.push(GatewayCommand::DeviceDeleted(device_info.clone()));
@@ -1671,8 +1454,7 @@ pub(crate) async fn delete_device(
         (status = 500, description = "Unable to list devices.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn list_devices(_role: AdminRole, State(appstate): State<AppState>) -> ApiResult {
@@ -1709,8 +1491,7 @@ pub(crate) async fn list_devices(_role: AdminRole, State(appstate): State<AppSta
         (status = 500, description = "Unable to list user devices.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn list_user_devices(
@@ -1750,8 +1531,7 @@ pub(crate) async fn list_user_devices(
         (status = 500, description = "Unable to get device configuration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn download_config(
@@ -1760,15 +1540,6 @@ pub(crate) async fn download_config(
     Path((network_id, device_id)): Path<(Id, Id)>,
 ) -> Result<String, WebError> {
     debug!("Creating config for device {device_id} in network {network_id}");
-
-    let settings = EnterpriseSettings::get(&appstate.pool).await?;
-    if settings.only_client_activation && !session.is_admin {
-        warn!(
-            "User {} tried to download device config, but manual device management is disabled",
-            session.user.username
-        );
-        return Err(WebError::Forbidden("Manual device management is disabled"));
-    }
 
     let network = find_network(network_id, &appstate.pool).await?;
     let device = device_for_admin_or_self(&appstate.pool, &session, device_id).await?;
@@ -1818,8 +1589,7 @@ pub(crate) async fn download_config(
         (status = 500, description = "Unable to get device configuration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn user_device_configs(
@@ -1828,15 +1598,6 @@ pub(crate) async fn user_device_configs(
     Path(device_id): Path<Id>,
 ) -> ApiResult {
     debug!("Creating WireGuard configs for user device {device_id}.");
-
-    let settings = EnterpriseSettings::get(&appstate.pool).await?;
-    if settings.only_client_activation && !session.is_admin {
-        warn!(
-            "User {} tried to download device config, but manual device management is disabled",
-            session.user.username
-        );
-        return Err(WebError::Forbidden("Manual device management is disabled"));
-    }
 
     let device = device_for_admin_or_self(&appstate.pool, &session, device_id).await?;
     let user = User::find_by_id(&appstate.pool, device.user_id)

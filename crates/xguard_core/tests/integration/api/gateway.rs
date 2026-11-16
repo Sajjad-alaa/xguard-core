@@ -1,11 +1,11 @@
+use reqwest::StatusCode;
+use serde_json::json;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::db::{
     Id,
     models::{WireguardNetwork, gateway::Gateway},
 };
 use xguard_core::handlers::Auth;
-use reqwest::StatusCode;
-use serde_json::json;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::common::{make_network, make_test_client, setup_pool};
 

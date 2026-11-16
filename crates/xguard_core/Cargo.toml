@@ -43,13 +43,8 @@ futures.workspace = true
 humantime.workspace = true
 # match version used by sqlx
 ipnetwork.workspace = true
-jsonwebkey.workspace = true
 jsonwebtoken.workspace = true
-ldap3.workspace = true
-md4.workspace = true
 openidconnect.workspace = true
-parse_link_header.workspace = true
-pgp.workspace = true
 prost.workspace = true
 # match version used by sqlx
 rand.workspace = true
@@ -65,8 +60,6 @@ serde-saphyr.workspace = true
 serde_cbor.workspace = true
 serde_json.workspace = true
 serde_urlencoded.workspace = true
-sha-1.workspace = true
-sha256.workspace = true
 sqlx.workspace = true
 ssh-key.workspace = true
 struct-patch.workspace = true
@@ -87,13 +80,11 @@ tower_governor.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
-trait-variant.workspace = true
 ua-parser.workspace = true
 # openapi
 utoipa = { workspace = true, optional = true }
 utoipa-swagger-ui = { workspace = true, optional = true }
 uuid.workspace = true
-webauthn-authenticator-rs.workspace = true
 webauthn-rs.workspace = true
 webauthn-rs-proto.workspace = true
 x25519-dalek.workspace = true
@@ -118,6 +109,7 @@ name = "openapi"
 required-features = ["openapi"]
 
 [dev-dependencies]
+webauthn-authenticator-rs = { version = "0.5", features = ["softpasskey"] }
 # Enable the shared test-only helpers (mock SMTP server) for the test build.
 xguard_common = { workspace = true, features = ["test-support"] }
 claims.workspace = true
@@ -135,8 +127,5 @@ reqwest = { version = "0.12", features = [
 serde_qs = "1.0"
 sha2.workspace = true
 tower.workspace = true
-webauthn-authenticator-rs = { version = "0.5", features = ["softpasskey"] }
 wiremock = "0.6"
 
-[build-dependencies]
-tonic-prost-build.workspace = true

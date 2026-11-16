@@ -83,7 +83,7 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
-use crate::{ComponentInfo, XGuardComponent, SystemInfo};
+use crate::{ComponentInfo, SystemInfo, XGuardComponent};
 
 /// Container for version information extracted from tracing span hierarchy.
 ///

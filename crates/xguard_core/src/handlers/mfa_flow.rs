@@ -5,6 +5,9 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sqlx::PgPool;
 use xguard_common::db::{
     Id,
     models::{
@@ -17,21 +20,15 @@ use xguard_common::db::{
         vpn_client_session::VpnClientMfaMethod,
     },
 };
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use sqlx::PgPool;
 
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
 use crate::{
     appstate::AppState,
     auth::{AdminRole, SessionInfo},
-    enterprise::{
-        db::models::openid_provider::OpenIdProvider, is_business_license_active,
-        is_mfa_method_licensed,
-    },
     error::WebError,
     events::{ApiEvent, ApiEventType, ApiRequestContext},
+    features::is_mfa_method_supported,
     handlers::{ApiResponse, ApiResult},
 };
 
@@ -218,15 +215,11 @@ pub(crate) fn license_error_response(field: &str, code: &str) -> ApiResponse {
 fn check_flow_license_gates(step_methods: &[Vec<VpnClientMfaMethod>]) -> Option<ApiResponse> {
     // Keep these write-side gates in sync with `flow_unavailable_reason`, which reports saved-flow
     // availability.
-    if step_methods.len() > 1 && !is_business_license_active() {
-        return Some(license_error_response("steps", "business_license_required"));
-    }
-
     for (method, code) in [
-        (VpnClientMfaMethod::Oidc, "business_license_required"),
-        (VpnClientMfaMethod::Fido2, "enterprise_license_required"),
+        (VpnClientMfaMethod::Oidc, "method_not_supported"),
+        (VpnClientMfaMethod::Fido2, "method_not_supported"),
     ] {
-        if !is_mfa_method_licensed(method)
+        if !is_mfa_method_supported(method)
             && let Some(index) = step_methods
                 .iter()
                 .position(|methods| methods.contains(&method))
@@ -396,7 +389,7 @@ async fn validate_flow_request(
     title: &str,
     step_methods: &[Vec<VpnClientMfaMethod>],
     before_methods: &[Option<HashSet<VpnClientMfaMethod>>],
-    pool: &PgPool,
+    _pool: &PgPool,
 ) -> Result<Option<ApiResponse>, WebError> {
     if let Some(resp) = check_flow_license_gates(step_methods) {
         return Ok(Some(resp));
@@ -410,7 +403,7 @@ async fn validate_flow_request(
     if let Some(resp) = check_method_prerequisites(
         step_methods,
         Settings::get_current_settings().smtp_configured(),
-        OpenIdProvider::get_current(pool).await?.is_some(),
+        false,
         before_methods,
     ) {
         return Ok(Some(resp));
@@ -433,8 +426,7 @@ async fn validate_flow_request(
         (status = 500, description = "Unable to list MFA flows.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn list_mfa_flows(
@@ -457,7 +449,7 @@ pub async fn list_mfa_flows(
             .push(location);
     }
     let smtp_configured = Settings::get_current_settings().smtp_configured();
-    let oidc_configured = OpenIdProvider::get_current(&appstate.pool).await?.is_some();
+    let oidc_configured = false;
     let gates = MethodGates::current(smtp_configured, oidc_configured);
     let availability = compute_method_availability(gates);
     let response: Vec<MfaFlowListItemResponse> = items
@@ -465,7 +457,7 @@ pub async fn list_mfa_flows(
         .map(|item| {
             let steps = steps_by_flow.remove(&item.id).unwrap_or_default();
             let locations = locations_by_flow.remove(&item.id).unwrap_or_default();
-            let reason = flow_unavailable_reason(&steps, &availability, gates);
+            let reason = flow_unavailable_reason(&steps, &availability);
             MfaFlowListItemResponse::new(item, steps, locations, reason)
         })
         .collect();
@@ -487,8 +479,7 @@ pub async fn list_mfa_flows(
         (status = 500, description = "Unable to create MFA flow.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn create_mfa_flow(
@@ -516,13 +507,6 @@ pub async fn create_mfa_flow(
             "MFA flow {} already exists",
             data.title
         )));
-    }
-
-    if !is_business_license_active() && MfaFlow::any_exist(&appstate.pool).await? {
-        return Ok(license_error_response(
-            "flow",
-            "additional_flow_business_license_required",
-        ));
     }
 
     let mut tx = appstate.pool.begin().await?;
@@ -562,8 +546,7 @@ pub async fn create_mfa_flow(
         (status = 500, description = "Unable to get MFA flow.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_mfa_flow(
@@ -602,8 +585,7 @@ pub async fn get_mfa_flow(
         (status = 500, description = "Unable to update MFA flow.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn update_mfa_flow(
@@ -707,8 +689,7 @@ pub async fn update_mfa_flow(
         (status = 500, description = "Unable to delete MFA flow.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn delete_mfa_flow(
@@ -787,8 +768,7 @@ pub async fn delete_mfa_flow(
         (status = 500, description = "Unable to list assigned flows.", body = ApiErrorResponse)
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_location_mfa_flows(
@@ -849,10 +829,8 @@ pub struct MethodAvailabilityResponse {
 pub enum MethodAvailabilityReason {
     /// Method is usable.
     Available,
-    /// A Business license is required.
-    Licensed,
-    /// An Enterprise license is required.
-    EnterpriseLicensed,
+    /// The method is not supported by XGuard.
+    NotSupported,
     /// SMTP must be configured first.
     SmtpNotConfigured,
     /// An OpenID provider must be configured first.
@@ -867,12 +845,7 @@ pub enum MethodAvailabilityReason {
 fn flow_unavailable_reason(
     steps: &[MfaFlowStep<Id>],
     availability: &[MethodAvailabilityResponse],
-    gates: MethodGates,
 ) -> Option<MethodAvailabilityReason> {
-    if steps.len() > 1 && !gates.multi_step_licensed {
-        return Some(MethodAvailabilityReason::Licensed);
-    }
-
     let entry = |method: VpnClientMfaMethod| {
         availability
             .iter()
@@ -901,7 +874,6 @@ struct MethodGates {
     oidc_provider_configured: bool,
     oidc_licensed: bool,
     fido2_licensed: bool,
-    multi_step_licensed: bool,
 }
 
 impl MethodGates {
@@ -909,9 +881,8 @@ impl MethodGates {
         Self {
             smtp_configured,
             oidc_provider_configured,
-            oidc_licensed: is_mfa_method_licensed(VpnClientMfaMethod::Oidc),
-            fido2_licensed: is_mfa_method_licensed(VpnClientMfaMethod::Fido2),
-            multi_step_licensed: is_business_license_active(),
+            oidc_licensed: is_mfa_method_supported(VpnClientMfaMethod::Oidc),
+            fido2_licensed: is_mfa_method_supported(VpnClientMfaMethod::Fido2),
         }
     }
 }
@@ -926,7 +897,6 @@ fn compute_method_availability(gates: MethodGates) -> Vec<MethodAvailabilityResp
         oidc_provider_configured,
         oidc_licensed,
         fido2_licensed,
-        multi_step_licensed: _,
     } = gates;
     let methods = [
         (
@@ -947,7 +917,7 @@ fn compute_method_availability(gates: MethodGates) -> Vec<MethodAvailabilityResp
             VpnClientMfaMethod::Oidc,
             oidc_licensed && oidc_provider_configured,
             if !oidc_licensed {
-                MethodAvailabilityReason::Licensed
+                MethodAvailabilityReason::NotSupported
             } else if !oidc_provider_configured {
                 MethodAvailabilityReason::OidcProviderMissing
             } else {
@@ -970,7 +940,7 @@ fn compute_method_availability(gates: MethodGates) -> Vec<MethodAvailabilityResp
             if fido2_licensed {
                 MethodAvailabilityReason::Available
             } else {
-                MethodAvailabilityReason::EnterpriseLicensed
+                MethodAvailabilityReason::NotSupported
             },
         ),
     ];
@@ -997,21 +967,20 @@ fn compute_method_availability(gates: MethodGates) -> Vec<MethodAvailabilityResp
         (status = 500, description = "Unable to compute method availability.", body = ApiErrorResponse)
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_method_availability(
     _admin: AdminRole,
     session: SessionInfo,
-    State(appstate): State<AppState>,
+    State(_appstate): State<AppState>,
 ) -> ApiResult {
     debug!(
         "User {} fetching MFA method availability",
         session.user.username
     );
     let smtp_configured = Settings::get_current_settings().smtp_configured();
-    let oidc_configured = OpenIdProvider::get_current(&appstate.pool).await?.is_some();
+    let oidc_configured = false;
     let gates = MethodGates::current(smtp_configured, oidc_configured);
     Ok(ApiResponse::json(
         compute_method_availability(gates),
@@ -1038,7 +1007,6 @@ mod tests {
             oidc_provider_configured: oidc_provider,
             oidc_licensed: business,
             fido2_licensed: fido2,
-            multi_step_licensed: business,
         }
     }
 
@@ -1046,7 +1014,7 @@ mod tests {
         steps: &[MfaFlowStep<Id>],
         gates: MethodGates,
     ) -> Option<MethodAvailabilityReason> {
-        flow_unavailable_reason(steps, &compute_method_availability(gates), gates)
+        flow_unavailable_reason(steps, &compute_method_availability(gates))
     }
 
     #[test]
@@ -1059,16 +1027,17 @@ mod tests {
             .is_none()
         );
 
-        assert!(matches!(
+        // XGuard has no license tiers: multi-step flows are always allowed.
+        assert!(
             flow_reason(
                 &[
                     step(&[VpnClientMfaMethod::Totp]),
                     step(&[VpnClientMfaMethod::Totp])
                 ],
                 gates(true, true, false, false)
-            ),
-            Some(MethodAvailabilityReason::Licensed)
-        ));
+            )
+            .is_none()
+        );
 
         assert!(matches!(
             flow_reason(
@@ -1095,14 +1064,14 @@ mod tests {
         );
     }
 
-    /// A step that has only FIDO2 cannot run without an Enterprise license, so the flow reports
-    /// the Enterprise reason. A step that also has another usable method still runs.
+    /// A step that has only FIDO2 cannot run (FIDO2 VPN MFA is not supported by XGuard), so the
+    /// flow reports `NotSupported`. A step that also has another usable method still runs.
     #[test]
-    fn test_flow_unavailable_reason_reports_enterprise_license_for_fido2_only_step() {
+    fn test_flow_unavailable_reason_reports_not_supported_for_fido2_only_step() {
         let business = gates(true, true, true, false);
         assert!(matches!(
             flow_reason(&[step(&[VpnClientMfaMethod::Fido2])], business),
-            Some(MethodAvailabilityReason::EnterpriseLicensed)
+            Some(MethodAvailabilityReason::NotSupported)
         ));
         assert!(
             flow_reason(

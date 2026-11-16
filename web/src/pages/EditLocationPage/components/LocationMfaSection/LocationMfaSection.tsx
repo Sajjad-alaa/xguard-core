@@ -8,17 +8,15 @@ import type {
   MfaFlowAssignment,
   MfaFlowListItemResponse,
 } from '../../../../shared/api/types';
-import { enterpriseBadgeProps } from '../../../../shared/components/badges/EnterpriseBadge';
 import type { SelectionOption } from '../../../../shared/components/SelectionSection/type';
 import { externalLink } from '../../../../shared/constants';
-import { Badge } from '../../../../shared/xguard-ui/components/Badge/Badge';
+import { mfaFlowUnavailableText } from '../../../../shared/utils/mfaFlowSteps';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
 import { IconKind } from '../../../../shared/xguard-ui/components/Icon';
 import { Icon } from '../../../../shared/xguard-ui/components/Icon/Icon';
 import { ThemeSpacing, ThemeVariable } from '../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
-import { mfaFlowUnavailableText } from '../../../../shared/utils/mfaFlowSteps';
 import postureCheckShield from '../../assets/posture_check_shield.png';
 import {
   overrideKey,
@@ -231,12 +229,6 @@ export const LocationMfaSection = ({
           <Divider spacing={ThemeSpacing.Xl} />
           <div className="location-mfa-overrides-header">
             <p className="title">{m.location_mfa_overrides_title()}</p>
-            {overridesLocked && (
-              <Badge
-                {...enterpriseBadgeProps}
-                text={m.license_enterprise_feature_badge()}
-              />
-            )}
           </div>
           <p className="location-mfa-overrides-description">
             {m.location_mfa_overrides_description()}

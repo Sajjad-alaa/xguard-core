@@ -5,18 +5,18 @@ use axum::{
     http::StatusCode,
 };
 use axum_extra::extract::Query;
-use xguard_common::{
-    db::{
-        Id,
-        models::{BiometricAuth, OAuth2AuthorizedApp, Settings, User, WebAuthn, user::SecurityKey},
-    },
-    types::{group_diff::GroupDiff, user_info::UserInfo},
-};
 use humantime::parse_duration;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, Postgres, QueryBuilder, Type};
 use thiserror::Error;
+use xguard_common::{
+    db::{
+        Id,
+        models::{BiometricAuth, OAuth2AuthorizedApp, Settings, User, WebAuthn, user::SecurityKey},
+    },
+    types::user_info::UserInfo,
+};
 
 use super::{
     AddUserData, ApiResponse, ApiResult, PasswordChange, PasswordChangeSelf,
@@ -33,20 +33,6 @@ use crate::{
     },
     enrollment_management::{
         send_enrollment_invitation, start_desktop_configuration, start_user_enrollment,
-    },
-    enterprise::{
-        db::models::{api_tokens::ApiToken, openid_provider::OpenIdProvider},
-        handlers::CanManageDevices,
-        ldap::{
-            model::{ldap_sync_allowed_for_user, maybe_update_rdn},
-            utils::{
-                ldap_add_user, ldap_add_user_to_groups, ldap_change_password, ldap_delete_user,
-                ldap_handle_user_modify, ldap_remove_user_from_groups,
-                ldap_store_enrollment_tokens, ldap_update_user_state,
-            },
-        },
-        license::get_cached_license,
-        limits::{get_counts, update_counts},
     },
     error::WebError,
     events::{ApiEvent, ApiEventType, ApiRequestContext},
@@ -296,8 +282,7 @@ pub struct UserFilterParams {
         (status = 500, description = "Unable to list users.", body = ApiErrorResponse, example = json!({"msg": "Internal error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn list_users(
@@ -348,8 +333,7 @@ pub(crate) async fn list_users(
 
     // Map [`User`] to [`UserInfo`].
     // TODO: too many queries – optimise.
-    let oidc_disable_password_management =
-        OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+    let oidc_disable_password_management = false;
     let mut users = Vec::with_capacity(all_users.len());
     for user in all_users {
         users.push(
@@ -469,8 +453,7 @@ fn apply_sorting(query_builder: &mut QueryBuilder<Postgres>, sorting: &SortParam
         (status = 500, description = "Unable to get user.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn get_user(
@@ -479,8 +462,7 @@ pub(crate) async fn get_user(
     Path(username): Path<String>,
 ) -> ApiResult {
     let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
-    let oidc_disable_password_management =
-        OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+    let oidc_disable_password_management = false;
     let user_details =
         UserDetails::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
     Ok(ApiResponse::json(user_details, StatusCode::OK))
@@ -524,8 +506,7 @@ pub(crate) async fn get_user(
         (status = 500, description = "Unable to create user.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn add_user(
@@ -537,18 +518,6 @@ pub(crate) async fn add_user(
 ) -> ApiResult {
     let username = user_data.username.clone();
     debug!("User {} adding user {username}", session.user.username);
-
-    // check if adding new user will go over limits
-    let user_count = get_counts().user();
-
-    if get_cached_license()
-        .as_ref()
-        .and_then(|l| l.limits.as_ref())
-        .is_some_and(|l| user_count >= l.users)
-    {
-        error!("Adding user {username} blocked! License limit reached.");
-        return Ok(WebError::Forbidden("License limit reached").into());
-    }
 
     // check username
     if let Err(err) = check_username(&username) {
@@ -586,7 +555,7 @@ pub(crate) async fn add_user(
     };
 
     // create new user
-    let mut user = User::new(
+    let user = User::new(
         user_data.username,
         password,
         user_data.last_name,
@@ -596,20 +565,8 @@ pub(crate) async fn add_user(
     )
     .save(&appstate.pool)
     .await?;
-    update_counts(&appstate.pool).await?;
 
-    if let Some(password) = user_data.password {
-        ldap_add_user(
-            &mut user,
-            Some(&password),
-            &appstate.pool,
-            &appstate.ldap_tx,
-        )
-        .await;
-    }
-
-    let oidc_disable_password_management =
-        OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+    let oidc_disable_password_management = false;
     let user_info = UserInfo::from_user(
         &appstate.pool,
         user.clone(),
@@ -649,8 +606,7 @@ pub(crate) async fn add_user(
         (status = 500, description = "Unable to start enrollment.", body = ApiErrorResponse, example = json!({"msg": "unexpected error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn start_enrollment(
@@ -758,12 +714,10 @@ pub(crate) async fn start_enrollment(
         (status = 500, description = "Unable to start remote desktop configuration.", body = ApiErrorResponse, example = json!({"msg": "unexpected error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn start_remote_desktop_configuration(
-    _can_manage_devices: CanManageDevices,
     session: SessionInfo,
     context: ApiRequestContext,
     State(appstate): State<AppState>,
@@ -844,8 +798,7 @@ pub(crate) async fn start_remote_desktop_configuration(
         (status = 500, description = "Unable to check username.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn username_available(
@@ -888,8 +841,7 @@ pub(crate) async fn username_available(
         (status = 500, description = "Unable to update user.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn modify_user(
@@ -901,8 +853,7 @@ pub(crate) async fn modify_user(
 ) -> ApiResult {
     debug!("User {} updating user {username}", session.user.username);
     let mut user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
-    let oidc_disable_password_management =
-        OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+    let oidc_disable_password_management = false;
     let groups_before = UserInfo::from_user(
         &appstate.pool,
         user.clone(),
@@ -913,7 +864,7 @@ pub(crate) async fn modify_user(
 
     // store user before mods
     let before = user.clone();
-    let old_username = user.username.clone();
+    let _old_username = user.username.clone();
     if let Err(err) = check_username(&user_info.username) {
         debug!("Username {} rejected: {err}", user_info.username);
         return Ok(ApiResponse::with_status(StatusCode::BAD_REQUEST));
@@ -930,7 +881,6 @@ pub(crate) async fn modify_user(
     let status_changing = user_info.is_active != user.is_active;
 
     let mut transaction = appstate.pool.begin().await?;
-    let ldap_sync_allowed = ldap_sync_allowed_for_user(&user, &mut *transaction).await?;
 
     // remove authorized apps if needed
     let request_app_ids: Vec<Id> = user_info
@@ -948,7 +898,6 @@ pub(crate) async fn modify_user(
         user.remove_oauth2_authorized_apps(&mut *transaction, &removed_apps)
             .await?;
     }
-    let mut group_diff = GroupDiff::default();
     let mut usermgr = UserManager::new();
     if session.is_admin {
         // prevent admin from disabling himself
@@ -957,27 +906,8 @@ pub(crate) async fn modify_user(
             return Ok(ApiResponse::with_status(StatusCode::BAD_REQUEST));
         }
 
-        // check if re-enabling a disabled user will go over license limits
-        if !user.is_active && user_info.is_active {
-            let user_count = get_counts().user();
-            let user_limit = get_cached_license()
-                .as_ref()
-                .and_then(|l| l.limits.as_ref())
-                .map(|l| l.users);
-
-            if let Some(limit) = user_limit
-                && user_count >= limit
-            {
-                error!("Enabling user {username} blocked. License limit reached.");
-                return Ok(WebError::LicenseLimitReached(format!(
-                    "Cannot enable user {username}: license user limit reached ({user_count}/{limit})"
-                ))
-                .into());
-            }
-        }
-
         // update VPN gateway config if user status or groups have changed
-        group_diff = user_info
+        let group_diff = user_info
             .handle_user_groups(&mut transaction, &mut user)
             .await?;
         if group_diff.changed()
@@ -993,14 +923,6 @@ pub(crate) async fn modify_user(
                 .sync_allowed_user_devices(&user, &mut transaction)
                 .await?;
         }
-
-        // remove API tokens when deactivating a user
-        if before.is_active && !user.is_active {
-            let api_tokens = ApiToken::find_by_user_id(&mut *transaction, user.id).await?;
-            for token in api_tokens {
-                token.delete(&mut *transaction).await?;
-            }
-        }
     }
 
     let updating_self = session.user.username == user.username;
@@ -1009,9 +931,6 @@ pub(crate) async fn modify_user(
     user.save(&mut *transaction).await?;
     transaction.commit().await?;
     usermgr.send(&appstate.gateway_tx);
-    if status_changing {
-        update_counts(&appstate.pool).await?;
-    }
     let user_info = UserInfo::from_user(
         &appstate.pool,
         user.clone(),
@@ -1019,57 +938,7 @@ pub(crate) async fn modify_user(
     )
     .await?;
 
-    if ldap_sync_allowed {
-        ldap_handle_user_modify(
-            &old_username,
-            &mut user,
-            &appstate.pool,
-            &appstate.gateway_tx,
-            &appstate.ldap_tx,
-        )
-        .await;
-    }
-
-    maybe_update_rdn(&mut user);
     user.save(&appstate.pool).await?;
-
-    Box::pin(ldap_update_user_state(
-        &mut user,
-        &appstate.pool,
-        &appstate.gateway_tx,
-        &appstate.ldap_tx,
-    ))
-    .await;
-
-    if group_diff.changed() || status_changing {
-        if !group_diff.added.is_empty() {
-            ldap_add_user_to_groups(
-                &user,
-                group_diff
-                    .added
-                    .iter()
-                    .map(String::as_str)
-                    .collect::<HashSet<&str>>(),
-                &appstate.pool,
-                &appstate.ldap_tx,
-            )
-            .await;
-        }
-
-        if !group_diff.removed.is_empty() {
-            ldap_remove_user_from_groups(
-                &user,
-                group_diff
-                    .removed
-                    .iter()
-                    .map(String::as_str)
-                    .collect::<HashSet<&str>>(),
-                &appstate.pool,
-                &appstate.ldap_tx,
-            )
-            .await;
-        }
-    }
 
     appstate.trigger_action(AppEvent::UserModified(user_info.clone()));
     let groups_after = user_info.groups.clone();
@@ -1131,8 +1000,7 @@ pub(crate) async fn modify_user(
         (status = 500, description = "Unable to delete user.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_user(
@@ -1154,11 +1022,6 @@ pub(crate) async fn delete_user(
             session.user.username
         );
         let mut transaction = appstate.pool.begin().await?;
-        let user_for_ldap = if ldap_sync_allowed_for_user(&user, &mut *transaction).await? {
-            Some(user.clone().as_noid())
-        } else {
-            None
-        };
         let mut usermgr = UserManager::new();
         usermgr
             .delete_user_and_cleanup_devices(user.clone(), &mut transaction)
@@ -1167,11 +1030,6 @@ pub(crate) async fn delete_user(
         appstate.trigger_action(AppEvent::UserDeleted(username.clone()));
         transaction.commit().await?;
         usermgr.send(&appstate.gateway_tx);
-
-        update_counts(&appstate.pool).await?;
-        if let Some(user_for_ldap) = user_for_ldap {
-            ldap_delete_user(&user_for_ldap, &appstate.pool, &appstate.ldap_tx).await;
-        }
 
         info!("User {} deleted user {}", session.user.username, &username);
         appstate.emit_event(ApiEvent {
@@ -1191,7 +1049,7 @@ pub(crate) async fn delete_user(
 /// management (set/change/reset) is disabled for `user`.
 async fn user_password_management_disabled(pool: &PgPool, user: &User<Id>) -> sqlx::Result<bool> {
     let settings = Settings::get_current_settings();
-    let oidc_disabled = OpenIdProvider::current_disables_password_management(pool).await?;
+    let oidc_disabled = false;
     let is_admin = user.is_admin(pool).await?;
     Ok(user.password_management_disabled(is_admin, &settings, oidc_disabled))
 }
@@ -1212,8 +1070,7 @@ async fn user_password_management_disabled(pool: &PgPool, user: &User<Id>) -> sq
         (status = 500, description = "Unable to change your password.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn change_self_password(
@@ -1250,14 +1107,6 @@ pub(crate) async fn change_self_password(
     user.logout_all_sessions_except(&appstate.pool, &session_id)
         .await?;
 
-    ldap_change_password(
-        &mut user,
-        &data.new_password,
-        &appstate.pool,
-        &appstate.ldap_tx,
-    )
-    .await;
-
     info!("User {} changed his password.", &user.username);
     appstate.emit_event(ApiEvent {
         context,
@@ -1288,8 +1137,7 @@ pub(crate) async fn change_self_password(
         (status = 500, description = "Unable to change user password.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn change_password(
@@ -1333,13 +1181,6 @@ pub(crate) async fn change_password(
         user.set_password(&data.new_password);
         user.save(&appstate.pool).await?;
         user.logout_all_sessions(&appstate.pool).await?;
-        ldap_change_password(
-            &mut user,
-            &data.new_password,
-            &appstate.pool,
-            &appstate.ldap_tx,
-        )
-        .await;
         info!(
             "Admin {} changed password for user {username}",
             session.user.username
@@ -1375,8 +1216,7 @@ pub(crate) async fn change_password(
         (status = 500, description = "Unable to send password reset email.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn reset_password(
@@ -1466,8 +1306,7 @@ pub(crate) async fn reset_password(
         (status = 500, description = "Unable to delete security key.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_security_key(
@@ -1547,13 +1386,11 @@ pub(crate) async fn delete_security_key(
         (status = 500, description = "Unable to get your own account details.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn me(session: SessionInfo, State(appstate): State<AppState>) -> ApiResult {
-    let oidc_disable_password_management =
-        OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+    let oidc_disable_password_management = false;
     let user_info = UserInfo::from_user(
         &appstate.pool,
         session.user,
@@ -1580,8 +1417,7 @@ pub async fn me(session: SessionInfo, State(appstate): State<AppState>) -> ApiRe
         (status = 500, description = "Unable to delete authorized OAuth2 application.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_authorized_app(
@@ -1640,8 +1476,7 @@ pub(crate) async fn delete_authorized_app(
         (status = 500, description = "Unable to disable users.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn bulk_disable_users(
@@ -1686,12 +1521,6 @@ pub(crate) async fn bulk_disable_users(
         let before = user.clone();
         let mut user_to_disable = user;
 
-        // Remove API tokens when deactivating a user (mirrors `modify_user`).
-        let api_tokens = ApiToken::find_by_user_id(&mut *transaction, user_to_disable.id).await?;
-        for token in api_tokens {
-            token.delete(&mut *transaction).await?;
-        }
-
         usermgr
             .disable_user(&mut user_to_disable, &mut transaction)
             .await?;
@@ -1699,16 +1528,6 @@ pub(crate) async fn bulk_disable_users(
     }
     transaction.commit().await?;
     usermgr.send(&appstate.gateway_tx);
-
-    for (_, user) in &mut events {
-        Box::pin(ldap_update_user_state(
-            user,
-            &appstate.pool,
-            &appstate.gateway_tx,
-            &appstate.ldap_tx,
-        ))
-        .await;
-    }
 
     info!(
         "User {} bulk-disabled {} user(s)",
@@ -1741,8 +1560,7 @@ pub(crate) async fn bulk_disable_users(
         (status = 500, description = "Unable to enable users.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn bulk_enable_users(
@@ -1769,30 +1587,6 @@ pub(crate) async fn bulk_enable_users(
         ));
     }
 
-    // check if enabling the requested users will go over license limits
-    let to_enable_count = users.iter().filter(|user| !user.is_active).count() as u32;
-    if to_enable_count > 0 {
-        let user_count = get_counts().user();
-        let user_limit = get_cached_license()
-            .as_ref()
-            .and_then(|l| l.limits.as_ref())
-            .map(|l| l.users);
-
-        if let Some(limit) = user_limit
-            && user_count + to_enable_count > limit
-        {
-            error!(
-                "User {} bulk-enabling users blocked! License limit reached.",
-                session.user.username
-            );
-            return Ok(WebError::LicenseLimitReached(format!(
-                "Cannot enable {to_enable_count} user(s): license user limit reached \
-                ({user_count}/{limit})"
-            ))
-            .into());
-        }
-    }
-
     let mut events = Vec::with_capacity(users.len());
     let mut transaction = appstate.pool.begin().await?;
     let mut usermgr = UserManager::new();
@@ -1811,19 +1605,6 @@ pub(crate) async fn bulk_enable_users(
     }
     transaction.commit().await?;
     usermgr.send(&appstate.gateway_tx);
-    if to_enable_count > 0 {
-        update_counts(&appstate.pool).await?;
-    }
-
-    for (_, user) in &mut events {
-        Box::pin(ldap_update_user_state(
-            user,
-            &appstate.pool,
-            &appstate.gateway_tx,
-            &appstate.ldap_tx,
-        ))
-        .await;
-    }
 
     info!(
         "User {} bulk-enabled {} user(s)",
@@ -1856,8 +1637,7 @@ pub(crate) async fn bulk_enable_users(
         (status = 500, description = "Unable to delete users.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn bulk_delete_users(
@@ -1893,35 +1673,22 @@ pub(crate) async fn bulk_delete_users(
     }
 
     let mut transaction = appstate.pool.begin().await?;
-    let mut ldap_targets = Vec::new();
     let mut removed_usernames = Vec::new();
     let mut removed_users = Vec::new();
     let mut usermgr = UserManager::new();
     for user in users {
         let username = user.username.clone();
-        let user_for_ldap = if ldap_sync_allowed_for_user(&user, &mut *transaction).await? {
-            Some(user.clone().as_noid())
-        } else {
-            None
-        };
         usermgr
             .delete_user_and_cleanup_devices(user.clone(), &mut transaction)
             .await?;
-        if let Some(noid_user) = user_for_ldap {
-            ldap_targets.push(noid_user);
-        }
         removed_usernames.push(username);
         removed_users.push(user);
     }
     transaction.commit().await?;
     usermgr.send(&appstate.gateway_tx);
-    update_counts(&appstate.pool).await?;
 
     for username in removed_usernames {
         appstate.trigger_action(AppEvent::UserDeleted(username));
-    }
-    for noid_user in &ldap_targets {
-        ldap_delete_user(noid_user, &appstate.pool, &appstate.ldap_tx).await;
     }
 
     info!(
@@ -1957,8 +1724,7 @@ pub(crate) async fn bulk_delete_users(
         (status = 500, description = "Unable to start enrollments.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn bulk_start_enrollment(
@@ -2056,150 +1822,6 @@ pub(crate) async fn bulk_start_enrollment(
 
     Ok(ApiResponse::new(
         json!({ "started": started.len(), "skipped": skipped }),
-        StatusCode::OK,
-    ))
-}
-
-/// Bulk store enrollment tokens in LDAP
-///
-/// Creates a fresh enrollment token for each of the given users and writes it to the attribute
-/// configured through `ldap_enrollment_token_attr`. No enrollment email is sent.
-///
-/// Disabled users are counted in `skipped`, users whose token could not be written to LDAP in
-/// `failed` - their token is still created in XGuard. The request is rejected when LDAP or
-/// the token attribute is not configured, or when any of the given IDs does not exist or is
-/// your own.
-#[cfg_attr(feature = "openapi", utoipa::path(
-    post,
-    path = "/api/v1/user/bulk-store-enrollment-token-ldap",
-    tag = "user",
-    request_body(content = BulkUserOperationRequest, example = json!({"users": [1, 4, 6, 23, 35]})),
-    responses(
-        (status = 200, description = "Enrollment tokens stored.", body = Object, example = json!({"stored": 3, "skipped": 1, "failed": 0})),
-        (status = 400, description = "LDAP is disabled or the enrollment token attribute is not configured, or the list contains unknown user IDs or your own account.", body = ApiErrorResponse, example = json!({"msg": "LDAP enrollment token attribute is not configured."})),
-        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
-        (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
-        (status = 500, description = "Unable to store enrollment tokens.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
-    ),
-    security(
-        ("cookie" = []),
-        ("api_token" = [])
-    )
-))]
-pub(crate) async fn bulk_store_enrollment_token_in_ldap(
-    _role: AdminRole,
-    State(appstate): State<AppState>,
-    session: SessionInfo,
-    context: ApiRequestContext,
-    Json(mut data): Json<BulkUserOperationRequest>,
-) -> ApiResult {
-    debug!(
-        "User {} bulk-storing enrollment tokens in LDAP for {} user(s)",
-        session.user.username,
-        data.users.len()
-    );
-
-    // Checked up front, so a misconfigured instance doesn't create tokens that never reach LDAP.
-    let settings = Settings::get_current_settings();
-    if settings.ldap_enrollment_token_attribute().is_none() {
-        debug!(
-            "User {} attempted to store enrollment tokens in LDAP, but the enrollment token \
-            attribute is not configured",
-            session.user.username
-        );
-        return Err(WebError::BadRequest(
-            "LDAP enrollment token attribute is not configured.".into(),
-        ));
-    }
-    if !settings.ldap_enabled {
-        debug!(
-            "User {} attempted to store enrollment tokens in LDAP while the LDAP integration is \
-            disabled",
-            session.user.username
-        );
-        return Err(WebError::BadRequest(
-            "LDAP integration is not enabled.".into(),
-        ));
-    }
-
-    data.users.sort_unstable();
-    data.users.dedup();
-
-    let users = User::find_by_ids(&appstate.pool, &data.users).await?;
-
-    if users.len() != data.users.len() {
-        return Err(WebError::BadRequest(
-            "Request contained users that don't exist in db.".into(),
-        ));
-    }
-
-    let token_expiration_time_seconds = settings.enrollment_token_timeout().as_secs();
-    let public_proxy_url = settings.proxy_public_url()?;
-
-    let mut tokens = Vec::with_capacity(users.len());
-    let mut skipped = 0;
-    let mut transaction = appstate.pool.begin().await?;
-    for mut user in users {
-        if !user.is_active {
-            debug!(
-                "Skipping enrollment token storage for disabled user: {}",
-                user.username
-            );
-            skipped += 1;
-            continue;
-        }
-        let token_id = start_user_enrollment(
-            &mut user,
-            &mut transaction,
-            &session.user,
-            // Delivered through LDAP, never by mail.
-            None,
-            token_expiration_time_seconds,
-            public_proxy_url.clone(),
-            false,
-        )
-        .await?;
-        tokens.push((user, token_id));
-    }
-    transaction.commit().await?;
-
-    // Written after the commit so a slow LDAP server doesn't hold the transaction open.
-    let token_refs = tokens
-        .iter()
-        .map(|(user, token)| (user, token.clone()))
-        .collect::<Vec<_>>();
-    let failed =
-        ldap_store_enrollment_tokens(&token_refs, public_proxy_url.as_str(), &appstate.pool)
-            .await
-            .map_err(|err| {
-                error!(
-                    "Failed to store enrollment tokens in LDAP for user {}: {err}",
-                    session.user.username
-                );
-                WebError::BadRequest(format!("Failed to store enrollment tokens in LDAP: {err}"))
-            })?;
-    let failed_ids = failed.iter().map(|user| user.id).collect::<HashSet<_>>();
-    let failed_count = failed_ids.len();
-    let stored_count = tokens.len() - failed_count;
-
-    info!(
-        "User {} stored enrollment tokens in LDAP for {stored_count} user(s) ({skipped} skipped, \
-        {failed_count} failed)",
-        session.user.username
-    );
-
-    for (user, _) in tokens {
-        if failed_ids.contains(&user.id) {
-            continue;
-        }
-        appstate.emit_event(ApiEvent {
-            context: context.clone(),
-            event: Box::new(ApiEventType::EnrollmentTokenAdded { user }),
-        })?;
-    }
-
-    Ok(ApiResponse::new(
-        json!({ "stored": stored_count, "skipped": skipped, "failed": failed_count }),
         StatusCode::OK,
     ))
 }

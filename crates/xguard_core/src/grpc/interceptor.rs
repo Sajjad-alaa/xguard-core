@@ -1,5 +1,5 @@
-use xguard_common::auth::claims::{Claims, ClaimsType};
 use tonic::{Status, service::Interceptor};
+use xguard_common::auth::claims::{Claims, ClaimsType};
 
 use crate::grpc::{AUTHORIZATION_HEADER, HOSTNAME_HEADER};
 

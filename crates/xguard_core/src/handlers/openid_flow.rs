@@ -15,13 +15,6 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, CookieJar, PrivateCookieJar, SameSite};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use chrono::Utc;
-use xguard_common::db::{
-    Id, NoId,
-    models::{
-        AuthCode, OAuth2AuthorizedApp, OAuth2Token, Session, SessionState, Settings, User,
-        oauth2client::OAuth2Client,
-    },
-};
 use openidconnect::{
     AccessToken, AdditionalClaims, Audience, AuthUrl, AuthorizationCode,
     EmptyAdditionalProviderMetadata, EmptyExtraTokenFields, EndUserEmail, EndUserFamilyName,
@@ -43,6 +36,13 @@ use serde::{
 };
 use sqlx::PgPool;
 use thiserror::Error;
+use xguard_common::db::{
+    Id, NoId,
+    models::{
+        AuthCode, OAuth2AuthorizedApp, OAuth2Token, Session, SessionState, Settings, User,
+        oauth2client::OAuth2Client,
+    },
+};
 
 use super::{ApiResponse, ApiResult, SESSION_COOKIE_NAME};
 #[cfg(feature = "openapi")]
@@ -703,8 +703,7 @@ async fn get_group_claims(pool: &PgPool, user: &User<Id>) -> Result<GroupClaims,
         (status = 500, description = "Unable to handle authorization request.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn secure_authorization(

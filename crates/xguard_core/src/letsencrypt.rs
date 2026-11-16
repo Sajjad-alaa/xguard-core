@@ -1,6 +1,16 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use chrono::{NaiveDateTime, TimeDelta, Utc};
+use sqlx::PgPool;
+use thiserror::Error;
+use tokio::{
+    sync::{
+        mpsc::{self, UnboundedSender, unbounded_channel},
+        watch,
+    },
+    time::timeout,
+};
+use tonic::{Request, service::Interceptor};
 use xguard_common::{
     VERSION,
     db::{
@@ -14,16 +24,6 @@ use xguard_proto::proxy::{
     AcmeChallenge, AcmeLogs, AcmeStep, acme_issue_event, proxy_client::ProxyClient,
 };
 use xguard_version::{Version, client::ClientVersionInterceptor};
-use sqlx::PgPool;
-use thiserror::Error;
-use tokio::{
-    sync::{
-        mpsc::{self, UnboundedSender, unbounded_channel},
-        watch,
-    },
-    time::timeout,
-};
-use tonic::{Request, service::Interceptor};
 
 use crate::mail::templates;
 
@@ -348,6 +348,18 @@ mod tests {
         time::Duration,
     };
 
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use tokio::{
+        net::TcpListener,
+        sync::{Mutex, mpsc},
+        task::JoinHandle,
+        time::{sleep, timeout},
+    };
+    use tokio_stream::{self as stream};
+    use tonic::{
+        Request, Response, Status, Streaming,
+        transport::{Identity, Server, ServerTlsConfig},
+    };
     use xguard_certs::{
         CertificateAuthority, Csr, DnType, ExtendedKeyUsagePurpose, PemLabel, generate_key_pair,
     };
@@ -361,18 +373,6 @@ mod tests {
     };
     use xguard_proto::proxy::{
         AcmeCertificate, AcmeIssueEvent, AcmeLogs, AcmeProgress, AcmeStep, proxy_server,
-    };
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-    use tokio::{
-        net::TcpListener,
-        sync::{Mutex, mpsc},
-        task::JoinHandle,
-        time::{sleep, timeout},
-    };
-    use tokio_stream::{self as stream};
-    use tonic::{
-        Request, Response, Status, Streaming,
-        transport::{Identity, Server, ServerTlsConfig},
     };
 
     use super::{ACME_TIMEOUT, LetsencryptError, do_letsencrypt_refresh};
@@ -445,15 +445,13 @@ mod tests {
                         }));
                     }
                     events.push(Ok(AcmeIssueEvent {
-                        payload: Some(
-                            xguard_proto::proxy::acme_issue_event::Payload::Certificate(
-                                AcmeCertificate {
-                                    cert_pem: cert_pem.clone(),
-                                    key_pem: key_pem.clone(),
-                                    account_credentials_json: account_credentials_json.clone(),
-                                },
-                            ),
-                        ),
+                        payload: Some(xguard_proto::proxy::acme_issue_event::Payload::Certificate(
+                            AcmeCertificate {
+                                cert_pem: cert_pem.clone(),
+                                key_pem: key_pem.clone(),
+                                account_credentials_json: account_credentials_json.clone(),
+                            },
+                        )),
                     }));
                     Ok(Response::new(Box::pin(stream::iter(events))))
                 }
@@ -714,11 +712,8 @@ mod tests {
             let cert = ca.sign_server_cert(&csr).expect("failed to sign cert");
             (
                 xguard_certs::der_to_pem(cert.der(), PemLabel::Certificate).expect("cert PEM"),
-                xguard_certs::der_to_pem(
-                    key_pair.serialize_der().as_slice(),
-                    PemLabel::PrivateKey,
-                )
-                .expect("key PEM"),
+                xguard_certs::der_to_pem(key_pair.serialize_der().as_slice(), PemLabel::PrivateKey)
+                    .expect("key PEM"),
             )
         };
 

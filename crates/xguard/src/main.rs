@@ -7,9 +7,21 @@ use std::{
 
 use anyhow::bail;
 use bytes::Bytes;
+use secrecy::ExposeSecret;
+#[cfg(unix)]
+use tokio::signal::unix::{SignalKind, signal};
+use tokio::{
+    signal::ctrl_c,
+    sync::{
+        broadcast,
+        mpsc::{channel, unbounded_channel},
+    },
+    time::timeout,
+};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use xguard_common::{
     CARGO_VERSION, VERSION,
-    config::{Command, XGuardConfig, ManageCommand, SERVER_CONFIG},
+    config::{Command, ManageCommand, SERVER_CONFIG, XGuardConfig},
     db::{
         init_db,
         models::{
@@ -27,12 +39,7 @@ use xguard_common::{
 use xguard_core::{
     add_user_to_group, change_user_password, create_admin_user, create_new_group,
     db::AppEvent,
-    disable_ldap_integration, disable_oidc_directory_sync,
-    enterprise::{
-        activity_log_stream::activity_log_stream_manager::run_activity_log_stream_manager,
-        license::{License, run_periodic_license_check, set_cached_license},
-        limits::update_counts,
-    },
+    disable_ldap_integration,
     events::{ApiEvent, BidiStreamEvent},
     gateway_config,
     grpc::{WorkerState, run_grpc_server},
@@ -53,18 +60,6 @@ use xguard_setup::{
 };
 use xguard_version::tracing::version_fmt_layer;
 use xguard_vpn_stats_purge::run_periodic_stats_purge;
-use secrecy::ExposeSecret;
-#[cfg(unix)]
-use tokio::signal::unix::{SignalKind, signal};
-use tokio::{
-    signal::ctrl_c,
-    sync::{
-        broadcast,
-        mpsc::{channel, unbounded_channel},
-    },
-    time::timeout,
-};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[macro_use]
 extern crate tracing;
@@ -123,20 +118,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // initialize global settings struct
     initialize_current_settings(&pool).await?;
-
-    debug!("Checking enterprise license status");
-    match License::load_and_try_renew(&pool).await {
-        Ok(license) => {
-            set_cached_license(license);
-        }
-        Err(err) => {
-            warn!(
-                "There was an error while loading the license, error: {err}. The enterprise \
-                features will be disabled."
-            );
-            set_cached_license(None);
-        }
-    }
 
     // handle optional subcommands
     if let Some(command) = &config.cmd {
@@ -230,10 +211,6 @@ async fn main() -> Result<(), anyhow::Error> {
                         when running this command for the change to persist."
                     );
                 }
-                ManageCommand::DisableOidcDirectorySync => {
-                    disable_oidc_directory_sync(&pool).await?;
-                    println!("OIDC external identity provider directory sync disabled.");
-                }
             },
         }
 
@@ -318,7 +295,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let (proxy_connection_event_tx, proxy_connection_event_rx) = unbounded_channel();
 
     // Activity log stream setup
-    let (activity_log_messages_tx, activity_log_messages_rx) = broadcast::channel::<Bytes>(100);
+    // Activity log messages are broadcast for streaming to external systems. Nothing consumes
+    // them yet; the idle receiver keeps sends from failing. Broadcast never blocks the sender.
+    let (activity_log_messages_tx, _activity_log_messages_rx) = broadcast::channel::<Bytes>(100);
     let activity_log_stream_reload_notify = Arc::new(tokio::sync::Notify::new());
 
     // setup communication channels for services
@@ -344,8 +323,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .grpc_key
         .as_ref()
         .and_then(|path| read_to_string(path).ok());
-
-    update_counts(&pool).await?;
 
     let (proxy_control_tx, proxy_control_rx) = channel::<ProxyControlMessage>(100);
     let (web_reload_tx, _web_reload_rx) = tokio::sync::broadcast::channel::<()>(8);
@@ -414,9 +391,7 @@ async fn main() -> Result<(), anyhow::Error> {
             settings.stats_purge_threshold()
         ), if settings.enable_stats_purge =>
             bail!("Periodic stats purge task returned early: {res:?}"),
-        res = run_periodic_license_check(&pool, proxy_control_tx.clone()) =>
-            bail!("Periodic license check task returned early: {res:?}"),
-        res = run_utility_thread(&pool, gateway_tx.clone(), proxy_control_tx, web_reload_tx.clone(), ldap_tx, dirsync_tx) =>
+        res = run_utility_thread(&pool, gateway_tx.clone(), proxy_control_tx, web_reload_tx.clone()) =>
             bail!("Utility thread returned early: {res:?}"),
         res = run_event_logger(
             pool.clone(),
@@ -430,11 +405,6 @@ async fn main() -> Result<(), anyhow::Error> {
             activity_log_stream_reload_notify.clone(),
             activity_log_messages_tx.clone()
         ) => bail!("Activity log event logger returned early: {res:?}"),
-        res = run_activity_log_stream_manager(
-            pool.clone(),
-            activity_log_stream_reload_notify.clone(),
-            activity_log_messages_rx
-        ) => bail!("Activity log stream manager returned early: {res:?}"),
         res = run_session_manager(
             pool.clone(),
             peer_stats_rx,

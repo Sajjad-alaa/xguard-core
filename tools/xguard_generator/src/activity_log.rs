@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{Duration, Utc};
+use rand::{Rng, rngs::ThreadRng, seq::SliceRandom};
 use xguard_common::db::{
     Id, NoId,
     models::{
@@ -27,7 +28,6 @@ use xguard_event_logger::description::{
     get_api_event_description,
     get_enrollment_event_description as get_core_enrollment_event_description,
 };
-use rand::{Rng, rngs::ThreadRng, seq::SliceRandom};
 
 #[allow(dead_code, clippy::large_enum_variant)]
 enum XGuardEvent {
@@ -152,9 +152,7 @@ impl XGuardEvent {
             XGuardEvent::MfaSecurityKeyRemoved { key } => {
                 Some(ApiEventType::MfaSecurityKeyRemoved { key: key.clone() })
             }
-            XGuardEvent::UserAdded { user } => {
-                Some(ApiEventType::UserAdded { user: user.clone() })
-            }
+            XGuardEvent::UserAdded { user } => Some(ApiEventType::UserAdded { user: user.clone() }),
             XGuardEvent::UserRemoved { user } => {
                 Some(ApiEventType::UserRemoved { user: user.clone() })
             }
@@ -171,12 +169,10 @@ impl XGuardEvent {
                 before: before.clone(),
                 after: after.clone(),
             }),
-            XGuardEvent::UserDeviceAdded { owner, device } => {
-                Some(ApiEventType::UserDeviceAdded {
-                    owner: owner.clone(),
-                    device: device.clone(),
-                })
-            }
+            XGuardEvent::UserDeviceAdded { owner, device } => Some(ApiEventType::UserDeviceAdded {
+                owner: owner.clone(),
+                device: device.clone(),
+            }),
             XGuardEvent::UserDeviceRemoved { owner, device } => {
                 Some(ApiEventType::UserDeviceRemoved {
                     owner: owner.clone(),
@@ -195,12 +191,10 @@ impl XGuardEvent {
                     location: location.clone(),
                 })
             }
-            XGuardEvent::GroupMemberAdded { group, user } => {
-                Some(ApiEventType::GroupMemberAdded {
-                    group: group.clone(),
-                    user: user.clone(),
-                })
-            }
+            XGuardEvent::GroupMemberAdded { group, user } => Some(ApiEventType::GroupMemberAdded {
+                group: group.clone(),
+                user: user.clone(),
+            }),
             XGuardEvent::GroupMemberRemoved { group, user } => {
                 Some(ApiEventType::GroupMemberRemoved {
                     group: group.clone(),
@@ -586,8 +580,8 @@ fn build_event(rng: &mut ThreadRng, ctx: &BuildContext, kind: EventKind) -> Gene
     let user_agent = random_user_agent(rng).to_string();
 
     let xguard = |event_type: EventType,
-                    metadata: Option<serde_json::Value>,
-                    description: Option<String>|
+                  metadata: Option<serde_json::Value>,
+                  description: Option<String>|
      -> GeneratedEvent {
         GeneratedEvent {
             module: ActivityLogModule::XGuard,
@@ -866,10 +860,7 @@ fn build_event(rng: &mut ThreadRng, ctx: &BuildContext, kind: EventKind) -> Gene
                     groups: groups.clone(),
                 })
                 .ok(),
-                get_xguard_event_description(&XGuardEvent::GroupsBulkAssigned {
-                    users,
-                    groups,
-                }),
+                get_xguard_event_description(&XGuardEvent::GroupsBulkAssigned { users, groups }),
             )
         }
         EventKind::EnrollmentStarted => enrollment(

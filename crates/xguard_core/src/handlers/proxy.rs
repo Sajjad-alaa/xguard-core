@@ -4,11 +4,11 @@ use axum::{
     http::StatusCode,
 };
 use chrono::Utc;
+use serde_json::Value;
 use xguard_common::{
     db::{Id, models::proxy::Proxy},
     types::proxy::{ProxyControlMessage, ProxyInfo},
 };
-use serde_json::Value;
 
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
@@ -38,8 +38,7 @@ pub struct ProxyUpdateData {
         (status = 500, description = "Unable to list edge instances.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn proxy_list(
@@ -71,8 +70,7 @@ pub async fn proxy_list(
         (status = 500, description = "Unable to get edge instance.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn proxy_details(
@@ -115,8 +113,7 @@ pub(crate) async fn proxy_details(
         (status = 500, description = "Unable to update edge instance.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn update_proxy(
@@ -195,8 +192,7 @@ pub(crate) async fn update_proxy(
         (status = 500, description = "Unable to delete edge instance.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_proxy(

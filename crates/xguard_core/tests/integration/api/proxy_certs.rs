@@ -13,6 +13,17 @@ use std::{
 };
 
 use axum_extra::extract::cookie::Key;
+use reqwest::StatusCode;
+use serde_json::{Value, json};
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, mpsc},
+    time::{sleep, timeout},
+};
 use xguard_certs::CertificateAuthority;
 use xguard_common::{
     db::{
@@ -27,21 +38,9 @@ use xguard_common::{
 use xguard_core::{
     build_webapp,
     db::AppEvent,
-    enterprise::license::{License, LicenseTier, SupportType, set_cached_license},
     events::ApiEvent,
     grpc::{GatewayCommand, WorkerState},
     handlers::Auth,
-};
-use reqwest::StatusCode;
-use serde_json::{Value, json};
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
-};
-use tokio::{
-    net::TcpListener,
-    sync::{broadcast, mpsc},
-    time::{sleep, timeout},
 };
 
 use super::common::{client::TestClient, generate_expired_test_cert_pem, generate_test_cert_pem};
@@ -140,18 +139,6 @@ async fn make_test_client_with_proxy_rx(
     let (tx, rx) = mpsc::unbounded_channel::<AppEvent>();
     let worker_state = Arc::new(Mutex::new(WorkerState::new(tx.clone())));
     let (gateway_tx, _wg_rx) = mpsc::unbounded_channel::<GatewayCommand>();
-
-    let license = License::new(
-        "test_customer".to_owned(),
-        false,
-        None,
-        None,
-        None,
-        LicenseTier::Business,
-        SupportType::Basic,
-        Vec::new(),
-    );
-    set_cached_license(Some(license));
 
     let key = Key::from(
         Settings::get_current_settings()

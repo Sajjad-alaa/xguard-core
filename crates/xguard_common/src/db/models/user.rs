@@ -1380,7 +1380,7 @@ mod test {
 
     use super::*;
     use crate::{
-        config::{XGuardConfig, SERVER_CONFIG},
+        config::{SERVER_CONFIG, XGuardConfig},
         db::{
             models::settings::{initialize_current_settings, update_current_settings},
             setup_pool,

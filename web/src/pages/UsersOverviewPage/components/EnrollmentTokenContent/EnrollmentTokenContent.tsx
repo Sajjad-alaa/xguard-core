@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
+import { useAppForm } from '../../../../shared/form';
+import { formChangeLogic } from '../../../../shared/formLogic';
+import type { OpenEnrollmentTokenModal } from '../../../../shared/hooks/modalControls/types';
 import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
 import { Checkbox } from '../../../../shared/xguard-ui/components/Checkbox/Checkbox';
 import { CopyField } from '../../../../shared/xguard-ui/components/CopyField/CopyField';
@@ -16,9 +19,6 @@ import {
   ThemeSpacing,
   ThemeVariable,
 } from '../../../../shared/xguard-ui/types';
-import { useAppForm } from '../../../../shared/form';
-import { formChangeLogic } from '../../../../shared/formLogic';
-import type { OpenEnrollmentTokenModal } from '../../../../shared/hooks/modalControls/types';
 
 type Props = OpenEnrollmentTokenModal & { onClose: () => void };
 

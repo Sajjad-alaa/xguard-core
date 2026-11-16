@@ -1,11 +1,11 @@
+use reqwest::StatusCode;
+use serde_json::{Value, json};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_certs::CertificateAuthority;
 use xguard_common::db::models::{
     Certificates, CoreCertSource, Settings, settings::update_current_settings,
 };
 use xguard_core::handlers::Auth;
-use reqwest::StatusCode;
-use serde_json::{Value, json};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::common::{
     generate_expired_test_cert_pem, generate_test_cert_pem, make_test_client, setup_pool,

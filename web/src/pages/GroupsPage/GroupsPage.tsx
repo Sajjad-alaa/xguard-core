@@ -1,23 +1,21 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { m } from '../../paraglide/messages';
 import { Page } from '../../shared/components/Page/Page';
-import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/xguard-ui/types';
+import { instanceBehavior } from '../../shared/defaults/instanceBehavior';
 import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
 import {
-  getEnterpriseSettingsQueryOptions,
   getGroupsInfoQueryOptions,
   getLocationsQueryOptions,
   getUsersOverviewQueryOptions,
 } from '../../shared/query';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { GroupsTable } from './components/GroupsTable/GroupsTable';
 import { CEGroupModal } from './modals/CEGroupModal/CEGroupModal';
 
 export const GroupsPage = () => {
   const { data: groups } = useSuspenseQuery(getGroupsInfoQueryOptions);
-  const { data: enterpriseSettings } = useSuspenseQuery(
-    getEnterpriseSettingsQueryOptions,
-  );
+  const enterpriseSettings = instanceBehavior;
   const { data: locations } = useSuspenseQuery(getLocationsQueryOptions);
   const { data: users } = useSuspenseQuery(getUsersOverviewQueryOptions);
   const groupClientTrafficPolicies = enterpriseSettings.group_client_traffic_policies ?? {

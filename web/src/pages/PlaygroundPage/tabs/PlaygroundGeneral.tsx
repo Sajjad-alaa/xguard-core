@@ -19,6 +19,11 @@ import type {
   SelectionOption,
   SelectionSectionCustomRender,
 } from '../../../shared/components/SelectionSection/type';
+import { useAppForm } from '../../../shared/form';
+import { formChangeLogic } from '../../../shared/formLogic';
+import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
+import { getLicenseInfoQueryOptions } from '../../../shared/query';
 import { ActionableSection } from '../../../shared/xguard-ui/components/ActionableSection/ActionableSection';
 import { ActionableSectionVariant } from '../../../shared/xguard-ui/components/ActionableSection/types';
 import { Badge } from '../../../shared/xguard-ui/components/Badge/Badge';
@@ -44,11 +49,6 @@ import { Toggle } from '../../../shared/xguard-ui/components/Toggle/Toggle';
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
-import { useAppForm } from '../../../shared/form';
-import { formChangeLogic } from '../../../shared/formLogic';
-import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
-import { getLicenseInfoQueryOptions } from '../../../shared/query';
 import { FoldableRadioSection } from '../../FoldableRadioSection/FoldableRadioSection';
 import testIconSrc from '../assets/actionable-test1.png';
 

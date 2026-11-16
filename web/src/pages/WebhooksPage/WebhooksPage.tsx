@@ -1,10 +1,10 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { m } from '../../paraglide/messages';
 import { Page } from '../../shared/components/Page/Page';
-import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
 import { getWebhooksQueryOptions } from '../../shared/query';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { CeWebhookModal } from './modals/CEWebhookModal/CEWebhookModal';
 import { WebhooksTable } from './WebhooksTable';
 

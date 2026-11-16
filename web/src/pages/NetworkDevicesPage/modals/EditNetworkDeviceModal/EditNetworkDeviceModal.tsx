@@ -1,8 +1,5 @@
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -10,15 +7,18 @@ import {
 } from '../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import type { OpenEditNetworkDeviceModal } from '../../../../shared/hooks/modalControls/types';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import './style.scss';
 import { useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../../../shared/api/api';
-import { Select } from '../../../../shared/xguard-ui/components/Select/Select';
-import type { SelectSingleValue } from '../../../../shared/xguard-ui/components/Select/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
+import { Select } from '../../../../shared/xguard-ui/components/Select/Select';
+import type { SelectSingleValue } from '../../../../shared/xguard-ui/components/Select/types';
 
 const modalNameValue = ModalName.EditNetworkDevice;
 

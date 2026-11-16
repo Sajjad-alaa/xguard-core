@@ -8,6 +8,8 @@ use axum::{
     http::StatusCode,
 };
 use chrono::NaiveDateTime;
+use serde_json::json;
+use sqlx::PgConnection;
 use xguard_common::{
     csv::AsCsv,
     db::{
@@ -20,8 +22,6 @@ use xguard_common::{
     },
     utils::{SplitIp, split_ip},
 };
-use serde_json::json;
-use sqlx::PgConnection;
 
 use super::{ApiResponse, ApiResult, WebError};
 #[cfg(feature = "openapi")]
@@ -31,10 +31,6 @@ use crate::{
     auth::{AdminRole, SessionInfo},
     device_access::{build_device_config, join_device_to_network},
     enrollment_management::start_desktop_configuration,
-    enterprise::{
-        db::models::enterprise_settings::EnterpriseSettings,
-        firewall::try_get_location_firewall_config, limits::update_counts,
-    },
     events::{ApiEvent, ApiEventType, ApiRequestContext},
     grpc::GatewayCommand,
     handlers::{
@@ -155,8 +151,7 @@ pub(crate) struct DeviceWireGuardConfig {
         (status = 500, description = "Unable to get network device configuration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn network_device_configs(
@@ -165,15 +160,6 @@ pub(crate) async fn network_device_configs(
     Path(device_id): Path<Id>,
 ) -> ApiResult {
     debug!("Creating a WireGuard config for network device {device_id}.");
-
-    let settings = EnterpriseSettings::get(&appstate.pool).await?;
-    if settings.only_client_activation && !session.is_admin {
-        warn!(
-            "User {} tried to download device config, but manual device management is disabled",
-            session.user.username
-        );
-        return Err(WebError::Forbidden("Manual device management is disabled"));
-    }
 
     let device = device_for_admin_or_self(&appstate.pool, &session, device_id).await?;
     let user = User::find_by_id(&appstate.pool, device.user_id)
@@ -235,8 +221,7 @@ pub(crate) async fn network_device_configs(
         (status = 500, description = "Unable to get network device.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn get_network_device(
@@ -283,8 +268,7 @@ pub(crate) async fn get_network_device(
         (status = 500, description = "Unable to list network devices.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn list_network_devices(
@@ -383,8 +367,7 @@ impl IpAvailabilityCheckResult {
         (status = 500, description = "Unable to check IP availability.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn check_ip_availability(
@@ -487,8 +470,7 @@ pub(crate) async fn check_ip_availability(
         (status = 500, description = "Unable to find available IP addresses.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn find_available_ips(
@@ -584,8 +566,7 @@ impl From<NetworkAddressError> for WebError {
         (status = 500, description = "Unable to start network device setup.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn start_network_device_setup(
@@ -679,8 +660,6 @@ pub(crate) async fn start_network_device_setup(
         result.device.id
     );
 
-    update_counts(&mut *transaction).await?;
-
     transaction.commit().await?;
 
     Ok(ApiResponse::new(
@@ -712,8 +691,7 @@ pub(crate) async fn start_network_device_setup(
         (status = 500, description = "Unable to start network device setup.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn start_network_device_setup_for_device(
@@ -823,8 +801,7 @@ pub(crate) async fn start_network_device_setup_for_device(
         (status = 500, description = "Unable to create network device.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn add_network_device(
@@ -898,18 +875,6 @@ pub(crate) async fn add_network_device(
         network_info: vec![network_info.clone()],
     }));
 
-    update_counts(&mut *transaction).await?;
-
-    // send firewall update event if ACLs & enterprise features are enabled
-    if let Some(firewall_config) =
-        try_get_location_firewall_config(&network, &mut transaction).await?
-    {
-        appstate.send_gateway_command(GatewayCommand::FirewallConfigChanged(
-            network.id,
-            firewall_config,
-        ));
-    }
-
     let template_locations = vec![TemplateLocation {
         name: config.network_name.clone(),
         assigned_ips: config.address.as_csv(),
@@ -975,8 +940,7 @@ pub struct ModifyNetworkDevice {
         (status = 500, description = "Unable to update network device.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn modify_network_device(
@@ -1026,17 +990,6 @@ pub async fn modify_network_device(
         wireguard_network_device.update(&mut *transaction).await?;
         let device_info = DeviceInfo::from_device(&mut *transaction, device.clone()).await?;
         appstate.send_gateway_command(GatewayCommand::DeviceModified(device_info));
-
-        // send firewall update event if ACLs are enabled
-        if device_network.acl_enabled
-            && let Some(firewall_config) =
-                try_get_location_firewall_config(&device_network, &mut transaction).await?
-        {
-            appstate.send_gateway_command(GatewayCommand::FirewallConfigChanged(
-                device_network.id,
-                firewall_config,
-            ));
-        }
 
         info!(
             "User {} changed IP addresses of network device {} from {:?} to {:?} in network {}",

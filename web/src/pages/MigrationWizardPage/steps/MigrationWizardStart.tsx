@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { m } from '../../../paraglide/messages';
 import { Controls } from '../../../shared/components/Controls/Controls';
+import { getMigrationStateQueryOptions } from '../../../shared/query';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
 import { IconKind } from '../../../shared/xguard-ui/components/Icon';
@@ -9,7 +10,6 @@ import { RenderMarkdown } from '../../../shared/xguard-ui/components/RenderMarkd
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { getMigrationStateQueryOptions } from '../../../shared/query';
 import { useMigrationWizardStore } from '../store/useMigrationWizardStore';
 
 export const MigrationWizardStart = () => {

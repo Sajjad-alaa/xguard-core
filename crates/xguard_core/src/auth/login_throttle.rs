@@ -1,8 +1,8 @@
+use sqlx::PgExecutor;
 use xguard_common::db::{
     Id,
     models::{ThrottleScope, User},
 };
-use sqlx::PgExecutor;
 
 use crate::error::WebError;
 

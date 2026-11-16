@@ -3,9 +3,9 @@ import { useMemo } from 'react';
 import { Bar, BarChart } from 'recharts';
 import type { TransferStats } from '../../../../shared/api/types';
 import { TransferText } from '../../../../shared/components/TransferText/TransferText';
+import { mapTransferToChart } from '../../../../shared/utils/stats';
 import { TableCell } from '../../../../shared/xguard-ui/components/table/TableCell/TableCell';
 import { ThemeVariable } from '../../../../shared/xguard-ui/types';
-import { mapTransferToChart } from '../../../../shared/utils/stats';
 
 export const DeviceTrafficChartCell = ({
   stats,

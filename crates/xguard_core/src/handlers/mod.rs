@@ -8,6 +8,10 @@ use axum::{
 };
 use axum_client_ip::{RightmostForwarded, RightmostXForwardedFor};
 use axum_extra::{TypedHeader, headers::UserAgent};
+use ipnetwork::IpNetworkError;
+use serde_json::{Value, json};
+use sqlx::PgPool;
+use webauthn_rs::prelude::RegisterPublicKeyCredential;
 use xguard_common::{
     config::server_config,
     db::{
@@ -17,18 +21,9 @@ use xguard_common::{
     types::user_info::UserInfo,
 };
 use xguard_static_ip::error::StaticIpError;
-use ipnetwork::IpNetworkError;
-use serde_json::{Value, json};
-use sqlx::PgPool;
-use webauthn_rs::prelude::RegisterPublicKeyCredential;
 
 use crate::{
-    appstate::AppState,
-    auth::SessionInfo,
-    db::WebHook,
-    enterprise::{db::models::acl::AclError, license::LicenseError},
-    error::WebError,
-    events::ApiRequestContext,
+    appstate::AppState, auth::SessionInfo, db::WebHook, error::WebError, events::ApiRequestContext,
 };
 
 pub(crate) mod activity_log;
@@ -39,7 +34,6 @@ pub mod core_certs;
 pub(crate) mod forward_auth;
 pub mod gateway;
 pub(crate) mod group;
-pub mod license;
 pub(crate) mod location_stats;
 pub mod mail;
 pub(crate) mod mfa_flow;
@@ -225,9 +219,7 @@ impl From<WebError> for ApiResponse {
             | WebError::ModelError(_)
             | WebError::Email(_)
             | WebError::ClientIpError
-            | WebError::FirewallError(_)
             | WebError::ApiEventChannelError(_)
-            | WebError::ActivityLogStreamError(_)
             | WebError::UrlParseError(_)
             | WebError::CertificateError(_) => {
                 error!("{web_error}");
@@ -251,69 +243,6 @@ impl From<WebError> for ApiResponse {
                         StatusCode::INTERNAL_SERVER_ERROR,
                     )
                 }
-            },
-            WebError::AclError(err) => match err {
-                AclError::ParseIntError(_)
-                | AclError::IpNetworkError(_)
-                | AclError::AddrParseError(_)
-                | AclError::InvalidRelationError(_)
-                | AclError::InvalidPortsFormat(_) => Self::new(
-                    json!({"msg": "Unprocessable entity"}),
-                    StatusCode::UNPROCESSABLE_ENTITY,
-                ),
-                AclError::InvalidIpRangeError(err) => Self::new(
-                    json!({"msg": format!("Invalid IP range: {err}")}),
-                    StatusCode::UNPROCESSABLE_ENTITY,
-                ),
-                AclError::RuleNotFoundError(id) => Self::new(
-                    json!({"msg": format!("Rule {id} not found")}),
-                    StatusCode::NOT_FOUND,
-                ),
-                AclError::RuleAlreadyAppliedError(id) => Self::new(
-                    json!({"msg": format!("Rule {id} already applied")}),
-                    StatusCode::BAD_REQUEST,
-                ),
-                AclError::AliasNotFoundError(id) => Self::new(
-                    json!({"msg": format!("Alias {id} not found")}),
-                    StatusCode::NOT_FOUND,
-                ),
-                AclError::DestinationNotFoundError(id) => Self::new(
-                    json!({"msg": format!("Destination {id} not found")}),
-                    StatusCode::NOT_FOUND,
-                ),
-                AclError::AliasAlreadyAppliedError(id) => Self::new(
-                    json!({"msg": format!("Alias {id} already applied")}),
-                    StatusCode::BAD_REQUEST,
-                ),
-                AclError::DestinationAlreadyAppliedError(id) => Self::new(
-                    json!({"msg": format!("Destination {id} already applied")}),
-                    StatusCode::BAD_REQUEST,
-                ),
-                AclError::AliasUsedByRulesError(id) => Self::new(
-                    json!({"msg": format!("Alias {id} is used by some existing ACL rules")}),
-                    StatusCode::BAD_REQUEST,
-                ),
-                AclError::DestinationUsedByRulesError(id) => Self::new(
-                    json!({
-                        "msg": format!("Destination {id} is used by some existing ACL rules")
-                    }),
-                    StatusCode::BAD_REQUEST,
-                ),
-                AclError::DbError(_) | AclError::FirewallError(_) => {
-                    error!("{err}");
-                    Self::new(
-                        json!({"msg": "Internal server error"}),
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    )
-                }
-                AclError::CannotModifyDeletedRuleError(id) => Self::new(
-                    json!({"msg": format!("Cannot modify deleted ACL rule {id}")}),
-                    StatusCode::BAD_REQUEST,
-                ),
-                AclError::CannotUseModifiedAliasInRuleError(alias_ids) => Self::new(
-                    json!({"msg": format!("Cannot use modified alias in ACL rule {alias_ids:?}")}),
-                    StatusCode::BAD_REQUEST,
-                ),
             },
             WebError::Http(status) => {
                 error!("{status}");
@@ -399,34 +328,6 @@ impl From<WebError> for ApiResponse {
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             }
-            WebError::LicenseError(err) => match err {
-                LicenseError::DecodeError(msg) => {
-                    warn!(msg);
-                    Self::new(json!({"msg": msg}), StatusCode::BAD_REQUEST)
-                }
-                LicenseError::SignatureMismatch => {
-                    let msg = "License signature doesn't match its content";
-                    warn!(msg);
-                    Self::new(json!({"msg": msg}), StatusCode::BAD_REQUEST)
-                }
-                LicenseError::InvalidSignature => {
-                    let msg = "License signature is malformed and couldn't be read";
-                    warn!(msg);
-                    Self::new(json!({"msg": msg}), StatusCode::BAD_REQUEST)
-                }
-                LicenseError::LicenseNotFound => {
-                    let msg = "License not found";
-                    warn!(msg);
-                    Self::new(json!({"msg": msg}), StatusCode::NOT_FOUND)
-                }
-                _ => {
-                    error!("License error: {err}");
-                    Self::new(
-                        json!({"msg": "Internal server error"}),
-                        StatusCode::FORBIDDEN,
-                    )
-                }
-            },
             WebError::IpNetwork(err) => {
                 let msg = match err {
                     IpNetworkError::InvalidAddr(msg) | IpNetworkError::InvalidCidrFormat(msg) => {

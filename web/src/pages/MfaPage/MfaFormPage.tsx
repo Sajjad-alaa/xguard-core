@@ -16,6 +16,9 @@ import { Controls } from '../../shared/components/Controls/Controls';
 import { EditPage } from '../../shared/components/EditPage/EditPage';
 import { MfaConfiguration } from '../../shared/components/MfaConfiguration/MfaConfiguration';
 import type { MfaConfigurationStepData } from '../../shared/components/MfaConfiguration/types';
+import { useAppForm, useFieldContext } from '../../shared/form';
+import { formChangeLogic } from '../../shared/formLogic';
+import { getMfaFlowsQueryOptions } from '../../shared/query';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import { Divider } from '../../shared/xguard-ui/components/Divider/Divider';
 import { MarkedSection } from '../../shared/xguard-ui/components/MarkedSection/MarkedSection';
@@ -23,9 +26,6 @@ import { MarkedSectionHeader } from '../../shared/xguard-ui/components/MarkedSec
 import { useFormFieldError } from '../../shared/xguard-ui/hooks/useFormFieldError';
 import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../shared/xguard-ui/types';
-import { useAppForm, useFieldContext } from '../../shared/form';
-import { formChangeLogic } from '../../shared/formLogic';
-import { getMfaFlowsQueryOptions } from '../../shared/query';
 
 /** Maps a structured MFA flow API failure to user-facing copy. */
 const getSaveErrorMessage = (error: AxiosError<MfaFlowErrorResponse>): string => {

@@ -27,8 +27,7 @@ use crate::{
         (status = 500, description = "Unable to get configuration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn configuration(
@@ -66,8 +65,7 @@ pub(crate) async fn configuration(
         (status = 500, description = "Unable to get logs.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn logs(_admin: AdminRole, session: SessionInfo) -> Result<String, WebError> {

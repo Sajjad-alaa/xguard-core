@@ -1,5 +1,6 @@
+use sqlx::PgPool;
 use xguard_common::{
-    config::{XGuardConfig, SERVER_CONFIG},
+    config::{SERVER_CONFIG, XGuardConfig},
     db::models::{
         Settings, User,
         settings::{
@@ -7,29 +8,10 @@ use xguard_common::{
         },
     },
 };
-use xguard_core::enterprise::license::{License, LicenseTier, SupportType, set_cached_license};
-use sqlx::PgPool;
-
-fn set_test_license_business() {
-    let license = License {
-        customer_id: "0c4dcb5400544d47ad8617fcdf2704cb".into(),
-        limits: None,
-        subscription: false,
-        support_type: SupportType::Basic,
-        tier: LicenseTier::Business,
-        valid_until: None,
-        version_date_limit: None,
-        features: Vec::new(),
-    };
-    set_cached_license(Some(license));
-}
 
 /// Allows overriding the default XGuard URL for tests, as during the tests, the server has a random port, making the URL unpredictable beforehand.
 // TODO: Allow customizing the whole config, not just the URL
-pub(crate) async fn init_config(
-    custom_xguard_url: Option<&str>,
-    pool: &PgPool,
-) -> XGuardConfig {
+pub(crate) async fn init_config(custom_xguard_url: Option<&str>, pool: &PgPool) -> XGuardConfig {
     let url = custom_xguard_url.unwrap_or("http://localhost:8000");
     let test_secret_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     let config = XGuardConfig::new_test_config();
@@ -51,7 +33,6 @@ pub(crate) async fn init_config(
             }
         })
         .expect("Could not initialize runtime default settings in the database");
-    set_test_license_business();
 
     let _ = SERVER_CONFIG.set(config.clone());
     config

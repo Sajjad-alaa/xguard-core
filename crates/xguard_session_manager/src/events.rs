@@ -1,11 +1,11 @@
 use std::net::IpAddr;
 
 use chrono::NaiveDateTime;
+use strum::EnumCount;
 use xguard_common::db::{
     Id,
     models::{Device, User, WireguardNetwork},
 };
-use strum::EnumCount;
 
 #[derive(Debug)]
 pub struct SessionManagerEvent {

@@ -8,14 +8,14 @@ import type { Edge } from '../../shared/api/types';
 import { EditPage } from '../../shared/components/EditPage/EditPage';
 import { EditPageControls } from '../../shared/components/EditPageControls/EditPageControls';
 import { EditPageFormSection } from '../../shared/components/EditPageFormSection/EditPageFormSection';
-import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { useAppForm } from '../../shared/form';
 import { formChangeLogic } from '../../shared/formLogic';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import { getEdgeQueryOptions, getEdgesQueryOptions } from '../../shared/query';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 
 export const EditEdgePage = () => {
   const { edgeId } = useParams({

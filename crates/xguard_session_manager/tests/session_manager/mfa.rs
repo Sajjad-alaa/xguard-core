@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 
 use chrono::{TimeDelta, Utc};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::time::{Duration, timeout};
 use xguard_common::{
     db::{
         models::{
@@ -12,8 +14,6 @@ use xguard_common::{
     gateway_event::GatewayCommand,
 };
 use xguard_session_manager::events::SessionManagerEventType;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::time::{Duration, timeout};
 
 use crate::common::{
     SessionManagerHarness, assert_no_gateway_events, assert_no_session_manager_events,

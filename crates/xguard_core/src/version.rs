@@ -5,9 +5,9 @@ use std::{
 };
 
 use chrono::{NaiveDateTime, TimeDelta, Utc};
-use xguard_version::{ComponentInfo, Version, is_version_lower};
 use serde::Serialize;
 use tonic::{Status, service::Interceptor};
+use xguard_version::{ComponentInfo, Version, is_version_lower};
 
 pub const MIN_PROXY_VERSION: Version = Version::new(2, 1, 0);
 pub const MIN_GATEWAY_VERSION: Version = Version::new(2, 1, 0);

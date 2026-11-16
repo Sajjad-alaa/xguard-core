@@ -16,6 +16,20 @@ import {
 } from '../../../shared/api/types';
 import { GatewaysStatusBadge } from '../../../shared/components/GatewaysStatusBadge/GatewaysStatusBadge';
 import { TableValuesListCell } from '../../../shared/components/TableValuesListCell/TableValuesListCell';
+import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
+import {
+  getLicenseInfoQueryOptions,
+  getLocationsQueryOptions,
+} from '../../../shared/query';
+import { tableSortingFns } from '../../../shared/utils/dateSortingFn';
+import {
+  canUseBusinessFeature,
+  canUseEnterpriseFeature,
+  type LicenseCheckResult,
+  licenseActionCheck,
+  tierLicenseCheck,
+} from '../../../shared/utils/license';
 import { Badge } from '../../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../../shared/xguard-ui/components/Button/types';
@@ -32,20 +46,6 @@ import { TableTop } from '../../../shared/xguard-ui/components/table/TableTop/Ta
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
 import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
-import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
-import {
-  getLicenseInfoQueryOptions,
-  getLocationsQueryOptions,
-} from '../../../shared/query';
-import { tableSortingFns } from '../../../shared/utils/dateSortingFn';
-import {
-  canUseBusinessFeature,
-  canUseEnterpriseFeature,
-  type LicenseCheckResult,
-  licenseActionCheck,
-  tierLicenseCheck,
-} from '../../../shared/utils/license';
 import { useGatewayWizardStore } from '../../GatewaySetupPage/useGatewayWizardStore';
 
 type RowData = NetworkLocation;

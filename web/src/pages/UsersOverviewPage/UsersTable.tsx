@@ -33,6 +33,18 @@ import {
 import { useSelectionModal } from '../../shared/components/modals/SelectionModal/useSelectionModal';
 import type { SelectionOption } from '../../shared/components/SelectionSection/type';
 import { TableValuesListCell } from '../../shared/components/TableValuesListCell/TableValuesListCell';
+import { instanceBehavior } from '../../shared/defaults/instanceBehavior';
+import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
+import { useApp } from '../../shared/hooks/useApp';
+import { useAuth } from '../../shared/hooks/useAuth';
+import {
+  getGroupsInfoQueryOptions,
+  getLicenseInfoQueryOptions,
+  getSettingsQueryOptions,
+} from '../../shared/query';
+import { displayDate } from '../../shared/utils/displayDate';
+import { isDeviceOnline, isUserOnline } from '../../shared/utils/userOnlineStatus';
 import { Avatar } from '../../shared/xguard-ui/components/Avatar/Avatar';
 import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
@@ -54,18 +66,6 @@ import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/Table
 import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeVariable } from '../../shared/xguard-ui/types';
 import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
-import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
-import { useApp } from '../../shared/hooks/useApp';
-import { useAuth } from '../../shared/hooks/useAuth';
-import {
-  getEnterpriseSettingsQueryOptions,
-  getGroupsInfoQueryOptions,
-  getLicenseInfoQueryOptions,
-  getSettingsQueryOptions,
-} from '../../shared/query';
-import { displayDate } from '../../shared/utils/displayDate';
-import { isDeviceOnline, isUserOnline } from '../../shared/utils/userOnlineStatus';
 import { useAddUserModal } from './modals/AddUserModal/useAddUserModal';
 
 type RowData = User;
@@ -140,7 +140,7 @@ export const UsersTable = () => {
     [usersData?.pages],
   );
   const { data: license } = useSuspenseQuery(getLicenseInfoQueryOptions);
-  const { data: enterpriseSettings } = useQuery(getEnterpriseSettingsQueryOptions);
+  const enterpriseSettings = instanceBehavior;
   const appInfo = useApp((s) => s.appInfo);
   const isAdmin = useAuth((s) => s.isAdmin);
   const authUsername = useAuth((s) => s.user?.username);

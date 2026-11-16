@@ -5,6 +5,16 @@ use std::{
 };
 
 use anyhow::Context;
+use ipnetwork::IpNetwork;
+use reqwest::Url;
+use sqlx::PgPool;
+use tokio::{sync::mpsc, time::timeout};
+use tonic::{
+    Request, Status,
+    service::Interceptor,
+    transport::{Certificate, ClientTlsConfig, Endpoint},
+};
+use tracing::{debug, error, info, warn};
 use xguard_certs::{
     CertificateAuthority, CertificateInfo, CoreClientCert, Csr, PemLabel, der_to_pem,
 };
@@ -33,16 +43,6 @@ use xguard_proto::{
     proxy::proxy_setup_client::ProxySetupClient,
 };
 use xguard_version::{Version, client::ClientVersionInterceptor};
-use ipnetwork::IpNetwork;
-use reqwest::Url;
-use sqlx::PgPool;
-use tokio::{sync::mpsc, time::timeout};
-use tonic::{
-    Request, Status,
-    service::Interceptor,
-    transport::{Certificate, ClientTlsConfig, Endpoint},
-};
-use tracing::{debug, error, info, warn};
 
 const TOKEN_CLIENT_ID: &str = "XGuard Core";
 const STARTUP_ADOPTION_TIMEOUT: Duration = Duration::from_secs(10);

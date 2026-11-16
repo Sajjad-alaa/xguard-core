@@ -1,5 +1,6 @@
 import { m } from '../../../../paraglide/messages';
-import { SMTP_OAUTH_CALLBACK_TYPE } from '../../../../routes/smtp-oauth-callback';
+
+const SMTP_OAUTH_CALLBACK_TYPE = 'smtp-oauth-callback';
 
 export const GOOGLE_ISSUER_URL = 'https://accounts.google.com';
 export const MICROSOFT_ISSUER_URL = 'https://login.microsoftonline.com/common';

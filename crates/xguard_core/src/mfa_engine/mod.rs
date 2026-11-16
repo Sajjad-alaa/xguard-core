@@ -12,6 +12,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+use sqlx::{PgConnection, PgPool};
+use tokio::sync::mpsc::UnboundedSender;
+use tracing::{debug, error, warn};
 use xguard_common::{
     db::{
         Id,
@@ -30,15 +33,10 @@ use xguard_common::{
     },
     secret::SecretStringWrapper,
 };
-use sqlx::{PgConnection, PgPool};
-use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, warn};
 
 use crate::{
-    enterprise::{
-        db::models::openid_provider::OpenIdProvider, is_mfa_method_licensed, is_oidc_mfa_available,
-    },
     events::{BidiRequestContext, BidiStreamEvent, BidiStreamEventType, DesktopClientMfaEvent},
+    features::is_mfa_method_supported,
     grpc::GatewayCommand,
     mfa_engine::{
         authorize::{EventChannels, build_authorized_gateway_network_info, create_new_session},
@@ -118,22 +116,22 @@ pub struct MfaEngine {
     channels: EventChannels,
 }
 
-pub(crate) fn filter_unlicensed_mfa_methods(
+pub(crate) fn filter_supported_mfa_methods(
     methods: &HashSet<VpnClientMfaMethod>,
 ) -> HashSet<VpnClientMfaMethod> {
-    let licensed: HashSet<_> = methods
+    let supported: HashSet<_> = methods
         .iter()
         .copied()
-        .filter(|method| is_mfa_method_licensed(*method))
+        .filter(|method| is_mfa_method_supported(*method))
         .collect();
-    if licensed.len() < methods.len() {
+    if supported.len() < methods.len() {
         let removed: Vec<_> = VpnClientMfaMethod::ALL
             .into_iter()
-            .filter(|method| methods.contains(method) && !licensed.contains(method))
+            .filter(|method| methods.contains(method) && !supported.contains(method))
             .collect();
-        debug!("The active license removed MFA methods {removed:?} from this step");
+        debug!("Unsupported MFA methods {removed:?} were removed from this step");
     }
-    licensed
+    supported
 }
 
 /// The side effects of a completed flow, built inside the transaction but dispatched by the
@@ -248,17 +246,16 @@ impl MfaEngine {
         })
     }
 
-    /// Resolve and snapshot OIDC availability for a new session.
+    /// OIDC MFA needs an external identity provider integration, which XGuard does not include.
+    #[allow(clippy::unused_async)]
     async fn oidc_available(&self) -> sqlx::Result<bool> {
-        Ok(is_oidc_mfa_available(
-            self.oidc_provider_configured().await?,
-        ))
+        Ok(false)
     }
 
-    /// Check whether the OIDC provider still exists. Started sessions remain valid after a license
-    /// lapse.
+    /// See [`Self::oidc_available`].
+    #[allow(clippy::unused_async)]
     async fn oidc_provider_configured(&self) -> sqlx::Result<bool> {
-        Ok(OpenIdProvider::get_current(&self.pool).await?.is_some())
+        Ok(false)
     }
 
     /// Load an active session only when it belongs to the contract selected by the caller.

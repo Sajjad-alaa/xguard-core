@@ -352,14 +352,8 @@ fn passing_posture_data() -> DevicePostureData {
 fn client_headers() -> reqwest::header::HeaderMap {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("xguard-client-version", "2.1.0".parse().unwrap());
-    headers.insert(
-        "xguard-client-platform",
-        platform_header().parse().unwrap(),
-    );
-    headers.insert(
-        "user-agent",
-        "xguard-load-generator/0.1.0".parse().unwrap(),
-    );
+    headers.insert("xguard-client-platform", platform_header().parse().unwrap());
+    headers.insert("user-agent", "xguard-load-generator/0.1.0".parse().unwrap());
     headers
 }
 

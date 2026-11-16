@@ -5,6 +5,12 @@ import type {
   AvailableLocationIP,
   StartEnrollmentResponse,
 } from '../../../../shared/api/types';
+import {
+  closeModal,
+  subscribeCloseModal,
+  subscribeOpenModal,
+} from '../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
 import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
 import type {
@@ -12,18 +18,18 @@ import type {
   SelectSingleValue,
 } from '../../../../shared/xguard-ui/components/Select/types';
 import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
-import {
-  closeModal,
-  subscribeCloseModal,
-  subscribeOpenModal,
-} from '../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import './style.scss';
 import { useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
 import { DescriptionBlock } from '../../../../shared/components/DescriptionBlock/DescriptionBlock';
+import { useAppForm } from '../../../../shared/form';
+import { formChangeLogic } from '../../../../shared/formLogic';
+import { patternValidWireguardKey } from '../../../../shared/patterns';
+import { downloadText } from '../../../../shared/utils/download';
+import { formatFileName } from '../../../../shared/utils/formatFileName';
+import { generateWGKeys } from '../../../../shared/utils/generateWGKeys';
 import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import { CodeBox } from '../../../../shared/xguard-ui/components/CodeBox/CodeBox';
@@ -39,12 +45,6 @@ import {
   ThemeSpacing,
   ThemeVariable,
 } from '../../../../shared/xguard-ui/types';
-import { useAppForm } from '../../../../shared/form';
-import { formChangeLogic } from '../../../../shared/formLogic';
-import { patternValidWireguardKey } from '../../../../shared/patterns';
-import { downloadText } from '../../../../shared/utils/download';
-import { formatFileName } from '../../../../shared/utils/formatFileName';
-import { generateWGKeys } from '../../../../shared/utils/generateWGKeys';
 
 const modalNameValue = ModalName.AddNetworkDevice;
 

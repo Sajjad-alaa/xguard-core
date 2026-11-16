@@ -12,18 +12,11 @@ mod tests;
 
 use std::{str::FromStr, time::Duration};
 
-use xguard_common::db::models::{
-    MFAMethod, Settings,
-    settings::{
-        defaults::WELCOME_EMAIL_SUBJECT,
-        smtp::{SmtpAuthentication, SmtpEncryption, SmtpSettings},
-    },
-};
 use lettre::{
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
     message::{Body, Mailbox, MultiPart, SinglePart, header::ContentType},
     transport::smtp::{
-        authentication::{Credentials, Mechanism},
+        authentication::Credentials,
         client::{Tls, TlsParameters},
     },
 };
@@ -31,8 +24,13 @@ use serde::Serialize;
 use sqlx::PgConnection;
 use tera::{Context, Tera, Value};
 use tracing::{debug, error, info, warn};
-
-use crate::enterprise::oauth2::xoauth2_access_token;
+use xguard_common::db::models::{
+    MFAMethod, Settings,
+    settings::{
+        defaults::WELCOME_EMAIL_SUBJECT,
+        smtp::{SmtpAuthentication, SmtpEncryption, SmtpSettings},
+    },
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum MailError {
@@ -53,9 +51,6 @@ pub enum MailError {
 
     #[error("Invalid port: {0}")]
     InvalidPort(i32),
-
-    #[error(transparent)]
-    OAuth2(#[from] crate::enterprise::oauth2::OAuth2Error),
 }
 
 use self::{
@@ -270,7 +265,7 @@ impl Mail {
 
     /// Builds mailer object with specified configuration.
     async fn mailer(
-        mut smtp_settings: SmtpSettings,
+        smtp_settings: SmtpSettings,
     ) -> Result<AsyncSmtpTransport<Tokio1Executor>, MailError> {
         type Builder = AsyncSmtpTransport<Tokio1Executor>;
 
@@ -312,14 +307,9 @@ impl Mail {
                     builder.credentials(Credentials::new(user, password.expose_secret().into()));
             }
             SmtpAuthentication::XOAuth2 => {
-                let code = xoauth2_access_token(&mut smtp_settings).await?;
-                let Some(sender) = smtp_settings.sender else {
-                    error!("XOAUTH2 requires sender email address");
-                    return Err(MailError::SmtpNotConfigured);
-                };
-                builder = builder
-                    .authentication(vec![Mechanism::Xoauth2])
-                    .credentials(Credentials::new(sender, code));
+                // XOAUTH2 needs the Microsoft OAuth2 integration, which XGuard does not include.
+                error!("XOAUTH2 SMTP authentication is not supported");
+                return Err(MailError::SmtpNotConfigured);
             }
         }
 

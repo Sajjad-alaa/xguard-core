@@ -1,5 +1,5 @@
-use xguard_core::events::ProxyConnectionEvent;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use xguard_core::events::ProxyConnectionEvent;
 
 use super::support::complete_proxy_handshake;
 use crate::tests::common::{HandlerTestContext, reload_proxy};

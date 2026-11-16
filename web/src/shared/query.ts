@@ -1,6 +1,6 @@
 import { type QueryKey, queryOptions } from '@tanstack/react-query';
 import api from './api/api';
-import { AclDeploymentState, type UserProfile } from './api/types';
+import type { UserProfile } from './api/types';
 import { updateServiceApi, updateServiceClient } from './api/update-service';
 import {
   contextualHelpPath,
@@ -8,18 +8,6 @@ import {
 } from './components/ContextualHelp/data';
 import { resourceDisplayMap } from './utils/resourceById';
 import { parseVideoTutorials, videoTutorialsPath } from './video-tutorials/data';
-
-export const getExternalProviderQueryOptions = queryOptions({
-  queryFn: api.openIdProvider.getOpenIdProvider,
-  queryKey: ['openid', 'provider'],
-  select: (resp) => resp.data,
-});
-
-export const getEnterpriseSettingsQueryOptions = queryOptions({
-  queryFn: api.settings.getEnterpriseSettings,
-  queryKey: ['settings_enterprise'],
-  select: (resp) => resp.data,
-});
 
 export const getLocationsCountQueryOptions = queryOptions({
   queryFn: api.location.getCount,
@@ -186,16 +174,6 @@ export const getUserAuthKeysQueryOptions = (username: string) =>
     refetchOnReconnect: true,
   });
 
-export const getUserApiTokensQueryOptions = (username: string, admin: boolean) =>
-  queryOptions({
-    queryFn: () => api.user.getApiTokens(username),
-    queryKey: ['user', username, 'api_token'],
-    select: (resp) => resp.data,
-    refetchOnReconnect: true,
-    throwOnError: false,
-    enabled: admin,
-  });
-
 export const getUsersQueryOptions = queryOptions({
   queryFn: api.user.getAllUsers,
   queryKey: ['user'],
@@ -232,17 +210,6 @@ export const getSettingsQueryOptions = queryOptions({
   select: (resp) => resp.data,
 });
 
-export const getDevicePostureVersionMetadataQueryOptions = queryOptions({
-  queryFn: api.devicePosture.getDevicePostureVersionMetadata,
-  queryKey: ['device-posture', 'versions'],
-  select: (resp) => resp.data,
-  staleTime: Infinity,
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: true,
-});
-
-// Logged events are append-only, so a fetched event never needs refreshing. The key is
-// kept outside the `activity-log` prefix so list invalidations don't refetch it either.
 export const getActivityLogEventQueryOptions = (id: number) =>
   queryOptions({
     queryFn: () => api.getActivityLogEvent(id).then((resp) => resp.data),
@@ -250,87 +217,9 @@ export const getActivityLogEventQueryOptions = (id: number) =>
     staleTime: Infinity,
   });
 
-export const getDevicePostureQueryOptions = (id: number) =>
-  queryOptions({
-    queryFn: () => api.devicePosture.getDevicePosture(id).then((resp) => resp.data),
-    queryKey: ['device-posture', id],
-  });
-
-export const getOpenIdProvidersQueryOptions = queryOptions({
-  queryFn: api.openIdProvider.getOpenIdProvider,
-  queryKey: ['openid', 'provider'],
-  select: (resp) => resp.data,
-});
-
-export const getAliasesCountQueryOptions = queryOptions({
-  queryFn: api.acl.alias.getCount,
-  queryKey: ['acl', 'alias', 'count'],
-  select: (resp) => resp.data,
-});
-export const getDestinationsCountQueryOptions = queryOptions({
-  queryFn: api.acl.destination.getCount,
-  queryKey: ['acl', 'destination', 'count'],
-  select: (resp) => resp.data,
-});
-
-export const getRulesCountQueryOptions = queryOptions({
-  queryFn: api.acl.rule.getCount,
-  queryKey: ['acl', 'rule', 'count'],
-  select: (resp) => resp.data,
-});
-
-export const getRulesQueryOptions = queryOptions({
-  queryFn: api.acl.rule.getRules,
-  queryKey: ['acl', 'rule'],
-});
-
-export const getAliasesQueryOptions = queryOptions({
-  queryFn: api.acl.alias.getAliases,
-  queryKey: ['acl', 'alias'],
-  select: (resp) => resp.data,
-});
-
-export const getAppliedAliasesQueryOptions = queryOptions({
-  queryFn: api.acl.alias.getAliases,
-  queryKey: [
-    'acl',
-    'alias',
-    {
-      state: AclDeploymentState.Applied,
-    },
-  ],
-  select: (resp) =>
-    resp.data.filter((alias) => alias.state === AclDeploymentState.Applied),
-});
-
-export const getDestinationsQueryOptions = queryOptions({
-  queryFn: api.acl.destination.getDestinations,
-  queryKey: ['acl', 'destination'],
-  select: (resp) => resp.data,
-});
-
-export const getAppliedDestinationsQueryOptions = queryOptions({
-  queryFn: api.acl.destination.getDestinations,
-  queryKey: [
-    'acl',
-    'destination',
-    {
-      state: AclDeploymentState.Applied,
-    },
-  ],
-  select: (resp) =>
-    resp.data.filter((destination) => destination.state === AclDeploymentState.Applied),
-});
-
 export const getLicenseInfoQueryOptions = queryOptions({
   queryFn: api.getLicenseInfo,
   queryKey: ['enterprise_info'],
-});
-
-export const getActivityLogStreamsQueryOptions = queryOptions({
-  queryFn: api.activityLogStream.getStreams,
-  queryKey: ['activity_log_stream'],
-  select: (resp) => resp.data,
 });
 
 export const getSessionInfoQueryOptions = queryOptions({

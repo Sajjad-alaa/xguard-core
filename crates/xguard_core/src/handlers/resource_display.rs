@@ -24,8 +24,7 @@ pub struct ResourceDisplay {
         (status = 500, description = "Unable to list networks.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_locations_display(

@@ -1,10 +1,4 @@
 import { m } from '../../../paraglide/messages';
-import { Divider } from '../../xguard-ui/components/Divider/Divider';
-import { Modal } from '../../xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../xguard-ui/components/ModalControls/ModalControls';
-import { Search } from '../../xguard-ui/components/Search/Search';
-import { ThemeSpacing } from '../../xguard-ui/types';
-import { isPresent } from '../../xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -12,6 +6,12 @@ import {
 } from '../../hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../hooks/modalControls/modalTypes';
 import type { OpenDisplayListModal } from '../../hooks/modalControls/types';
+import { Divider } from '../../xguard-ui/components/Divider/Divider';
+import { Modal } from '../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../xguard-ui/components/ModalControls/ModalControls';
+import { Search } from '../../xguard-ui/components/Search/Search';
+import { ThemeSpacing } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import './style.scss';
 import { useEffect, useMemo, useState } from 'react';
 

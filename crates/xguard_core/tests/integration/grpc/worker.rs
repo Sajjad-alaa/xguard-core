@@ -1,13 +1,13 @@
 use claims::assert_matches;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::sync::mpsc::error::TryRecvError;
+use tonic::Code;
 use xguard_common::db::{
     Id,
     models::{AuthenticationKey, AuthenticationKeyType, User, YubiKey},
 };
 use xguard_core::db::AppEvent;
 use xguard_proto::worker::{JobStatus, Worker, worker_service_client::WorkerServiceClient};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::sync::mpsc::error::TryRecvError;
-use tonic::Code;
 
 use super::common::{
     add_authorization_metadata, create_gateway_jwt, make_grpc_test_server, setup_grpc_pool,

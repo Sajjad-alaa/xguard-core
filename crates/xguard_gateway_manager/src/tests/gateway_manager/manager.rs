@@ -1,6 +1,6 @@
-use xguard_common::db::models::gateway::Gateway;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tonic::Status;
+use xguard_common::db::models::gateway::Gateway;
 
 use crate::tests::common::{
     ManagerTestContext, MockGatewayHarness, build_gateway_with_enabled, complete_manager_handshake,

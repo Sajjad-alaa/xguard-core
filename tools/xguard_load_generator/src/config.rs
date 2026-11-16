@@ -59,11 +59,7 @@ pub struct SeedLdapArgs {
     #[arg(long)]
     pub users: NonZeroUsize,
 
-    #[arg(
-        long,
-        env = "XGUARD_LDAP_URL",
-        default_value = "ldap://localhost:389"
-    )]
+    #[arg(long, env = "XGUARD_LDAP_URL", default_value = "ldap://localhost:389")]
     pub ldap_url: String,
 
     #[arg(

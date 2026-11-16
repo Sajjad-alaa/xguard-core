@@ -1,8 +1,8 @@
 import './style.scss';
 import clsx from 'clsx';
+import { policyOsVariantToIcon, policyOsVariantToText } from '../../utils/policyPostures';
 import { Icon } from '../../xguard-ui/components/Icon';
 import { ThemeVariable } from '../../xguard-ui/types';
-import { policyOsVariantToIcon, policyOsVariantToText } from '../../utils/policyPostures';
 import type { SystemSelectorProps } from './types';
 
 export const SystemSelector = ({ os: variant, onClick }: SystemSelectorProps) => {

@@ -3,11 +3,11 @@ import { m } from '../../../paraglide/messages';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { LoadingStep } from '../../../shared/components/LoadingStep/LoadingStep';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
+import { useSSEController } from '../../../shared/hooks/useSSEController';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { CodeCard } from '../../../shared/xguard-ui/components/CodeCard/CodeCard';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { useSSEController } from '../../../shared/hooks/useSSEController';
 import type { SetupEvent, SetupStep, SetupStepId } from '../../EdgeSetupPage/steps/types';
 import { useMigrationWizardStore } from '../store/useMigrationWizardStore';
 

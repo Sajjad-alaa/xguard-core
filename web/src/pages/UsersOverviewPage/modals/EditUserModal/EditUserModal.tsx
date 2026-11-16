@@ -5,14 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
-import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
-import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
-import { EvenSplit } from '../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
-import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { TextStyle, ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import {
@@ -27,6 +19,14 @@ import {
   patternValidPhoneNumber,
 } from '../../../../shared/patterns';
 import { removeEmptyStrings } from '../../../../shared/utils/removeEmptyStrings';
+import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { EvenSplit } from '../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { TextStyle, ThemeSpacing } from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 
 const modalName = ModalName.EditUserModal;
 

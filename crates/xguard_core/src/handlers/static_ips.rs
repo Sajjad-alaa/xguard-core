@@ -5,19 +5,18 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use serde::Serialize;
 use xguard_common::db::{
     Id,
-    models::{Device, WireguardNetwork, device::DeviceInfo},
+    models::{Device, device::DeviceInfo},
 };
 use xguard_static_ip::{DeviceLocationIp, LocationDevices, get_ips_for_device, get_ips_for_user};
-use serde::Serialize;
 
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
 use crate::{
     appstate::AppState,
     auth::{AdminRole, SessionInfo},
-    enterprise::firewall::try_get_location_firewall_config,
     grpc::GatewayCommand,
     handlers::{ApiResponse, ApiResult},
 };
@@ -54,8 +53,7 @@ pub struct DeviceLocationIpsResponse {
         (status = 500, description = "Unable to get user device IP addresses.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_all_user_device_ips(
@@ -90,8 +88,7 @@ pub async fn get_all_user_device_ips(
         (status = 500, description = "Unable to get device IP addresses.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_device_ips(
@@ -133,8 +130,7 @@ pub struct StaticIpAssignment {
         (status = 500, description = "Unable to assign IP addresses.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn assign_static_ips(
@@ -145,7 +141,6 @@ pub async fn assign_static_ips(
 ) -> ApiResult {
     let mut transaction = state.pool.begin().await?;
     let mut device_ids = BTreeSet::new();
-    let mut location_ids = BTreeSet::new();
     for assignment in payload {
         xguard_static_ip::assign_static_ips(
             assignment.device_id,
@@ -155,7 +150,6 @@ pub async fn assign_static_ips(
         )
         .await?;
         device_ids.insert(assignment.device_id);
-        location_ids.insert(assignment.location_id);
     }
     transaction.commit().await?;
 
@@ -164,18 +158,6 @@ pub async fn assign_static_ips(
         if let Some(device) = Device::find_by_id(&mut *conn, device_id).await? {
             let device_info = DeviceInfo::from_device(&mut *conn, device).await?;
             state.send_gateway_command(GatewayCommand::DeviceModified(device_info));
-        }
-    }
-    // ACL rules embed peer addresses, so locations with ACLs need a firewall refresh too.
-    for location_id in location_ids {
-        if let Some(location) = WireguardNetwork::find_by_id(&mut *conn, location_id).await?
-            && let Some(firewall_config) =
-                try_get_location_firewall_config(&location, &mut conn).await?
-        {
-            state.send_gateway_command(GatewayCommand::FirewallConfigChanged(
-                location_id,
-                firewall_config,
-            ));
         }
     }
 
@@ -211,8 +193,7 @@ pub struct ValidateIpAssignmentRequest {
         (status = 500, description = "Unable to validate IP assignment.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn validate_ip_assignment(

@@ -3,12 +3,12 @@ import { type PropsWithChildren, useEffect, useRef } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../api/api';
 import { DISMISSED_UPDATE_KEY } from '../constants';
-import { Snackbar } from '../xguard-ui/providers/snackbar/snackbar';
-import { isPresent } from '../xguard-ui/utils/isPresent';
 import { openModal } from '../hooks/modalControls/modalsSubjects';
 import { ModalName } from '../hooks/modalControls/modalTypes';
 import { useApp } from '../hooks/useApp';
 import { useAuth } from '../hooks/useAuth';
+import { Snackbar } from '../xguard-ui/providers/snackbar/snackbar';
+import { isPresent } from '../xguard-ui/utils/isPresent';
 
 export const AppInfoProvider = ({ children }: PropsWithChildren) => {
   const isAuthenticated = useAuth((s) => isPresent(s.user));

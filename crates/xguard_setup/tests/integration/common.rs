@@ -5,9 +5,17 @@ use std::{
 };
 
 use axum::serve;
+use reqwest::{
+    Client,
+    cookie::Jar,
+    header::{HeaderMap, HeaderValue, USER_AGENT},
+};
+use semver::Version;
+use sqlx::PgPool;
+use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 use xguard_common::{
     VERSION,
-    config::{XGuardConfig, SERVER_CONFIG},
+    config::{SERVER_CONFIG, XGuardConfig},
     db::{
         Id,
         models::{
@@ -18,14 +26,6 @@ use xguard_common::{
     },
 };
 use xguard_setup::{migration::build_migration_webapp, setup_server::build_setup_webapp};
-use reqwest::{
-    Client,
-    cookie::Jar,
-    header::{HeaderMap, HeaderValue, USER_AGENT},
-};
-use semver::Version;
-use sqlx::PgPool;
-use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 
 pub(crate) const SESSION_COOKIE_NAME: &str = "xguard_session";
 pub(crate) const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);

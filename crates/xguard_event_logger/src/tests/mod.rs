@@ -1,6 +1,9 @@
 use std::net::{IpAddr, Ipv4Addr};
 
 use chrono::Utc;
+use ipnetwork::IpNetwork;
+use serde_json::Value;
+use strum::EnumCount;
 use xguard_common::db::{
     Id, NoId,
     models::{
@@ -23,16 +26,6 @@ use xguard_core::{
         activity_log::{ActivityLogEvent, ActivityLogModule, EventType},
         webhook::WebHook,
     },
-    enterprise::db::models::{
-        activity_log_stream::{ActivityLogStream, ActivityLogStreamType},
-        api_tokens::ApiToken,
-        device_posture::{DevicePosture, DevicePostureSnapshot},
-        enterprise_settings::EnterpriseSettingsInfo,
-        openid_provider::{
-            DirectorySyncTarget, DirectorySyncUserBehavior, OpenIdProvider, OpenIdProviderKind,
-        },
-        snat::UserSnatBinding,
-    },
     events::{
         ApiEventType, BidiRequestContext, BidiStreamEvent, BidiStreamEventType,
         DesktopClientMfaEvent, DirectorySyncEvent, DirectorySyncEventType,
@@ -41,9 +34,6 @@ use xguard_core::{
     },
 };
 use xguard_session_manager::events::SessionManagerEventType;
-use ipnetwork::IpNetwork;
-use serde_json::Value;
-use strum::EnumCount;
 
 use crate::{
     map_to_activity_log_event,
@@ -326,42 +316,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
         id: 2,
         ..gateway.clone()
     };
-    let oid_provider = OpenIdProvider {
-        id: 1,
-        name: "oid".into(),
-        base_url: "http://x".into(),
-        kind: OpenIdProviderKind::Google,
-        client_id: "c".into(),
-        client_secret: "s".to_owned().into(),
-        display_name: None,
-        google_service_account_key: None,
-        google_service_account_email: None,
-        admin_email: None,
-        directory_sync_enabled: false,
-        directory_sync_interval: 0,
-        directory_sync_user_behavior: DirectorySyncUserBehavior::Keep,
-        directory_sync_admin_behavior: DirectorySyncUserBehavior::Keep,
-        directory_sync_target: DirectorySyncTarget::All,
-        okta_private_jwk: None,
-        okta_dirsync_client_id: None,
-        directory_sync_group_match: Vec::new(),
-        jumpcloud_api_key: None,
-        prefetch_users: false,
-        disable_password_management: false,
-        directory_sync_user_groups: None,
-    };
-    let log_stream = ActivityLogStream {
-        id: 1,
-        name: "stream".into(),
-        stream_type: ActivityLogStreamType::VectorHttp,
-        config: serde_json::Value::Null,
-    };
-    let log_stream2 = ActivityLogStream {
-        id: 2,
-        name: "stream2".into(),
-        stream_type: ActivityLogStreamType::LogstashHttp,
-        config: serde_json::Value::Null,
-    };
     let webhook = WebHook {
         id: 1,
         url: "http://x".into(),
@@ -409,25 +363,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
         name: "admin".into(),
         is_admin: true,
     };
-    let api_token = ApiToken {
-        id: 1,
-        user_id: 1,
-        created_at: timestamp,
-        name: "tok".into(),
-        token_hash: "h".into(),
-    };
-    let snat = UserSnatBinding {
-        id: 1,
-        user_id: 1,
-        location_id: 10,
-        public_ip: "1.2.3.4".parse().unwrap(),
-    };
-    let snat2 = UserSnatBinding {
-        id: 2,
-        user_id: 1,
-        location_id: 10,
-        public_ip: "5.6.7.8".parse().unwrap(),
-    };
     let webauthn_key = WebAuthn {
         id: 1,
         user_id: 1,
@@ -441,31 +376,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
         attestation_chain: None,
         attestation_chain_sha256: None,
         registered_at: None,
-    };
-    let posture = DevicePosture {
-        id: 1,
-        name: "dp".into(),
-        description: None,
-        min_desktop_client_version: None,
-        min_mobile_client_version: None,
-        allow_prerelease_client: false,
-    };
-    let posture_snapshot = DevicePostureSnapshot {
-        device_posture: posture.clone(),
-        os_rules: Vec::new(),
-        location_ids: Vec::new(),
-    };
-    let posture_snapshot2 = DevicePostureSnapshot {
-        device_posture: DevicePosture {
-            id: 2,
-            name: "dp2".into(),
-            description: Some("desc".into()),
-            min_desktop_client_version: None,
-            min_mobile_client_version: None,
-            allow_prerelease_client: true,
-        },
-        os_rules: Vec::new(),
-        location_ids: Vec::new(),
     };
 
     let mfa_flow_snapshot = MfaFlowSnapshot {
@@ -765,32 +675,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("Modified"),
         },
         EventTestCase {
-            name: "ActivityLogStreamCreated",
-            message: api_message(ApiEventType::ActivityLogStreamCreated {
-                stream: log_stream.clone(),
-            }),
-            event_type: EventType::ActivityLogStreamCreated,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("Created"),
-        },
-        EventTestCase {
-            name: "ActivityLogStreamModified",
-            message: api_message(ApiEventType::ActivityLogStreamModified {
-                before: log_stream.clone(),
-                after: log_stream2,
-            }),
-            event_type: EventType::ActivityLogStreamModified,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("Modified"),
-        },
-        EventTestCase {
-            name: "ActivityLogStreamRemoved",
-            message: api_message(ApiEventType::ActivityLogStreamRemoved { stream: log_stream }),
-            event_type: EventType::ActivityLogStreamRemoved,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("Removed"),
-        },
-        EventTestCase {
             name: "VpnLocationAdded",
             message: api_message(ApiEventType::VpnLocationAdded {
                 location: location.clone(),
@@ -817,38 +701,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::VpnLocationModified,
             module: ActivityLogModule::XGuard,
             description_contains: Some("modified"),
-        },
-        EventTestCase {
-            name: "ApiTokenAdded",
-            message: api_message(ApiEventType::ApiTokenAdded {
-                owner: user.clone(),
-                token: api_token.clone(),
-            }),
-            event_type: EventType::ApiTokenAdded,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("Added"),
-        },
-        EventTestCase {
-            name: "ApiTokenRemoved",
-            message: api_message(ApiEventType::ApiTokenRemoved {
-                owner: user.clone(),
-                token: api_token.clone(),
-            }),
-            event_type: EventType::ApiTokenRemoved,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("Removed"),
-        },
-        EventTestCase {
-            name: "ApiTokenRenamed",
-            message: api_message(ApiEventType::ApiTokenRenamed {
-                owner: user.clone(),
-                token: api_token,
-                old_name: "old".into(),
-                new_name: "new".into(),
-            }),
-            event_type: EventType::ApiTokenRenamed,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("renamed"),
         },
         EventTestCase {
             name: "OpenIdAppAdded",
@@ -889,24 +741,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("Disabled"),
         },
         EventTestCase {
-            name: "OpenIdProviderModified",
-            message: api_message(ApiEventType::OpenIdProviderModified {
-                provider: oid_provider.clone(),
-            }),
-            event_type: EventType::OpenIdProviderModified,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("Modified"),
-        },
-        EventTestCase {
-            name: "OpenIdProviderRemoved",
-            message: api_message(ApiEventType::OpenIdProviderRemoved {
-                provider: oid_provider,
-            }),
-            event_type: EventType::OpenIdProviderRemoved,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("Removed"),
-        },
-        EventTestCase {
             name: "SettingsUpdated",
             message: api_message(ApiEventType::SettingsUpdated {
                 before: Settings::default(),
@@ -932,16 +766,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::SettingsDefaultBrandingRestored,
             module: ActivityLogModule::XGuard,
             description_contains: Some("Restored"),
-        },
-        EventTestCase {
-            name: "EnterpriseSettingsUpdated",
-            message: api_message(ApiEventType::EnterpriseSettingsUpdated {
-                before: EnterpriseSettingsInfo::default(),
-                after: EnterpriseSettingsInfo::default(),
-            }),
-            event_type: EventType::EnterpriseSettingsUpdated,
-            module: ActivityLogModule::XGuard,
-            description_contains: None,
         },
         EventTestCase {
             name: "GroupsBulkAssigned",
@@ -1094,40 +918,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("Added"),
         },
         EventTestCase {
-            name: "UserSnatBindingAdded",
-            message: api_message(ApiEventType::UserSnatBindingAdded {
-                user: user.clone(),
-                location: location.clone(),
-                binding: snat.clone(),
-            }),
-            event_type: EventType::UserSnatBindingAdded,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("bound"),
-        },
-        EventTestCase {
-            name: "UserSnatBindingRemoved",
-            message: api_message(ApiEventType::UserSnatBindingRemoved {
-                user: user.clone(),
-                location: location.clone(),
-                binding: snat.clone(),
-            }),
-            event_type: EventType::UserSnatBindingRemoved,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("Removed"),
-        },
-        EventTestCase {
-            name: "UserSnatBindingModified",
-            message: api_message(ApiEventType::UserSnatBindingModified {
-                user: user.clone(),
-                location: location.clone(),
-                before: snat,
-                after: snat2,
-            }),
-            event_type: EventType::UserSnatBindingModified,
-            module: ActivityLogModule::XGuard,
-            description_contains: Some("changed"),
-        },
-        EventTestCase {
             name: "ProxyModified",
             message: api_message(ApiEventType::ProxyModified {
                 before: proxy.clone(),
@@ -1160,64 +950,6 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::GatewayDeleted,
             module: ActivityLogModule::XGuard,
             description_contains: Some("Deleted"),
-        },
-        EventTestCase {
-            name: "DevicePostureCreated",
-            message: api_message(ApiEventType::DevicePostureCreated {
-                snapshot: posture_snapshot.clone(),
-            }),
-            event_type: EventType::DevicePostureCreated,
-            module: ActivityLogModule::Posture,
-            description_contains: Some("Created"),
-        },
-        EventTestCase {
-            name: "DevicePostureUpdated",
-            message: api_message(ApiEventType::DevicePostureUpdated {
-                before: posture_snapshot.clone(),
-                after: posture_snapshot2.clone(),
-            }),
-            event_type: EventType::DevicePostureUpdated,
-            module: ActivityLogModule::Posture,
-            description_contains: Some("Updated"),
-        },
-        EventTestCase {
-            name: "DevicePostureDeleted",
-            message: api_message(ApiEventType::DevicePostureDeleted {
-                snapshot: posture_snapshot.clone(),
-            }),
-            event_type: EventType::DevicePostureDeleted,
-            module: ActivityLogModule::Posture,
-            description_contains: Some("Deleted"),
-        },
-        EventTestCase {
-            name: "DevicePostureDuplicated",
-            message: api_message(ApiEventType::DevicePostureDuplicated {
-                original: posture_snapshot,
-                duplicate: posture_snapshot2,
-            }),
-            event_type: EventType::DevicePostureDuplicated,
-            module: ActivityLogModule::Posture,
-            description_contains: Some("Duplicated"),
-        },
-        EventTestCase {
-            name: "DevicePostureLocationsAssigned",
-            message: api_message(ApiEventType::DevicePostureLocationsAssigned {
-                device_posture: posture,
-                location_ids: vec![10],
-            }),
-            event_type: EventType::DevicePostureLocationsAssigned,
-            module: ActivityLogModule::Posture,
-            description_contains: Some("Assigned"),
-        },
-        EventTestCase {
-            name: "LocationPosturesAssigned",
-            message: api_message(ApiEventType::LocationPosturesAssigned {
-                location: location.clone(),
-                posture_ids: vec![1],
-            }),
-            event_type: EventType::LocationPosturesAssigned,
-            module: ActivityLogModule::Posture,
-            description_contains: Some("Assigned"),
         },
         EventTestCase {
             name: "MfaFlowCreated",
@@ -1485,39 +1217,6 @@ fn bidi_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::VpnClientMfaLoginSuperseded,
             module: ActivityLogModule::Vpn,
             description_contains: Some("superseded"),
-        },
-        EventTestCase {
-            name: "DevicePostureCheckPassed",
-            message: bidi_msg(
-                BidiStreamEventType::DesktopClientMfa(Box::new(
-                    DesktopClientMfaEvent::PostureCheckPassed {
-                        device: device.clone(),
-                        location: location.clone(),
-                        device_posture_data: None,
-                    },
-                )),
-                Some(location.clone()),
-            ),
-            event_type: EventType::DevicePostureCheckPassed,
-            module: ActivityLogModule::Posture,
-            description_contains: Some("posture check passed"),
-        },
-        EventTestCase {
-            name: "DevicePostureCheckFailed",
-            message: bidi_msg(
-                BidiStreamEventType::DesktopClientMfa(Box::new(
-                    DesktopClientMfaEvent::PostureCheckFailed {
-                        device,
-                        location: location.clone(),
-                        device_posture_data: None,
-                        failed_checks: vec!["check1".into()],
-                    },
-                )),
-                Some(location.clone()),
-            ),
-            event_type: EventType::DevicePostureCheckFailed,
-            module: ActivityLogModule::Posture,
-            description_contains: Some("posture check failed"),
         },
     ];
 

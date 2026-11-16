@@ -1,4 +1,10 @@
 use chrono::{TimeDelta, Utc};
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+    query_scalar,
+};
+use tokio::time::timeout;
 use xguard_common::{
     db::{
         Id,
@@ -14,12 +20,6 @@ use xguard_core::{
     events::{BidiStreamEventType, PasswordResetEvent},
 };
 use xguard_proto::proxy::core_response;
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
-    query_scalar,
-};
-use tokio::time::timeout;
 
 use super::support::{
     STRONG_PASSWORD, assert_error_response, complete_proxy_handshake, create_enrollment_token,

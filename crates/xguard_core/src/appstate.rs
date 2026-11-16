@@ -2,7 +2,6 @@ use std::sync::{Arc, RwLock, atomic::AtomicBool};
 
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
-use xguard_common::{db::models::Settings, types::proxy::ProxyControlMessage};
 use reqwest::Client;
 use serde_json::json;
 use sqlx::PgPool;
@@ -10,6 +9,7 @@ use tokio::{
     sync::{broadcast, mpsc},
     task::spawn,
 };
+use xguard_common::{db::models::Settings, types::proxy::ProxyControlMessage};
 
 use crate::{
     db::{AppEvent, WebHook},

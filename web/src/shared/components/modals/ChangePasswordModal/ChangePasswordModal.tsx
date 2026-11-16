@@ -8,12 +8,6 @@ import type z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../api/api';
 import type { ApiError, User } from '../../../api/types';
-import { Icon } from '../../../xguard-ui/components/Icon';
-import type { IconKindValue } from '../../../xguard-ui/components/Icon/icon-types';
-import { Modal } from '../../../xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
-import { Snackbar } from '../../../xguard-ui/providers/snackbar/snackbar';
-import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { useAppForm, withForm } from '../../../form';
 import { formChangeLogic } from '../../../formLogic';
 import {
@@ -22,6 +16,12 @@ import {
   subscribeOpenModal,
 } from '../../../hooks/modalControls/modalsSubjects';
 import type { ModalNameValue } from '../../../hooks/modalControls/modalTypes';
+import { Icon } from '../../../xguard-ui/components/Icon';
+import type { IconKindValue } from '../../../xguard-ui/components/Icon/icon-types';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
+import { Snackbar } from '../../../xguard-ui/providers/snackbar/snackbar';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import {
   adminChangePasswordDefaultValues,
   adminChangePasswordSchema,

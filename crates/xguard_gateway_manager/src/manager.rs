@@ -4,10 +4,6 @@ use std::{
     time::Duration,
 };
 
-use xguard_common::{
-    db::{ChangeNotification, Id, TriggerOperation, models::gateway::Gateway},
-    gateway_event::GatewayCommand,
-};
 use sqlx::{PgPool, postgres::PgListener};
 use tokio::{
     sync::{
@@ -18,6 +14,10 @@ use tokio::{
     time::sleep,
 };
 use tonic::Request;
+use xguard_common::{
+    db::{ChangeNotification, Id, TriggerOperation, models::gateway::Gateway},
+    gateway_event::GatewayCommand,
+};
 
 #[cfg(test)]
 use crate::GatewayManagerTestSupport;

@@ -8,6 +8,8 @@ import { useMemo } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import type { Webhook } from '../../shared/api/types';
+import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
@@ -19,8 +21,6 @@ import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/Tab
 import { TableEditCell } from '../../shared/xguard-ui/components/table/TableEditCell/TableEditCell';
 import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
 import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
-import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 
 type RowData = Webhook;
 

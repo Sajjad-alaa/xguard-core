@@ -9,6 +9,9 @@ import { Suspense, useMemo, useState } from 'react';
 import { m } from '../../../paraglide/messages';
 import { getActivityLogEventLabel } from '../../../shared/api/activity-log-types';
 import type { ActivityLogEvent } from '../../../shared/api/types';
+import { getActivityLogEventQueryOptions } from '../../../shared/query';
+import { displayDate } from '../../../shared/utils/displayDate';
+import { formatIpForDisplay } from '../../../shared/utils/formatIpForDisplay';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
 import { DrawerModal } from '../../../shared/xguard-ui/components/DrawerModal/DrawerModal';
@@ -17,9 +20,6 @@ import { Toggle } from '../../../shared/xguard-ui/components/Toggle/Toggle';
 import { TableBody } from '../../../shared/xguard-ui/components/table/TableBody/TableBody';
 import { renderTableCellValue } from '../../../shared/xguard-ui/components/table/utils/renderTableCellValue';
 import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
-import { getActivityLogEventQueryOptions } from '../../../shared/query';
-import { displayDate } from '../../../shared/utils/displayDate';
-import { formatIpForDisplay } from '../../../shared/utils/formatIpForDisplay';
 import {
   buildLogDetailsChanges,
   type LogDetailsChange,

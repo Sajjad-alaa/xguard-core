@@ -13,6 +13,11 @@ import type { MigrationWizardApiState } from '../../../../shared/api/types';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
 import { externalLink } from '../../../../shared/constants';
+import {
+  getMigrationStateQueryOptions,
+  getSessionInfoQueryOptions,
+} from '../../../../shared/query';
+import { migrationWizardFinishPromise } from '../../../../shared/wizard/migrationWizardFinishPromise';
 import { ActionableSection } from '../../../../shared/xguard-ui/components/ActionableSection/ActionableSection';
 import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
@@ -26,11 +31,6 @@ import {
   ThemeSpacing,
   ThemeVariable,
 } from '../../../../shared/xguard-ui/types';
-import {
-  getMigrationStateQueryOptions,
-  getSessionInfoQueryOptions,
-} from '../../../../shared/query';
-import { migrationWizardFinishPromise } from '../../../../shared/wizard/migrationWizardFinishPromise';
 import { useMigrationWizardStore } from '../../store/useMigrationWizardStore';
 import { MigrationWizardStep } from '../../types';
 import prepareNetworkImage from './assets/prepare-network.png';

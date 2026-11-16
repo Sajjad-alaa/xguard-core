@@ -1,15 +1,8 @@
 pub mod login_throttle;
 
-use axum::{
-    Extension,
-    extract::{FromRequestParts, OptionalFromRequestParts},
-    http::request::Parts,
-};
-use axum_extra::{
-    TypedHeader,
-    extract::cookie::CookieJar,
-    headers::{Authorization, authorization::Bearer},
-};
+use axum::{Extension, extract::FromRequestParts, http::request::Parts};
+use axum_extra::extract::cookie::CookieJar;
+use sqlx::PgPool;
 use xguard_common::db::{
     Id,
     models::{
@@ -19,13 +12,8 @@ use xguard_common::db::{
         user::User,
     },
 };
-use sqlx::PgPool;
 
-use crate::{
-    enterprise::{db::models::api_tokens::ApiToken, is_business_license_active},
-    error::WebError,
-    handlers::{ClientIpAddr, SESSION_COOKIE_NAME},
-};
+use crate::{error::WebError, handlers::SESSION_COOKIE_NAME};
 
 pub struct SessionExtractor(pub Session);
 
@@ -38,41 +26,6 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         // let appstate = AppState::from_ref(state);
         let pool = extract_pool(parts, state).await?;
-
-        // first try to authenticate by API token if one is found in header
-        if is_business_license_active() {
-            let maybe_auth_header: Option<TypedHeader<Authorization<Bearer>>> =
-                <TypedHeader<_> as OptionalFromRequestParts<S>>::from_request_parts(parts, state)
-                    .await
-                    .map_err(|err| {
-                        error!("Failed to extract optional auth header: {err}");
-                        WebError::Authorization("Invalid auth header".into())
-                    })?;
-            if let Some(header) = maybe_auth_header {
-                let token_string = header.token();
-                debug!("Trying to authorize request using API token");
-                return match ApiToken::try_find_by_auth_token(&pool, token_string).await {
-                    Ok(Some(api_token)) => {
-                        // create a dummy session and don't store it in the DB
-                        // since each request needs to be authorized anyway
-                        let ip_address = ClientIpAddr::from_request_parts(parts, state)
-                            .await
-                            .map_err(|err| {
-                                error!("Failed to get client IP: {err:?}");
-                                WebError::ClientIpError
-                            })?;
-                        Ok(Self(Session::new(
-                            api_token.user_id,
-                            SessionState::ApiTokenVerified,
-                            ip_address.0.to_string(),
-                            None,
-                        )))
-                    }
-                    Ok(None) => Err(WebError::Authorization("Invalid API token".into())),
-                    Err(err) => Err(err.into()),
-                };
-            }
-        }
 
         let Ok(cookies) = CookieJar::from_request_parts(parts, state).await;
         if let Some(session_cookie) = cookies.get(SESSION_COOKIE_NAME) {

@@ -7,13 +7,6 @@ import type { CreateGroupRequest, User } from '../../../../shared/api/types';
 import { DescriptionBlock } from '../../../../shared/components/DescriptionBlock/DescriptionBlock';
 import { SelectionSection } from '../../../../shared/components/SelectionSection/SelectionSection';
 import type { SelectionOption } from '../../../../shared/components/SelectionSection/type';
-import { Checkbox } from '../../../../shared/xguard-ui/components/Checkbox/Checkbox';
-import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
-import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import {
@@ -23,6 +16,13 @@ import {
 } from '../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import type { OpenCEGroupModal } from '../../../../shared/hooks/modalControls/types';
+import { Checkbox } from '../../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 
 interface ModalState extends OpenCEGroupModal {
   step: 'start' | 'users';

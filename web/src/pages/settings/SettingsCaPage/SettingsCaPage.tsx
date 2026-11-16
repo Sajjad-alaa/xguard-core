@@ -14,6 +14,8 @@ import { Page } from '../../../shared/components/Page/Page';
 import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCard';
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
+import { displayDate } from '../../../shared/utils/displayDate';
+import { downloadFile } from '../../../shared/utils/download';
 import { ActionableSection } from '../../../shared/xguard-ui/components/ActionableSection/ActionableSection';
 import { ActionableSectionVariant } from '../../../shared/xguard-ui/components/ActionableSection/types';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
@@ -21,8 +23,6 @@ import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
-import { displayDate } from '../../../shared/utils/displayDate';
-import { downloadFile } from '../../../shared/utils/download';
 import caIconSrc from './assets/ca.png';
 
 const breadcrumbs = [

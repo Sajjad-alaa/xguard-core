@@ -2,11 +2,11 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { LocationsMigrationWizardPage } from '../../../pages/LocationsMigrationWizardPage/LocationsMigrationWizardPage';
 import { useMigrationWizardStore } from '../../../pages/MigrationWizardPage/store/useMigrationWizardStore';
 import { ActiveWizard } from '../../../shared/api/types';
-import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import {
   getMigrationStateQueryOptions,
   getSessionInfoQueryOptions,
 } from '../../../shared/query';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 
 export const Route = createFileRoute('/_wizard/migration/locations')({
   beforeLoad: async ({ context }) => {

@@ -1,8 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
 import { AppLoaderPage } from '../pages/AppLoaderPage/AppLoaderPage';
-import { SnackbarManager } from '../shared/xguard-ui/providers/snackbar/SnackbarManager';
 import { AppSettingsEssentialsProvider } from '../shared/providers/AppSettingsEssentialsProvider';
+import { SnackbarManager } from '../shared/xguard-ui/providers/snackbar/SnackbarManager';
 
 interface RouterContext {
   queryClient: QueryClient;

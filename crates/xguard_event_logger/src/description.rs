@@ -111,18 +111,6 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         } => Some(format!(
             "Modified network device {after} in location {location}"
         )),
-        ApiEventType::ActivityLogStreamCreated { stream } => Some(format!(
-            "Created {} activity log stream {}",
-            stream.stream_type, stream.name
-        )),
-        ApiEventType::ActivityLogStreamModified { before: _, after } => Some(format!(
-            "Modified {} activity log stream {}",
-            after.stream_type, after.name
-        )),
-        ApiEventType::ActivityLogStreamRemoved { stream } => Some(format!(
-            "Removed {} activity log stream {}",
-            stream.stream_type, stream.name
-        )),
         ApiEventType::VpnLocationAdded { location } => {
             Some(format!("Added VPN location {location}"))
         }
@@ -132,21 +120,6 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::VpnLocationModified { before: _, after } => {
             Some(format!("VPN location {after} was modified"))
         }
-        ApiEventType::ApiTokenAdded { owner, token } => {
-            Some(format!("Added API token {} for user {owner}", token.name))
-        }
-        ApiEventType::ApiTokenRemoved { owner, token } => Some(format!(
-            "Removed API token {} owned by user {owner}",
-            token.name
-        )),
-        ApiEventType::ApiTokenRenamed {
-            owner,
-            token: _,
-            old_name,
-            new_name,
-        } => Some(format!(
-            "API token owned by user {owner} was renamed from {old_name} to {new_name}",
-        )),
         ApiEventType::OpenIdAppAdded { app } => {
             Some(format!("Added OpenID application {}", app.name))
         }
@@ -160,12 +133,6 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
             let state = if *enabled { "Enabled" } else { "Disabled" };
             Some(format!("{} OpenID application {}", state, app.name))
         }
-        ApiEventType::OpenIdProviderModified { provider } => {
-            Some(format!("Modified OpenID provider {}", provider.name))
-        }
-        ApiEventType::OpenIdProviderRemoved { provider } => {
-            Some(format!("Removed OpenID provider {}", provider.name))
-        }
         ApiEventType::SettingsUpdated {
             before: _,
             after: _,
@@ -177,10 +144,6 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::SettingsDefaultBrandingRestored => {
             Some("Restored default branding settings".into())
         }
-        ApiEventType::EnterpriseSettingsUpdated {
-            before: _,
-            after: _,
-        } => None,
         ApiEventType::GroupsBulkAssigned { users, groups } => Some(format!(
             "Assigned {} users to {} groups",
             users.len(),
@@ -251,61 +214,12 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::ClientConfigurationTokenAdded { user } => {
             Some(format!("Added client configuration token for user {user}"))
         }
-        ApiEventType::UserSnatBindingAdded { user, binding, .. } => Some(format!(
-            "Devices owned by user {user} bound to public IP {}",
-            binding.public_ip
-        )),
-        ApiEventType::UserSnatBindingRemoved { user, binding, .. } => Some(format!(
-            "Removed public IP {} binding for user {user}",
-            binding.public_ip
-        )),
-        ApiEventType::UserSnatBindingModified {
-            user,
-            before,
-            after,
-            ..
-        } => Some(format!(
-            "Public IP bound to devices owned by user {user} changed from {} to {}",
-            before.public_ip, after.public_ip
-        )),
         ApiEventType::ProxyModified { before: _, after } => Some(format!("Modified proxy {after}")),
         ApiEventType::ProxyDeleted { proxy } => Some(format!("Deleted proxy {proxy}")),
         ApiEventType::GatewayModified { before: _, after } => {
             Some(format!("Modified gateway {after}"))
         }
         ApiEventType::GatewayDeleted { gateway } => Some(format!("Deleted gateway {gateway}")),
-        ApiEventType::DevicePostureCreated { snapshot } => Some(format!(
-            "Created device posture check {}",
-            snapshot.device_posture.name
-        )),
-        ApiEventType::DevicePostureUpdated { after, .. } => Some(format!(
-            "Updated device posture check {}",
-            after.device_posture.name
-        )),
-        ApiEventType::DevicePostureDeleted { snapshot } => Some(format!(
-            "Deleted device posture check {}",
-            snapshot.device_posture.name
-        )),
-        ApiEventType::DevicePostureDuplicated { duplicate, .. } => Some(format!(
-            "Duplicated device posture check as {}",
-            duplicate.device_posture.name
-        )),
-        ApiEventType::DevicePostureLocationsAssigned {
-            device_posture,
-            location_ids,
-        } => Some(format!(
-            "Assigned {} location(s) to device posture check {}",
-            location_ids.len(),
-            device_posture.id
-        )),
-        ApiEventType::LocationPosturesAssigned {
-            location,
-            posture_ids,
-        } => Some(format!(
-            "Assigned {} posture check(s) to location {}",
-            posture_ids.len(),
-            location.id
-        )),
         ApiEventType::MfaFlowCreated { snapshot } => {
             Some(format!("Created MFA flow '{}'", snapshot.flow.title))
         }

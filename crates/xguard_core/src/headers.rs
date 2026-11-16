@@ -9,12 +9,12 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use sqlx::PgPool;
+use ua_parser::{Extractor, Regexes, device, os, user_agent};
 use xguard_common::db::{
     Id,
     models::{DeviceLoginEvent, User},
 };
-use sqlx::PgPool;
-use ua_parser::{Extractor, Regexes, device, os, user_agent};
 
 use crate::mail::templates::{SessionContext, TemplateError, new_device_login_mail};
 

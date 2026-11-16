@@ -2,9 +2,9 @@ import './style.scss';
 import { useMatch } from '@tanstack/react-router';
 import clsx from 'clsx';
 import type { HtmlHTMLAttributes, PropsWithChildren, Ref } from 'react';
-import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { useApp } from '../../hooks/useApp';
 import { useAuth } from '../../hooks/useAuth';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { PageTopBar } from '../PageTopBar/PageTopBar';
 
 interface Props extends HtmlHTMLAttributes<HTMLDivElement>, PropsWithChildren {

@@ -1,6 +1,6 @@
-use xguard_common::{db::Id, gateway_event::GatewayCommand};
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
+use xguard_common::{db::Id, gateway_event::GatewayCommand};
 
 use crate::events::SessionManagerEvent;
 

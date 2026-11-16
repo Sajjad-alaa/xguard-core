@@ -53,5 +53,6 @@
   "mfa_flow_error_enterprise_license": "An Enterprise license is required for FIDO2 security keys.",
   "mfa_flow_error_smtp_not_configured": "Configure SMTP before using email verification codes.",
   "mfa_flow_error_oidc_provider_missing": "Configure an OpenID provider before using external identity provider verification.",
-  "mfa_flow_unavailable_warning": "MFA flow contains error(s) and may be partially or fully disabled."
+  "mfa_flow_unavailable_warning": "MFA flow contains error(s) and may be partially or fully disabled.",
+  "mfa_flow_method_not_supported": "Not available in XGuard"
 }

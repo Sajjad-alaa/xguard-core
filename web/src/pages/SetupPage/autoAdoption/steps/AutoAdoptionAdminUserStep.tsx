@@ -10,13 +10,13 @@ import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
+import { useAppForm, withForm } from '../../../../shared/form';
+import { formChangeLogic } from '../../../../shared/formLogic';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import { Icon } from '../../../../shared/xguard-ui/components/Icon';
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { useAppForm, withForm } from '../../../../shared/form';
-import { formChangeLogic } from '../../../../shared/formLogic';
 import { AutoAdoptionSetupStep } from '../types';
 import { useAutoAdoptionSetupWizardStore } from '../useAutoAdoptionSetupWizardStore';
 

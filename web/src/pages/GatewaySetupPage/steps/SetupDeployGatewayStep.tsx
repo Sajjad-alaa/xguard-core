@@ -15,11 +15,7 @@ import type { TabsItem } from '../../../shared/xguard-ui/components/Tabs/types';
 import { TooltipContent } from '../../../shared/xguard-ui/providers/tooltip/TooltipContent';
 import { TooltipProvider } from '../../../shared/xguard-ui/providers/tooltip/TooltipContext';
 import { TooltipTrigger } from '../../../shared/xguard-ui/providers/tooltip/TooltipTrigger';
-import {
-  TextStyle,
-  ThemeSpacing,
-  ThemeVariable,
-} from '../../../shared/xguard-ui/types';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
 import amazonImage from '../assets/amazon.png';
 import kubernetesImage from '../assets/kub.png';
 import opnsenseImage from '../assets/opnsense.png';

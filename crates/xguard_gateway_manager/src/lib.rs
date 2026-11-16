@@ -10,18 +10,18 @@ use std::{
 };
 
 #[cfg(test)]
-use xguard_common::db::{Id, models::gateway::Gateway};
-use xguard_common::messages::peer_stats_update::PeerStatsUpdate;
-use xguard_core::events::GatewayConnectionEvent;
-use xguard_proto::gateway::gateway_client::GatewayClient;
-use xguard_version::client::ClientVersionInterceptor;
-#[cfg(test)]
 use tokio::sync::Notify;
 use tokio::{
     sync::mpsc::{UnboundedSender, unbounded_channel},
     task::JoinHandle,
 };
 use tonic::{service::interceptor::InterceptedService, transport::Channel};
+#[cfg(test)]
+use xguard_common::db::{Id, models::gateway::Gateway};
+use xguard_common::messages::peer_stats_update::PeerStatsUpdate;
+use xguard_core::events::GatewayConnectionEvent;
+use xguard_proto::gateway::gateway_client::GatewayClient;
+use xguard_version::client::ClientVersionInterceptor;
 
 #[macro_use]
 extern crate tracing;

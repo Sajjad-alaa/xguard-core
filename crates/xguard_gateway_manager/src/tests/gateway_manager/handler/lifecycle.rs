@@ -85,8 +85,7 @@ async fn test_gateway_manager_shutdown_closes_stream_with_updates_handler_runnin
     updated_network.name.push_str("-shutdown-test");
     context.send_event(GatewayCommand::NetworkModified(
         updated_network,
-        Vec::new(),
-        None,
+        Vec::new()
     ));
     let outbound = mock_gateway.recv_outbound().await;
     assert!(matches!(

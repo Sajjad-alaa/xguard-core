@@ -1,6 +1,7 @@
 use std::net::IpAddr;
 
 use chrono::NaiveDateTime;
+use tokio::sync::Notify;
 use xguard_common::db::{
     Id,
     models::{Device, Settings, WireguardNetwork},
@@ -13,7 +14,6 @@ use xguard_core::events::{
 use xguard_session_manager::events::{
     SessionManagerEvent, SessionManagerEventContext, SessionManagerEventType,
 };
-use tokio::sync::Notify;
 
 /// Thin wrapper around source event types.
 ///
@@ -56,17 +56,7 @@ impl EventLoggerMessage {
     ///
     /// Side effect: calls `reload_notify.notify_waiters()` when the event is an
     /// activity log stream configuration change.
-    pub fn from_api_event(api_event: ApiEvent, reload_notify: &Notify) -> Self {
-        // Side effect: activity log stream configuration changed
-        if matches!(
-            *api_event.event,
-            ApiEventType::ActivityLogStreamCreated { .. }
-                | ApiEventType::ActivityLogStreamModified { .. }
-                | ApiEventType::ActivityLogStreamRemoved { .. }
-        ) {
-            reload_notify.notify_waiters();
-        }
-
+    pub fn from_api_event(api_event: ApiEvent, _reload_notify: &Notify) -> Self {
         let location = extract_api_location(&api_event.event);
 
         Self {
@@ -86,8 +76,6 @@ impl EventLoggerMessage {
                 | DesktopClientMfaEvent::Failed { location, .. }
                 | DesktopClientMfaEvent::Aborted { location, .. }
                 | DesktopClientMfaEvent::Disconnected { location, .. }
-                | DesktopClientMfaEvent::PostureCheckPassed { location, .. }
-                | DesktopClientMfaEvent::PostureCheckFailed { location, .. }
                 | DesktopClientMfaEvent::SessionSuperseded { location, .. }
                 | DesktopClientMfaEvent::MfaLoginSuperseded { location, .. } => {
                     Some(location.clone())
@@ -164,10 +152,7 @@ fn extract_api_location(event: &ApiEventType) -> Option<WireguardNetwork<Id>> {
         | ApiEventType::NetworkDeviceModified { location, .. }
         | ApiEventType::NetworkDeviceRemoved { location, .. }
         | ApiEventType::VpnLocationAdded { location }
-        | ApiEventType::VpnLocationRemoved { location }
-        | ApiEventType::UserSnatBindingAdded { location, .. }
-        | ApiEventType::UserSnatBindingRemoved { location, .. }
-        | ApiEventType::UserSnatBindingModified { location, .. } => Some(location.clone()),
+        | ApiEventType::VpnLocationRemoved { location } => Some(location.clone()),
         ApiEventType::VpnLocationModified { after, .. } => Some(after.clone()),
         _ => None,
     }

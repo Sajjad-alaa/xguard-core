@@ -1,5 +1,8 @@
 use std::{collections::HashMap, net::IpAddr};
 
+use sqlx::PgConnection;
+use thiserror::Error;
+use tokio::sync::mpsc::UnboundedSender;
 use xguard_common::{
     csv::AsCsv,
     db::{
@@ -14,15 +17,9 @@ use xguard_common::{
     },
     gateway_event::send_multiple_gateway_commands,
 };
-use sqlx::PgConnection;
-use thiserror::Error;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    device_access::join_device_to_all_networks,
-    enterprise::firewall::{FirewallError, try_get_location_firewall_config},
-    grpc::GatewayCommand,
-    wg_config::ImportedDevice,
+    device_access::join_device_to_all_networks, grpc::GatewayCommand, wg_config::ImportedDevice,
 };
 
 pub mod allowed_peers;
@@ -44,16 +41,6 @@ impl LocationManager {
         for network in locations {
             sync_location_allowed_devices(&network, &mut *conn, None, &mut gateway_commands)
                 .await?;
-
-            // Send firewall config update, if ACLs are enabled for a given location.
-            if let Some(firewall_config) =
-                try_get_location_firewall_config(&network, &mut *conn).await?
-            {
-                gateway_commands.push(GatewayCommand::FirewallConfigChanged(
-                    network.id,
-                    firewall_config,
-                ));
-            }
         }
 
         Ok(Self { gateway_commands })
@@ -67,8 +54,6 @@ impl LocationManager {
 
 #[derive(Debug, Error)]
 pub enum LocationManagementError {
-    #[error(transparent)]
-    FirewallError(#[from] FirewallError),
     #[error(transparent)]
     DbError(#[from] sqlx::Error),
     #[error(transparent)]

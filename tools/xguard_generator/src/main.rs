@@ -1,11 +1,8 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, value_parser};
-use xguard_common::db::{Id, init_db};
-use xguard_generator::{
-    acl_rules::generate_acl_rules,
-    vpn_session_stats::{VpnSessionGeneratorConfig, generate_vpn_session_stats},
-};
 use tracing_subscriber::EnvFilter;
+use xguard_common::db::{Id, init_db};
+use xguard_generator::vpn_session_stats::{VpnSessionGeneratorConfig, generate_vpn_session_stats};
 
 #[derive(Parser)]
 #[command(about, long_about = None)]
@@ -53,11 +50,6 @@ enum Commands {
         /// number of activity log events to generate (defaults to 20 when omitted)
         #[arg(long)]
         activity_log_events: Option<usize>,
-    },
-    /// Generates ACL rules
-    AclRules {
-        #[arg(long)]
-        num_rules: u32,
     },
 }
 
@@ -110,7 +102,6 @@ async fn main() -> Result<()> {
 
             generate_vpn_session_stats(pool, config).await?;
         }
-        Commands::AclRules { num_rules } => generate_acl_rules(pool, num_rules).await?,
     };
 
     Ok(())

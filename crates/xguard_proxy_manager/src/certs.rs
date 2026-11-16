@@ -2,9 +2,9 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use xguard_common::db::{Id, models::proxy::Proxy};
 use sqlx::PgPool;
 use tokio::sync::watch;
+use xguard_common::db::{Id, models::proxy::Proxy};
 
 /// Build a compact id->serial map, skipping proxies without a stored cert.
 fn collect_certs<I>(items: I) -> HashMap<Id, String>

@@ -3,16 +3,6 @@ import { useEffect, useState } from 'react';
 import z from 'zod';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
-import { AppText } from '../../../shared/xguard-ui/components/AppText/AppText';
-import { Modal } from '../../../shared/xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../shared/xguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
-import {
-  TextStyle,
-  ThemeSpacing,
-  ThemeVariable,
-} from '../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import {
@@ -21,6 +11,12 @@ import {
   subscribeOpenModal,
 } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
+import { AppText } from '../../../shared/xguard-ui/components/AppText/AppText';
+import { Modal } from '../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
 
 const modalNameValue = ModalName.SendTestMail;
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { m } from '../../../../../../../paraglide/messages';
-import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
 import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
+import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
 import './style.scss';
 import { useStore } from '@tanstack/react-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -9,6 +9,15 @@ import type { AxiosError } from 'axios';
 import type z from 'zod';
 import api from '../../../../../../../shared/api/api';
 import type { ApiError } from '../../../../../../../shared/api/types';
+import { useAppForm } from '../../../../../../../shared/form';
+import { formChangeLogic } from '../../../../../../../shared/formLogic';
+import {
+  closeModal,
+  openModal,
+  subscribeCloseModal,
+  subscribeOpenModal,
+} from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
+import { totpCodeFormSchema } from '../../../../../../../shared/schema/totpCode';
 import { Badge } from '../../../../../../../shared/xguard-ui/components/Badge/Badge';
 import { CopyField } from '../../../../../../../shared/xguard-ui/components/CopyField/CopyField';
 import { Divider } from '../../../../../../../shared/xguard-ui/components/Divider/Divider';
@@ -19,15 +28,6 @@ import { Snackbar } from '../../../../../../../shared/xguard-ui/providers/snackb
 import { ThemeSpacing } from '../../../../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
 import { createZodIssue } from '../../../../../../../shared/xguard-ui/utils/zod';
-import { useAppForm } from '../../../../../../../shared/form';
-import { formChangeLogic } from '../../../../../../../shared/formLogic';
-import {
-  closeModal,
-  openModal,
-  subscribeCloseModal,
-  subscribeOpenModal,
-} from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
-import { totpCodeFormSchema } from '../../../../../../../shared/schema/totpCode';
 import { useUserProfile } from '../../../../hooks/useUserProfilePage';
 
 const modalName = ModalName.TotpSetup;

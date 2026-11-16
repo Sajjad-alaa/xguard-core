@@ -1,6 +1,9 @@
 //! Shared tail for enabling an MFA factor, used by both [`super::EnrollmentServer::mfa_setup_finish`]
 //! and the email fallback in [`super::MfaConfigServer::mfa_config_authorize`].
 
+use sqlx::{PgPool, Postgres, Transaction};
+use tokio::sync::mpsc::UnboundedSender;
+use tonic::Status;
 use xguard_common::db::{
     Id,
     models::{MFAMethod, User},
@@ -11,9 +14,6 @@ use xguard_core::{
     mail::templates::mfa_configured_mail,
 };
 use xguard_proto::proxy::DeviceInfo;
-use sqlx::{PgPool, Postgres, Transaction};
-use tokio::sync::mpsc::UnboundedSender;
-use tonic::Status;
 
 pub(super) enum RecoveryCodesPolicy {
     /// Replace any stored codes with new ones.

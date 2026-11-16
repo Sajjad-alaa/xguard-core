@@ -1,8 +1,8 @@
 use std::env;
 
 use base64::{Engine, prelude::BASE64_STANDARD};
-use xguard_proto::client_types::ClientPlatformInfo;
 use prost::Message;
+use xguard_proto::client_types::ClientPlatformInfo;
 
 /// Builds the base64-encoded platform header expected by Proxy.
 #[must_use]

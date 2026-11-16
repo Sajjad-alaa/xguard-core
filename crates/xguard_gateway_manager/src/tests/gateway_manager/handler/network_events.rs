@@ -45,8 +45,7 @@ async fn test_matching_location_network_modified_event_produces_modify_update(
     assert_send_ok!(
         context.events_tx().send(GatewayCommand::NetworkModified(
             modified_network,
-            Vec::new(),
-            None,
+            Vec::new()
         )),
         "failed to send modified gateway event"
     );
@@ -133,7 +132,7 @@ async fn test_only_matching_handler_receives_network_modified_update(
     modified_network.fwmark = 7;
 
     // Every handler receives all events.
-    let event = GatewayCommand::NetworkModified(modified_network, Vec::new(), None);
+    let event = GatewayCommand::NetworkModified(modified_network, Vec::new());
     assert_send_ok!(
         unrelated_context.events_tx().send(event.clone()),
         "failed to send modified gateway event"

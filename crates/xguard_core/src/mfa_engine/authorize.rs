@@ -1,4 +1,7 @@
 use chrono::Utc;
+use sqlx::PgConnection;
+use thiserror::Error;
+use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 use xguard_common::{
     db::{
         Id,
@@ -11,9 +14,6 @@ use xguard_common::{
     gateway_event::GatewayCommand,
     secret::SecretStringWrapper,
 };
-use sqlx::PgConnection;
-use thiserror::Error;
-use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 
 use crate::events::{
     BidiRequestContext, BidiStreamEvent, BidiStreamEventType, DesktopClientMfaEvent,

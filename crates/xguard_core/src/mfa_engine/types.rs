@@ -45,13 +45,6 @@ pub struct MultiStepStartOutcome {
 pub(crate) enum VerificationProof {
     Code(String),
     BiometricSignature(String),
-    Fido2 {
-        /// Already checked to equal the first 32 bytes of `authenticator_data`.
-        rp_id_hash: Vec<u8>,
-        signature: Vec<u8>,
-        authenticator_data: Vec<u8>,
-        credential_id: Vec<u8>,
-    },
 }
 
 /// Outcome returned by the legacy finish contract.

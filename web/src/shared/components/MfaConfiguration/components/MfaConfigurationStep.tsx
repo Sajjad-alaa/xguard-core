@@ -1,12 +1,12 @@
 import { Reorder, useDragControls } from 'motion/react';
 import { m } from '../../../../paraglide/messages';
+import { mfaFlowMethodHints } from '../../../utils/mfaFlowSteps';
 import { Divider } from '../../../xguard-ui/components/Divider/Divider';
 import { FieldError } from '../../../xguard-ui/components/FieldError/FieldError';
 import { Helper } from '../../../xguard-ui/components/Helper/Helper';
 import { Icon } from '../../../xguard-ui/components/Icon';
 import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing, ThemeVariable } from '../../../xguard-ui/types';
-import { mfaFlowMethodHints } from '../../../utils/mfaFlowSteps';
 import type { MfaConfigurationStepProps } from '../types';
 import { MfaMethodsMenu } from './MfaMethodsMenu';
 

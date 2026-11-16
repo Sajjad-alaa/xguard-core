@@ -6,12 +6,12 @@ import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
+import { useAppForm } from '../../../../shared/form';
+import { formChangeLogic } from '../../../../shared/formLogic';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { useAppForm } from '../../../../shared/form';
-import { formChangeLogic } from '../../../../shared/formLogic';
 import { SetupPageStep } from '../types';
 import { useSetupWizardStore } from '../useSetupWizardStore';
 

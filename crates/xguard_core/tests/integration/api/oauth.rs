@@ -1,13 +1,5 @@
 use std::borrow::Cow;
 
-use xguard_common::db::{
-    Id,
-    models::{
-        OAuth2AuthorizedApp, OAuth2Token,
-        oauth2client::{OAuth2Client, OAuth2ClientSafe},
-    },
-};
-use xguard_core::handlers::{Auth, openid_clients::NewOpenIDClient};
 use reqwest::{
     StatusCode, Url,
     header::{AUTHORIZATION, CONTENT_TYPE},
@@ -17,6 +9,14 @@ use sqlx::{
     PgPool,
     postgres::{PgConnectOptions, PgPoolOptions},
 };
+use xguard_common::db::{
+    Id,
+    models::{
+        OAuth2AuthorizedApp, OAuth2Token,
+        oauth2client::{OAuth2Client, OAuth2ClientSafe},
+    },
+};
+use xguard_core::handlers::{Auth, openid_clients::NewOpenIDClient};
 
 use super::common::{client::TestClient, make_client_with_db, setup_pool};
 use crate::api::PaginatedApiResponse;

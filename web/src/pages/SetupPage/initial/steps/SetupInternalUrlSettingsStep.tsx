@@ -7,13 +7,6 @@ import { getApiErrorMessage } from '../../../../shared/api/apiErrorMessages';
 import type { ApiError } from '../../../../shared/api/types';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
-import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
-import { Helper } from '../../../../shared/xguard-ui/components/Helper/Helper';
-import { Radio } from '../../../../shared/xguard-ui/components/Radio/Radio';
-import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import {
@@ -22,6 +15,13 @@ import {
   isValidXGuardUrl,
 } from '../../../../shared/utils/xguardUrl';
 import { createDistinctUrlRefinement } from '../../../../shared/utils/xguardUrlValidation';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Helper } from '../../../../shared/xguard-ui/components/Helper/Helper';
+import { Radio } from '../../../../shared/xguard-ui/components/Radio/Radio';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import type { InternalSslType } from '../../autoAdoption/types';
 import '../../autoAdoption/steps/style.scss';
 import { SetupPageStep } from '../types';

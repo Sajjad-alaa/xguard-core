@@ -5,12 +5,12 @@ use std::{
     time::Instant,
 };
 
-use xguard_common::db::models::{AuthenticationKey, AuthenticationKeyType, User, YubiKey};
-pub use xguard_proto::worker::JobStatus;
-use xguard_proto::worker::{GetJobResponse, Worker, worker_service_server};
 use sqlx::{PgPool, query};
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::{Request, Response, Status};
+use xguard_common::db::models::{AuthenticationKey, AuthenticationKeyType, User, YubiKey};
+pub use xguard_proto::worker::JobStatus;
+use xguard_proto::worker::{GetJobResponse, Worker, worker_service_server};
 
 use super::{Job, JobResponse, WorkerDetail, WorkerInfo, WorkerState};
 use crate::db::{AppEvent, HWKeyUserData};

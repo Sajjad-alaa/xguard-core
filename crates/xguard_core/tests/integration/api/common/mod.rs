@@ -6,6 +6,13 @@ use std::{
 };
 
 use axum_extra::extract::cookie::Key;
+use reqwest::{StatusCode, header::HeaderName};
+use serde_json::{Value, json};
+use sqlx::PgPool;
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, mpsc},
+};
 use xguard_certs::{
     CertificateAuthority, Csr, DnType, ExtendedKeyUsagePurpose, PemLabel, der_to_pem,
     generate_key_pair,
@@ -26,17 +33,9 @@ use xguard_common::{
 use xguard_core::{
     apply_security_layers, build_webapp,
     db::AppEvent,
-    enterprise::license::{License, LicenseTier, SupportType, set_cached_license},
     events::ApiEvent,
     grpc::{GatewayCommand, WorkerState},
     handlers::{Auth, user::UserDetails},
-};
-use reqwest::{StatusCode, header::HeaderName};
-use serde_json::{Value, json};
-use sqlx::PgPool;
-use tokio::{
-    net::TcpListener,
-    sync::{broadcast, mpsc},
 };
 
 use self::client::TestClient;
@@ -91,20 +90,6 @@ pub(crate) async fn make_base_client(
     let (tx, rx) = mpsc::unbounded_channel::<AppEvent>();
     let worker_state = Arc::new(Mutex::new(WorkerState::new(tx.clone())));
     let (gateway_tx, gateway_rx) = mpsc::unbounded_channel::<GatewayCommand>();
-
-    let license = License::new(
-        "test_customer".to_owned(),
-        false,
-        // Permanent license
-        None,
-        None,
-        None,
-        LicenseTier::Business,
-        SupportType::Basic,
-        Vec::new(),
-    );
-
-    set_cached_license(Some(license));
 
     let (proxy_control_tx, proxy_control_rx) = mpsc::channel(8);
 
@@ -186,8 +171,8 @@ pub(crate) async fn fetch_user_details(client: &TestClient, username: &str) -> U
     response.json().await
 }
 
-/// Exceeds enterprise free version limits by creating more than 1 network
-pub(crate) async fn exceed_enterprise_limits(client: &TestClient) {
+/// Logs in as admin and creates two networks.
+pub(crate) async fn login_and_add_two_networks(client: &TestClient) {
     let auth = Auth::new("admin", "pass123");
     client.post("/api/v1/auth").json(&auth).send().await;
 
@@ -224,15 +209,6 @@ pub(crate) async fn update_location_mfa_flows(
     assignments: Value,
 ) -> TestResponse {
     update_location_assignments(client, location_id, "mfa_flows", assignments).await
-}
-
-/// Save a complete posture-check assignment list through the location update endpoint.
-pub(crate) async fn update_location_posture_checks(
-    client: &TestClient,
-    location_id: Id,
-    posture_checks: Value,
-) -> TestResponse {
-    update_location_assignments(client, location_id, "posture_checks", posture_checks).await
 }
 
 async fn update_location_assignments(
@@ -402,19 +378,8 @@ pub(crate) async fn setup_ca(pool: &PgPool) {
     certs.save(pool).await.expect("failed to save CA certs");
 }
 
-/// Override the global license cache with an Enterprise-tier license.
-pub(crate) fn set_enterprise_license() {
-    set_cached_license(Some(License::new(
-        "test_customer".to_owned(),
-        false,
-        None,
-        None,
-        None,
-        LicenseTier::Enterprise,
-        SupportType::Basic,
-        Vec::new(),
-    )));
-}
+/// No-op kept for test readability: XGuard has no license tiers, every feature is available.
+pub(crate) fn set_enterprise_license() {}
 
 /// Set minimal SMTP fields on a [`Settings`] so that `smtp_configured()` returns `true`.
 pub(crate) fn configure_smtp(settings: &mut Settings) {

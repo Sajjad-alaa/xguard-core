@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use xguard_common::db::{Id, models::User};
 use rand::{Rng, rngs::ThreadRng};
 use sqlx::PgPool;
 use tracing::info;
+use xguard_common::db::{Id, models::User};
 
 const FIRST_NAMES: &str = include_str!("../data/first_names.txt");
 const LAST_NAMES: &str = include_str!("../data/last_names.txt");

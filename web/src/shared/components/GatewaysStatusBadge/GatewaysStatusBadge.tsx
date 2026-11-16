@@ -18,6 +18,10 @@ import { useGatewayWizardStore } from '../../../pages/GatewaySetupPage/useGatewa
 import { m } from '../../../paraglide/messages';
 import api from '../../api/api';
 import { type GatewayInfo, LicenseFeature } from '../../api/types';
+import { openModal } from '../../hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../hooks/modalControls/modalTypes';
+import { getLicenseInfoQueryOptions } from '../../query';
+import { canUseEnterpriseFeature, licenseActionCheck } from '../../utils/license';
 import { Badge } from '../../xguard-ui/components/Badge/Badge';
 import type { BadgeVariantValue } from '../../xguard-ui/components/Badge/types';
 import { Button } from '../../xguard-ui/components/Button/Button';
@@ -28,10 +32,6 @@ import { InteractionBox } from '../../xguard-ui/components/InteractionBox/Intera
 import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
 import { Snackbar } from '../../xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../xguard-ui/types';
-import { openModal } from '../../hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../hooks/modalControls/modalTypes';
-import { getLicenseInfoQueryOptions } from '../../query';
-import { canUseEnterpriseFeature, licenseActionCheck } from '../../utils/license';
 import './style.scss';
 
 type Status = 'all' | 'none' | 'some';

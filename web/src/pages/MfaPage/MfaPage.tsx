@@ -2,16 +2,16 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Suspense } from 'react';
 import { m } from '../../paraglide/messages';
+import { DeletionBlockedModal } from '../../shared/components/modals/DeletionBlockedModal/DeletionBlockedModal';
 import { Page } from '../../shared/components/Page/Page';
 import { TableSkeleton } from '../../shared/components/skeleton/TableSkeleton/TableSkeleton';
+import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
+import { getLicenseInfoQueryOptions, getMfaFlowsQueryOptions } from '../../shared/query';
+import { canUseBusinessFeature, licenseActionCheck } from '../../shared/utils/license';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
 import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../shared/xguard-ui/types';
-import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
-import { getLicenseInfoQueryOptions, getMfaFlowsQueryOptions } from '../../shared/query';
-import { canUseBusinessFeature, licenseActionCheck } from '../../shared/utils/license';
-import { DeletionBlockedModal } from '../Acl/components/DeletionBlockedModal/DeletionBlockedModal';
 import { MfaFlowsTable } from './MfaFlowsTable';
 
 const MfaPageContent = () => {

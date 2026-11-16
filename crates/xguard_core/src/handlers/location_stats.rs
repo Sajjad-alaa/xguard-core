@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use axum::extract::{Path, Query, State};
 use chrono::{DateTime, NaiveDateTime, TimeDelta, Utc};
+use reqwest::StatusCode;
 use xguard_common::db::{
     Id,
     models::{
@@ -12,7 +13,6 @@ use xguard_common::db::{
         },
     },
 };
-use reqwest::StatusCode;
 
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
@@ -79,8 +79,7 @@ fn get_aggregation(from: NaiveDateTime) -> Result<DateTimeAggregation, StatusCod
         (status = 500, description = "Unable to get location statistics.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn locations_overview_stats(
@@ -123,8 +122,7 @@ pub(crate) async fn locations_overview_stats(
         (status = 500, description = "Unable to get location statistics.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn location_stats(
@@ -168,8 +166,7 @@ pub(crate) async fn location_stats(
         (status = 500, description = "Unable to get connected users.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn location_connected_users(
@@ -229,8 +226,7 @@ pub(crate) async fn location_connected_users(
         (status = 500, description = "Unable to get connected network devices.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn location_connected_network_devices(
@@ -304,8 +300,7 @@ pub(crate) struct ConnectedUserDevicesPath {
         (status = 500, description = "Unable to get connected user devices.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn location_connected_user_devices(

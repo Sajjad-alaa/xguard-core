@@ -1,13 +1,13 @@
 use std::time::SystemTime;
 
+use reqwest::StatusCode;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use totp_lite::{Sha1, totp_custom};
 use xguard_common::db::models::{
     Settings,
     user::{TOTP_CODE_DIGITS, TOTP_CODE_VALIDITY_PERIOD},
 };
 use xguard_core::handlers::{Auth, AuthCode, AuthTotp};
-use reqwest::StatusCode;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use totp_lite::{Sha1, totp_custom};
 
 use super::common::{
     X_FORWARDED_HOST, X_FORWARDED_URI, get_db_user, make_client, make_client_with_db, setup_pool,

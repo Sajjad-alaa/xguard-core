@@ -1,8 +1,8 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
-use xguard_common::db::models::{webauthn::RegistrationSource, wireguard::LocationMfaMode};
-use xguard_proto::{client_types::ClientPlatformInfo, proxy::DeviceInfo};
 use prost::Message;
 use semver::Version;
+use xguard_common::db::models::{webauthn::RegistrationSource, wireguard::LocationMfaMode};
+use xguard_proto::{client_types::ClientPlatformInfo, proxy::DeviceInfo};
 
 const MOBILE_OS_FAMILIES: [&str; 2] = ["android", "ios"];
 

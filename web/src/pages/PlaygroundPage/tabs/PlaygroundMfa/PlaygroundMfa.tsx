@@ -8,10 +8,10 @@ import { MfaMethodAvailabilityReason } from '../../../../shared/api/types';
 import { Card } from '../../../../shared/components/Card/Card';
 import { MfaConfiguration } from '../../../../shared/components/MfaConfiguration/MfaConfiguration';
 import type { MfaConfigurationStepData } from '../../../../shared/components/MfaConfiguration/types';
+import { mfaFlowUnavailableText } from '../../../../shared/utils/mfaFlowSteps';
 import { IconKind } from '../../../../shared/xguard-ui/components/Icon';
 import { Icon } from '../../../../shared/xguard-ui/components/Icon/Icon';
 import { ThemeVariable } from '../../../../shared/xguard-ui/types';
-import { mfaFlowUnavailableText } from '../../../../shared/utils/mfaFlowSteps';
 import { MfaFlowAssignmentCard } from '../../../EditLocationPage/components/LocationMfaSection/components/MfaFlowAssignmentCard/MfaFlowAssignmentCard';
 import { LocationMfaSection } from '../../../EditLocationPage/components/LocationMfaSection/LocationMfaSection';
 
@@ -130,8 +130,7 @@ export const PlaygroundMfa = () => {
             onRemove={noop}
           />
           {[
-            MfaMethodAvailabilityReason.Licensed,
-            MfaMethodAvailabilityReason.EnterpriseLicensed,
+            MfaMethodAvailabilityReason.NotSupported,
             MfaMethodAvailabilityReason.SmtpNotConfigured,
             MfaMethodAvailabilityReason.OidcProviderMissing,
           ].map((reason) => (

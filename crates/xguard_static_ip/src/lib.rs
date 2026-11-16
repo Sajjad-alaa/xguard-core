@@ -1,5 +1,8 @@
 use std::net::IpAddr;
 
+use serde::Serialize;
+use sqlx::{PgConnection, PgPool, prelude::FromRow, query_as};
+use tracing::debug;
 use xguard_common::{
     db::{
         Id,
@@ -7,9 +10,6 @@ use xguard_common::{
     },
     utils::{SplitIp, split_ip},
 };
-use serde::Serialize;
-use sqlx::{PgConnection, PgPool, prelude::FromRow, query_as};
-use tracing::debug;
 
 use crate::error::StaticIpError;
 
@@ -239,11 +239,11 @@ pub async fn validate_ip(
 mod tests {
     use std::str::FromStr;
 
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
     use xguard_common::db::{
         models::{Device, DeviceType, User, WireguardNetwork, device::WireguardNetworkDevice},
         setup_pool,
     };
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
     use super::*;
 

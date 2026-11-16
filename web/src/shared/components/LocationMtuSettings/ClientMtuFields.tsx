@@ -1,10 +1,10 @@
 import type z from 'zod';
 import { m } from '../../../paraglide/messages';
 import { MAX_MTU, MIN_MTU } from '../../constants';
+import { withFieldGroup } from '../../form';
 import { AppText } from '../../xguard-ui/components/AppText/AppText';
 import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
 import { TextStyle, ThemeSpacing, ThemeVariable } from '../../xguard-ui/types';
-import { withFieldGroup } from '../../form';
 
 type ClientMtuValues = {
   client_mtu_enabled: boolean;

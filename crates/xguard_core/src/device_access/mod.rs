@@ -3,6 +3,8 @@
 //! This module owns the process of assigning a device to a VPN location and
 //! generating its WireGuard configuration.
 
+use sqlx::PgConnection;
+use tracing::warn;
 use xguard_common::{
     db::{
         Id,
@@ -16,31 +18,20 @@ use xguard_common::{
     },
     device_config_gen::create_wireguard_config,
 };
-use sqlx::PgConnection;
-use tracing::warn;
-
-use crate::enterprise::{
-    LicenseFeature, allowed_ips::get_effective_allowed_ips, has_enterprise_access,
-};
 
 /// Build a `DeviceConfig` for a device already assigned to a network.
 ///
-/// Computes effective AllowedIPs (manual + ACL-derived when the location
-/// toggle is enabled and an enterprise license is active) and generates the
-/// WireGuard config string.
+/// Uses the location's configured AllowedIPs and generates the WireGuard
+/// config string.
 pub async fn build_device_config(
     conn: &mut PgConnection,
     network: &WireguardNetwork<Id>,
     wireguard_network_device: &WireguardNetworkDevice,
     user: &User<Id>,
 ) -> Result<DeviceConfig, DeviceError> {
-    let effective_ips = get_effective_allowed_ips(conn, network, user).await;
+    let effective_ips = network.allowed_ips.clone();
 
     let config = create_wireguard_config(network, wireguard_network_device, &effective_ips);
-    let has_postures = network
-        .has_postures(&mut *conn)
-        .await
-        .map_err(|err| DeviceError::Unexpected(err.to_string()))?;
 
     // `None` when the location's flow configuration has no legacy equivalent. Carried through as
     // absent rather than coerced to `Disabled`, which would advertise an MFA-enabled location as
@@ -53,15 +44,7 @@ pub async fn build_device_config(
         Some(LocationMfaMode::Disabled)
     };
 
-    // Group overrides need the GroupMTUOverride feature.
-    let mtu = if has_enterprise_access(Some(LicenseFeature::GroupMTUOverride)) {
-        network
-            .client_mtu_for_user(&mut *conn, user.id)
-            .await
-            .map_err(|err| DeviceError::Unexpected(err.to_string()))?
-    } else {
-        network.client_mtu
-    };
+    let mtu = network.client_mtu;
 
     // Resolve the location's MFA flow for this user, carrying the ordered steps (methods only;
     // per-method `configured` flags are computed separately). Empty when MFA is disabled or no
@@ -90,7 +73,7 @@ pub async fn build_device_config(
         mfa_enabled: network.mfa_enabled,
         location_mfa_mode,
         service_location_mode: network.service_location_mode.clone(),
-        posture_check_required: has_postures,
+        posture_check_required: false,
         steps,
     })
 }
@@ -178,6 +161,10 @@ mod tests {
         net::{IpAddr, Ipv4Addr},
     };
 
+    use sqlx::{
+        PgPool,
+        postgres::{PgConnectOptions, PgPoolOptions},
+    };
     use xguard_common::db::{
         Id,
         models::{
@@ -186,17 +173,12 @@ mod tests {
             group::Group,
             mfa_flow::{LocationMfaFlowAssignment, MfaFlow, MfaFlowStep},
             vpn_client_session::VpnClientMfaMethod,
-            wireguard::{GroupClientMtu, LocationMfaMode},
+            wireguard::LocationMfaMode,
         },
         setup_pool,
     };
-    use sqlx::{
-        PgPool,
-        postgres::{PgConnectOptions, PgPoolOptions},
-    };
 
     use super::build_device_config;
-    use crate::enterprise::license::{License, LicenseTier, SupportType, set_cached_license};
 
     async fn create_user(pool: &PgPool, username: &str) -> User<Id> {
         User::new(
@@ -350,95 +332,5 @@ mod tests {
         assert!(!config.mfa_enabled);
         assert_eq!(config.location_mfa_mode, Some(LocationMfaMode::Disabled));
         assert_eq!(config.steps, [] as [MfaFlowStep<Id>; 0]);
-    }
-
-    #[sqlx::test]
-    async fn test_build_device_config_resolves_group_client_mtu(
-        _: PgPoolOptions,
-        options: PgConnectOptions,
-    ) {
-        let pool = setup_pool(options).await;
-        set_cached_license(Some(License::new(
-            "test_customer".to_owned(),
-            false,
-            None,
-            None,
-            None,
-            LicenseTier::Enterprise,
-            SupportType::Basic,
-            Vec::new(),
-        )));
-
-        let group_a = Group::new("mtu-a").save(&pool).await.unwrap();
-        let group_b = Group::new("mtu-b").save(&pool).await.unwrap();
-        let both_user = create_user(&pool, "both-user").await;
-        let a_user = create_user(&pool, "a-user").await;
-        let plain_user = create_user(&pool, "plain-user").await;
-        both_user.add_to_group(&pool, &group_a).await.unwrap();
-        both_user.add_to_group(&pool, &group_b).await.unwrap();
-        a_user.add_to_group(&pool, &group_a).await.unwrap();
-
-        let mut network = WireguardNetwork::default()
-            .try_set_address("10.0.0.1/24")
-            .unwrap()
-            .save(&pool)
-            .await
-            .unwrap();
-        network.client_mtu = Some(1400);
-        network.save(&pool).await.unwrap();
-        let mut conn = pool.acquire().await.unwrap();
-        network
-            .set_group_client_mtus(
-                &mut conn,
-                &[
-                    GroupClientMtu {
-                        client_mtu: 1300,
-                        group_ids: vec![group_a.id],
-                    },
-                    GroupClientMtu {
-                        client_mtu: 1280,
-                        group_ids: vec![group_b.id],
-                    },
-                ],
-            )
-            .await
-            .unwrap();
-
-        let mtu_for = async |network: &WireguardNetwork<Id>, user: &User<Id>| {
-            let wireguard_network_device = WireguardNetworkDevice::new(
-                network.id,
-                create_device(&pool, user.id).await.id,
-                vec![IpAddr::V4(Ipv4Addr::new(10, 0, 0, 10))],
-            );
-            let mut conn = pool.acquire().await.unwrap();
-            let mtu = build_device_config(&mut conn, network, &wireguard_network_device, user)
-                .await
-                .unwrap()
-                .mtu;
-            Device::find_by_id(&pool, wireguard_network_device.device_id)
-                .await
-                .unwrap()
-                .unwrap()
-                .delete(&pool)
-                .await
-                .unwrap();
-            mtu
-        };
-
-        // The lowest override among the user's groups wins.
-        assert_eq!(mtu_for(&network, &both_user).await, Some(1280));
-        assert_eq!(mtu_for(&network, &a_user).await, Some(1300));
-        // Users without an override fall back to the location value.
-        assert_eq!(mtu_for(&network, &plain_user).await, Some(1400));
-
-        // Overrides apply without a location MTU.
-        network.client_mtu = None;
-        network.save(&pool).await.unwrap();
-        assert_eq!(mtu_for(&network, &a_user).await, Some(1300));
-        assert_eq!(mtu_for(&network, &plain_user).await, None);
-
-        // Overrides are ignored without a license.
-        set_cached_license(None);
-        assert_eq!(mtu_for(&network, &a_user).await, None);
     }
 }

@@ -1,5 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
+use tokio::sync::watch;
 use xguard_common::db::{
     Id,
     models::{
@@ -7,11 +12,6 @@ use xguard_common::db::{
     },
     setup_pool,
 };
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
-};
-use tokio::sync::watch;
 
 use super::{collect_certs, refresh_certs};
 

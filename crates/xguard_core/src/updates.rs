@@ -1,9 +1,9 @@
 use std::{env, time::Duration};
 
 use chrono::NaiveDate;
+use semver::Version;
 use xguard_common::{REPORTED_VERSION, global_value};
 use xguard_version::is_version_lower;
-use semver::Version;
 
 const PRODUCT_NAME: &str = "XGuard";
 const UPDATES_URL: &str = "https://pkgs.xguard.local/api/update/check";

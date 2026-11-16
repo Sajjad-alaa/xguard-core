@@ -1,13 +1,13 @@
 use std::net::{IpAddr, Ipv4Addr};
 
+use ipnetwork::IpNetwork;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::db::{
     models::{
         Device, DeviceType, User, WireguardNetwork, device::WireguardNetworkDevice, group::Group,
     },
     setup_pool,
 };
-use ipnetwork::IpNetwork;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::*;
 use crate::{

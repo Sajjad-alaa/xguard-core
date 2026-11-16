@@ -15,28 +15,21 @@ use crate::{
             device::{DeviceInfo, DeviceNetworkInfo},
         },
     },
-    gateway_types::{FirewallConfig, WireguardPeer},
+    gateway_types::WireguardPeer,
 };
 
 /// A command sent from core to the gateway manager service.
 ///
-/// Each variant instructs the gateway daemon to update its WireGuard state or
-/// firewall configuration. Native Rust types are used throughout; conversion to
+/// Each variant instructs the gateway daemon to update its WireGuard state. Native Rust types are used throughout; conversion to
 /// protobuf wire types happens at the serialization boundary in the gateway manager.
 #[derive(Clone, Debug)]
 pub enum GatewayCommand {
     NetworkCreated(WireguardNetwork<Id>),
-    NetworkModified(
-        WireguardNetwork<Id>,
-        Vec<WireguardPeer>,
-        Option<FirewallConfig>,
-    ),
+    NetworkModified(WireguardNetwork<Id>, Vec<WireguardPeer>),
     NetworkDeleted(Id, String),
     DeviceCreated(DeviceInfo),
     DeviceModified(DeviceInfo),
     DeviceDeleted(DeviceInfo),
-    FirewallConfigChanged(Id, FirewallConfig),
-    FirewallDisabled(Id),
     VpnSessionAuthorized(Id, Device<Id>, DeviceNetworkInfo),
     VpnSessionDeauthorized(Id, Device<Id>),
 }

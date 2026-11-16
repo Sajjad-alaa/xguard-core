@@ -1,7 +1,7 @@
-use xguard_common::db::{Id, NoId};
-use xguard_core::{db::WebHook, handlers::Auth};
 use reqwest::StatusCode;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use xguard_common::db::{Id, NoId};
+use xguard_core::{db::WebHook, handlers::Auth};
 
 use super::common::{make_client, setup_pool};
 

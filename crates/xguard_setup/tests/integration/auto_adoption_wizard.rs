@@ -1,5 +1,14 @@
 use std::sync::Once;
 
+use ipnetwork::IpNetwork;
+use reqwest::{
+    Client, StatusCode,
+    header::{HeaderMap, USER_AGENT},
+};
+use serde_json::{Value, json};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::time::timeout;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use xguard_common::{
     config::XGuardConfig,
     db::{
@@ -18,15 +27,6 @@ use xguard_common::{
 };
 use xguard_core::setup_logs::CoreSetupLogLayer;
 use xguard_setup::auto_adoption::attempt_auto_adoption;
-use ipnetwork::IpNetwork;
-use reqwest::{
-    Client, StatusCode,
-    header::{HeaderMap, USER_AGENT},
-};
-use serde_json::{Value, json};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::time::timeout;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use super::common::{SHUTDOWN_TIMEOUT, make_setup_test_client};
 use crate::common::{SESSION_COOKIE_NAME, TEST_USER_AGENT};

@@ -1,7 +1,5 @@
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
 import { useAppForm } from '../../../form';
 import { formChangeLogic } from '../../../formLogic';
 import {
@@ -10,6 +8,8 @@ import {
   subscribeOpenModal,
 } from '../../../hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../hooks/modalControls/modalTypes';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
 import './style.scss';
 import { useStore } from '@tanstack/react-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -17,10 +17,10 @@ import type { AxiosError } from 'axios';
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../../api/api';
 import { type ApiError, AuthKeyType, type AuthKeyTypeValue } from '../../../api/types';
+import { getUserAuthKeysQueryOptions } from '../../../query';
 import { Select } from '../../../xguard-ui/components/Select/Select';
 import type { SelectOption } from '../../../xguard-ui/components/Select/types';
 import { isPresent } from '../../../xguard-ui/utils/isPresent';
-import { getUserAuthKeysQueryOptions } from '../../../query';
 
 const modalNameKey = ModalName.AddAuthKey;
 

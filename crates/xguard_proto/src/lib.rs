@@ -22,19 +22,6 @@ mod generated {
             }
         }
 
-        pub mod enterprise {
-            pub mod firewall {
-                pub mod v2 {
-                    tonic::include_proto!("xguard.enterprise.firewall.v2");
-                }
-            }
-            pub mod posture {
-                pub mod v2 {
-                    tonic::include_proto!("xguard.enterprise.posture.v2");
-                }
-            }
-        }
-
         pub mod client_types {
             tonic::include_proto!("xguard.client_types");
         }
@@ -59,15 +46,6 @@ pub mod worker {
     pub use crate::generated::xguard::worker::v1::*;
 }
 
-pub mod enterprise {
-    pub mod firewall {
-        pub use crate::generated::xguard::enterprise::firewall::v2::*;
-    }
-    pub mod posture {
-        pub use crate::generated::xguard::enterprise::posture::v2::*;
-    }
-}
-
 pub mod client_types {
     pub use crate::generated::xguard::client_types::*;
 }
@@ -77,6 +55,9 @@ pub mod common {
 }
 
 use client_types::MfaMethod;
+use proxy::{CoreError, CoreErrorCode};
+use serde::Serialize;
+use tonic::{Code, Status};
 use xguard_common::{
     db::{
         Id,
@@ -86,11 +67,8 @@ use xguard_common::{
             wireguard::{LocationMfaMode, ServiceLocationMode},
         },
     },
-    gateway_types::{FirewallConfig, WireguardPeer},
+    gateway_types::WireguardPeer,
 };
-use proxy::{CoreError, CoreErrorCode};
-use serde::Serialize;
-use tonic::{Code, Status};
 
 use crate::gateway::Configuration;
 
@@ -258,18 +236,13 @@ impl From<ServiceLocationMode> for client_types::ServiceLocationMode {
 }
 
 impl Configuration {
-    pub fn new(
-        location: &WireguardNetwork<Id>,
-        peers: Vec<WireguardPeer>,
-        maybe_firewall_config: Option<FirewallConfig>,
-    ) -> Self {
+    pub fn new(location: &WireguardNetwork<Id>, peers: Vec<WireguardPeer>) -> Self {
         Self {
             name: location.name.clone(),
             port: location.port.cast_unsigned(),
             private_key: location.prvkey.clone(),
             addresses: location.address().iter().map(ToString::to_string).collect(),
             peers: peers.into_iter().map(Into::into).collect(),
-            firewall_config: maybe_firewall_config.map(Into::into),
             mtu: location.mtu.cast_unsigned(),
             fwmark: location.fwmark as u32,
         }

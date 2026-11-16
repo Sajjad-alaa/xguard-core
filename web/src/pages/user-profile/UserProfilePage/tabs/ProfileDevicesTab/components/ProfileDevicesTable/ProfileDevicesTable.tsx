@@ -1,5 +1,5 @@
+import { instanceBehavior } from '../../../../../../../shared/defaults/instanceBehavior';
 import './style.scss';
-import { useQuery } from '@tanstack/react-query';
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -15,6 +15,11 @@ import { m } from '../../../../../../../paraglide/messages';
 import api from '../../../../../../../shared/api/api';
 import type { UserDevice } from '../../../../../../../shared/api/types';
 import { useAddUserDeviceModal } from '../../../../../../../shared/components/modals/AddUserDeviceModal/store/useAddUserDeviceModal';
+import { openModal } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
+import { useApp } from '../../../../../../../shared/hooks/useApp';
+import { useAuth } from '../../../../../../../shared/hooks/useAuth';
+import { displayDate } from '../../../../../../../shared/utils/displayDate';
 import { Badge } from '../../../../../../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../../../../../../shared/xguard-ui/components/Button/types';
@@ -36,12 +41,6 @@ import { TooltipContent } from '../../../../../../../shared/xguard-ui/providers/
 import { TooltipProvider } from '../../../../../../../shared/xguard-ui/providers/tooltip/TooltipContext';
 import { TooltipTrigger } from '../../../../../../../shared/xguard-ui/providers/tooltip/TooltipTrigger';
 import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
-import { openModal } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
-import { useApp } from '../../../../../../../shared/hooks/useApp';
-import { useAuth } from '../../../../../../../shared/hooks/useAuth';
-import { getEnterpriseSettingsQueryOptions } from '../../../../../../../shared/query';
-import { displayDate } from '../../../../../../../shared/utils/displayDate';
 import { useUserProfile } from '../../../../hooks/useUserProfilePage';
 
 interface RowData extends UserDevice {
@@ -90,7 +89,7 @@ const columnHelper = createColumnHelper<RowData>();
 const DevicesTable = ({ rowData }: { rowData: RowData[] }) => {
   const info = useApp((s) => s.appInfo);
   const isAdmin = useAuth((s) => s.isAdmin);
-  const { data: enterpriseSettings } = useQuery(getEnterpriseSettingsQueryOptions);
+  const enterpriseSettings = instanceBehavior;
   const devices = useUserProfile((s) => s.devices);
   const user = useUserProfile((s) => s.user);
   const username = user.username;
@@ -119,14 +118,7 @@ const DevicesTable = ({ rowData }: { rowData: RowData[] }) => {
         });
       },
     }),
-    [
-      canModifyDevices,
-      devices,
-      user,
-      info.network_present,
-      enterpriseSettings?.only_client_activation,
-      isAdmin,
-    ],
+    [canModifyDevices, devices, user, info.network_present, isAdmin],
   );
 
   const makeRowMenu = useCallback(
@@ -213,13 +205,7 @@ const DevicesTable = ({ rowData }: { rowData: RowData[] }) => {
       });
       return [{ items }];
     },
-    [
-      reservedNames,
-      username,
-      isAdmin,
-      reservedPubkeys,
-      enterpriseSettings?.only_client_activation,
-    ],
+    [reservedNames, username, isAdmin, reservedPubkeys],
   );
 
   const tableColumns = useMemo(

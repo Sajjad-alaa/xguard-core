@@ -1,8 +1,9 @@
 use std::net::IpAddr;
 
+use sqlx::postgres::PgConnectOptions;
 use xguard_common::{
     db::{
-        Id, NoId,
+        Id,
         models::{
             device::{Device, DeviceInfo, DeviceNetworkInfo, DeviceType, WireguardNetworkDevice},
             user::User,
@@ -11,23 +12,12 @@ use xguard_common::{
         },
     },
     gateway_event::GatewayCommand,
-    gateway_types::{
-        FirewallConfig, FirewallPolicy, FirewallRule, IpAddress, IpVersion, Port,
-        Protocol as GwProtocol, SnatBinding,
-    },
     secret::SecretStringWrapper,
 };
-use xguard_core::enterprise::db::models::device_posture::{
-    DevicePosture, DevicePostureLocation, DevicePostureOsRule, OsType,
+use xguard_proto::gateway::{
+    CoreResponse, Update, UpdateType, core_response,
+    update::{self},
 };
-use xguard_proto::{
-    enterprise::firewall::FirewallConfig as ProtoFirewallConfig,
-    gateway::{
-        CoreResponse, Update, UpdateType, core_response,
-        update::{self},
-    },
-};
-use sqlx::postgres::PgConnectOptions;
 
 use crate::tests::common::HandlerTestContext;
 
@@ -128,34 +118,6 @@ pub(crate) async fn create_authorized_mfa_device_for_network(
     (device, device_network_info)
 }
 
-pub(crate) async fn create_authorized_posture_device_for_current_network(
-    context: &HandlerTestContext,
-    device_name: &str,
-    device_pubkey: &str,
-    device_ip: &str,
-    preshared_key: &str,
-) -> (Device<Id>, DeviceNetworkInfo) {
-    let device = create_device_for_network(
-        context,
-        context.network.id,
-        device_name,
-        device_pubkey,
-        device_ip,
-    )
-    .await;
-    let network_device = WireguardNetworkDevice::find(&context.pool, device.id, context.network.id)
-        .await
-        .expect("failed to load posture device network info")
-        .expect("expected posture device network info");
-    let network_info = DeviceNetworkInfo::from_authorized_vpn_session(
-        context.network.id,
-        network_device.wireguard_ips,
-        preshared_key.to_owned().into(),
-    );
-
-    (device, network_info)
-}
-
 pub(crate) async fn create_device_info_for_network(
     context: &HandlerTestContext,
     network_id: Id,
@@ -223,48 +185,6 @@ pub(crate) async fn enable_internal_mfa_for_network(
     assert!(network.mfa_enabled);
 }
 
-pub(crate) async fn enable_linux_posture_for_network(
-    pool: &sqlx::PgPool,
-    network: &WireguardNetwork<Id>,
-) {
-    let policy = DevicePosture {
-        id: NoId,
-        name: "gateway-handler-test-posture".to_owned(),
-        description: None,
-        min_desktop_client_version: None,
-        min_mobile_client_version: None,
-        allow_prerelease_client: true,
-    }
-    .save(pool)
-    .await
-    .expect("failed to save posture policy");
-
-    DevicePostureOsRule {
-        id: NoId,
-        posture_id: policy.id,
-        os_type: OsType::Linux,
-        min_os_version: None,
-        disk_encryption_required: Some(true),
-        antivirus_required: None,
-        ad_domain_joined_required: None,
-        windows_security_update_max_age: None,
-        min_kernel_version: None,
-        device_integrity_required: None,
-        android_security_patch_level_max_age: None,
-    }
-    .save(pool)
-    .await
-    .expect("failed to save posture OS rule");
-
-    DevicePostureLocation::set_for_location(
-        &mut pool.acquire().await.expect("failed to acquire connection"),
-        network.id,
-        &[policy.id],
-    )
-    .await
-    .expect("failed to assign posture policy to network");
-}
-
 pub(crate) async fn assert_device_event_is_ignored_before_config_handshake(
     options: PgConnectOptions,
     device_name: &str,
@@ -311,26 +231,6 @@ pub(crate) async fn assert_device_event_for_different_network_is_ignored(
     assert_send_ok!(
         context.events_tx().send(build_event(device_info)),
         "failed to send ignored device event"
-    );
-
-    context.mock_gateway_mut().expect_no_outbound().await;
-
-    context.finish().await.expect_server_finished().await;
-}
-
-pub(crate) async fn assert_firewall_event_for_different_network_is_ignored(
-    options: PgConnectOptions,
-    build_event: impl FnOnce(Id) -> GatewayCommand,
-) {
-    let mut context = HandlerTestContext::new(options).await;
-    let other_network = context.create_other_network().await;
-    assert_ne!(other_network.id, context.network.id);
-
-    let _ = context.complete_config_handshake().await;
-
-    assert_send_ok!(
-        context.events_tx().send(build_event(other_network.id)),
-        "failed to send ignored firewall event"
     );
 
     context.mock_gateway_mut().expect_no_outbound().await;
@@ -407,7 +307,6 @@ pub(crate) fn assert_network_create_update(
             assert_eq!(network.addresses, vec![expected_address.to_owned()]);
             assert_eq!(network.port, expected_port);
             assert_eq!(network.peers, Vec::new());
-            assert_eq!(network.firewall_config, None);
             assert_eq!(network.mtu, expected_mtu);
             assert_eq!(network.fwmark, expected_fwmark);
         }
@@ -433,111 +332,9 @@ pub(crate) fn assert_network_modify_update(
             assert_eq!(network.addresses, vec![expected_address.to_owned()]);
             assert_eq!(network.port, expected_port);
             assert_eq!(network.peers, Vec::new());
-            assert_eq!(network.firewall_config, None);
             assert_eq!(network.mtu, expected_mtu);
             assert_eq!(network.fwmark, expected_fwmark);
         }
         _ => panic_unexpected("expected network modify update"),
-    }
-}
-
-pub(crate) fn build_test_firewall_config() -> FirewallConfig {
-    FirewallConfig {
-        default_policy: FirewallPolicy::Allow,
-        rules: vec![FirewallRule {
-            id: 101,
-            source_addrs: vec![IpAddress::IpSubnet("10.10.0.0/24".to_owned())],
-            destination_addrs: vec![IpAddress::Ip("198.51.100.20".to_owned())],
-            destination_ports: vec![Port::Single(443)],
-            protocols: vec![GwProtocol::Tcp],
-            verdict: FirewallPolicy::Deny,
-            comment: Some("block test https destination".to_owned()),
-            ip_version: IpVersion::Ipv4,
-        }],
-        snat_bindings: vec![SnatBinding {
-            id: 202,
-            source_addrs: vec![IpAddress::IpSubnet("10.10.0.0/24".to_owned())],
-            public_ip: "203.0.113.44".to_owned(),
-            comment: Some("test snat binding".to_owned()),
-        }],
-    }
-}
-
-pub(crate) fn assert_firewall_modify_update(
-    outbound: CoreResponse,
-    expected_firewall_config: &FirewallConfig,
-) {
-    let expected_proto: ProtoFirewallConfig = expected_firewall_config.clone().into();
-    match outbound.payload {
-        Some(core_response::Payload::Update(Update {
-            update_type,
-            update: Some(update::Update::FirewallConfig(firewall_config)),
-        })) => {
-            assert_eq!(update_type, UpdateType::Modify as i32);
-            assert_eq!(
-                firewall_config.default_policy,
-                expected_proto.default_policy
-            );
-            assert_eq!(firewall_config.rules.len(), expected_proto.rules.len());
-            assert_eq!(
-                firewall_config.snat_bindings.len(),
-                expected_proto.snat_bindings.len()
-            );
-
-            let firewall_rule = firewall_config
-                .rules
-                .first()
-                .expect("expected firewall rule in update payload");
-            let expected_firewall_rule = expected_proto
-                .rules
-                .first()
-                .expect("expected firewall rule in test config");
-            assert_eq!(firewall_rule.id, expected_firewall_rule.id);
-            assert_eq!(
-                firewall_rule.source_addrs,
-                expected_firewall_rule.source_addrs
-            );
-            assert_eq!(
-                firewall_rule.destination_addrs,
-                expected_firewall_rule.destination_addrs
-            );
-            assert_eq!(
-                firewall_rule.destination_ports,
-                expected_firewall_rule.destination_ports
-            );
-            assert_eq!(firewall_rule.protocols, expected_firewall_rule.protocols);
-            assert_eq!(firewall_rule.verdict, expected_firewall_rule.verdict);
-            assert_eq!(firewall_rule.comment, expected_firewall_rule.comment);
-            assert_eq!(firewall_rule.ip_version, expected_firewall_rule.ip_version);
-
-            let snat_binding = firewall_config
-                .snat_bindings
-                .first()
-                .expect("expected SNAT binding in update payload");
-            let expected_snat_binding = expected_proto
-                .snat_bindings
-                .first()
-                .expect("expected SNAT binding in test config");
-            assert_eq!(snat_binding.id, expected_snat_binding.id);
-            assert_eq!(
-                snat_binding.source_addrs,
-                expected_snat_binding.source_addrs
-            );
-            assert_eq!(snat_binding.public_ip, expected_snat_binding.public_ip);
-            assert_eq!(snat_binding.comment, expected_snat_binding.comment);
-        }
-        _ => panic_unexpected("expected firewall config update"),
-    }
-}
-
-pub(crate) fn assert_firewall_disable_update(outbound: &CoreResponse) {
-    match outbound.payload {
-        Some(core_response::Payload::Update(Update {
-            update_type,
-            update: Some(update::Update::DisableFirewall(())),
-        })) => {
-            assert_eq!(update_type, UpdateType::Delete as i32);
-        }
-        _ => panic_unexpected("expected firewall disable update"),
     }
 }

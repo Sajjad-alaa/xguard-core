@@ -5,10 +5,10 @@ import {
   ContextualHelpSidebar,
 } from '../../../../shared/components/ContextualHelp';
 import { SettingsLayout } from '../../../../shared/components/SettingsLayout/SettingsLayout';
+import { useApp } from '../../../../shared/hooks/useApp';
 import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { useApp } from '../../../../shared/hooks/useApp';
 import { getConfiguredBadge, getNotConfiguredBadge } from '../types';
 
 export const SettingsNotificationsTab = () => {

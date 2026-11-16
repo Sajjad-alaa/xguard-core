@@ -13,6 +13,9 @@ import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import { getApiErrorMessage } from '../../shared/api/apiErrorMessages';
 import type { ApiError, NetworkDevice } from '../../shared/api/types';
+import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
+import { displayDate } from '../../shared/utils/displayDate';
 import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
@@ -29,9 +32,6 @@ import { TableEditCell } from '../../shared/xguard-ui/components/table/TableEdit
 import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
 import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSize } from '../../shared/xguard-ui/types';
-import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
-import { displayDate } from '../../shared/utils/displayDate';
 
 type Props = {
   networkDevices: NetworkDevice[];

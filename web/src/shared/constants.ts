@@ -13,7 +13,8 @@ export const externalLink = {
     supportPortalGuide: 'https://docs.xguard.local/support-1/using-the-support-portal',
   },
   github: {
-    bugReport: 'https://github.com/Sajjad-alaa/xguard-core/issues/new?template=02-bug.yml',
+    bugReport:
+      'https://github.com/Sajjad-alaa/xguard-core/issues/new?template=02-bug.yml',
     featureRequest:
       'https://github.com/Sajjad-alaa/xguard-core/issues/new?template=01-feature-request.yml',
   },

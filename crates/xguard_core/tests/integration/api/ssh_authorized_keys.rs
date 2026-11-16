@@ -1,8 +1,8 @@
-use xguard_common::db::Id;
-use xguard_core::handlers::{AddUserData, EditGroupInfo};
 use reqwest::StatusCode;
 use serde_json::json;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use xguard_common::db::Id;
+use xguard_core::handlers::{AddUserData, EditGroupInfo};
 
 use super::common::{client::TestClient, get_db_user, make_client_with_db, setup_pool};
 

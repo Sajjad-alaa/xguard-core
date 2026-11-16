@@ -4,11 +4,11 @@ use axum::{
     extract::{Extension, Json, Path, State},
     http::StatusCode,
 };
+use serde_json::json;
 use xguard_common::{
     auth::claims::{Claims, ClaimsType},
     db::models::User,
 };
-use serde_json::json;
 
 use super::{ApiResponse, ApiResult};
 use crate::{

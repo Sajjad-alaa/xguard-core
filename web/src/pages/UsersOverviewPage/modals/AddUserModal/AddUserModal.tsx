@@ -11,6 +11,14 @@ import {
   refinePasswordField,
 } from '../../../../shared/components/modals/ChangePasswordModal/form';
 import { SelectionSection } from '../../../../shared/components/SelectionSection/SelectionSection';
+import { useAppForm } from '../../../../shared/form';
+import { formChangeLogic } from '../../../../shared/formLogic';
+import { useApp } from '../../../../shared/hooks/useApp';
+import {
+  patternSafeUsernameCharacters,
+  patternValidPhoneNumber,
+} from '../../../../shared/patterns';
+import { removeEmptyStrings } from '../../../../shared/utils/removeEmptyStrings';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import { Checkbox } from '../../../../shared/xguard-ui/components/Checkbox/Checkbox';
 import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
@@ -21,14 +29,6 @@ import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSe
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
-import { useAppForm } from '../../../../shared/form';
-import { formChangeLogic } from '../../../../shared/formLogic';
-import { useApp } from '../../../../shared/hooks/useApp';
-import {
-  patternSafeUsernameCharacters,
-  patternValidPhoneNumber,
-} from '../../../../shared/patterns';
-import { removeEmptyStrings } from '../../../../shared/utils/removeEmptyStrings';
 import { EnrollmentTokenContent } from '../../components/EnrollmentTokenContent/EnrollmentTokenContent';
 import { useAddUserModal } from './useAddUserModal';
 

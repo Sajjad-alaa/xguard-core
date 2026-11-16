@@ -1,21 +1,20 @@
 use std::net::IpAddr;
 
+use sqlx::PgPool;
+use tokio::sync::mpsc::UnboundedSender;
+use tonic::{Code, Status};
 use xguard_common::{
     db::{
         Id,
         models::{DeviceNetworkInfo, WireguardNetwork, wireguard::DEFAULT_WIREGUARD_MTU},
     },
     gateway_event::GatewayCommand,
-    gateway_types::{FirewallConfig, WireguardPeer},
+    gateway_types::WireguardPeer,
     secret::SecretStringWrapper,
 };
-use xguard_proto::{
-    enterprise::firewall::FirewallConfig as ProtoFirewallConfig,
-    gateway::{Configuration, CoreResponse, Peer, Update, UpdateType, core_response, update},
+use xguard_proto::gateway::{
+    Configuration, CoreResponse, Peer, Update, UpdateType, core_response, update,
 };
-use sqlx::PgPool;
-use tokio::sync::mpsc::UnboundedSender;
-use tonic::{Code, Status};
 
 /// Helper struct for handling gateway events.
 pub(crate) struct GatewayUpdatesHandler<'a> {
@@ -160,19 +159,14 @@ impl<'a> GatewayUpdatesHandler<'a> {
         match update {
             GatewayCommand::NetworkCreated(network) => {
                 if network.id == self.network.id {
-                    self.send_network_update(&network, Vec::new(), None, UpdateType::Create)
+                    self.send_network_update(&network, Vec::new(), UpdateType::Create)
                 } else {
                     Ok(())
                 }
             }
-            GatewayCommand::NetworkModified(network, peers, maybe_firewall_config) => {
+            GatewayCommand::NetworkModified(network, peers) => {
                 if network.id == self.network.id {
-                    let result = self.send_network_update(
-                        &network,
-                        peers,
-                        maybe_firewall_config,
-                        UpdateType::Modify,
-                    );
+                    let result = self.send_network_update(&network, peers, UpdateType::Modify);
                     // update stored network data
                     self.network = network;
                     self.refresh_session_authorization_required().await;
@@ -231,20 +225,6 @@ impl<'a> GatewayUpdatesHandler<'a> {
                     None => Ok(()),
                 }
             }
-            GatewayCommand::FirewallConfigChanged(location_id, firewall_config) => {
-                if location_id == self.network.id {
-                    self.send_firewall_update(firewall_config)
-                } else {
-                    Ok(())
-                }
-            }
-            GatewayCommand::FirewallDisabled(location_id) => {
-                if location_id == self.network.id {
-                    self.send_firewall_disable()
-                } else {
-                    Ok(())
-                }
-            }
             GatewayCommand::VpnSessionDeauthorized(location_id, device) => {
                 if location_id == self.network.id {
                     self.send_peer_delete(&device.wireguard_pubkey)
@@ -280,12 +260,10 @@ impl<'a> GatewayUpdatesHandler<'a> {
         &self,
         network: &WireguardNetwork<Id>,
         peers: Vec<WireguardPeer>,
-        firewall_config: Option<FirewallConfig>,
         update_type: UpdateType,
     ) -> Result<(), Status> {
         debug!("Sending network update for network {network}");
         let peers = peers.into_iter().map(Into::into).collect();
-        let firewall_config = firewall_config.map(ProtoFirewallConfig::from);
         if let Err(err) = self.tx.send(CoreResponse {
             id: 0,
             payload: Some(core_response::Payload::Update(Update {
@@ -296,7 +274,6 @@ impl<'a> GatewayUpdatesHandler<'a> {
                     addresses: network.address().iter().map(ToString::to_string).collect(),
                     port: network.port.cast_unsigned(),
                     peers,
-                    firewall_config,
                     mtu: network.mtu.cast_unsigned(),
                     fwmark: network.fwmark as u32,
                 })),
@@ -330,7 +307,6 @@ impl<'a> GatewayUpdatesHandler<'a> {
                     addresses: Vec::new(),
                     port: 0,
                     peers: Vec::new(),
-                    firewall_config: None,
                     mtu: DEFAULT_WIREGUARD_MTU.cast_unsigned(),
                     fwmark: 0,
                 })),
@@ -393,55 +369,6 @@ impl<'a> GatewayUpdatesHandler<'a> {
             return Err(Status::new(Code::Internal, msg));
         }
         debug!("Peer delete command sent for network {}", self.network);
-        Ok(())
-    }
-
-    /// Send firewall config update command to gateway
-    fn send_firewall_update(&self, firewall_config: FirewallConfig) -> Result<(), Status> {
-        debug!(
-            "Sending firewall config update for network {} with config {firewall_config:?}",
-            self.network
-        );
-        let proto_firewall = ProtoFirewallConfig::from(firewall_config);
-        if let Err(err) = self.tx.send(CoreResponse {
-            id: 0,
-            payload: Some(core_response::Payload::Update(Update {
-                update_type: UpdateType::Modify as i32,
-                update: Some(update::Update::FirewallConfig(proto_firewall)),
-            })),
-        }) {
-            let msg = format!(
-                "Failed to send firewall config update for network {}, error: {err}",
-                self.network,
-            );
-            error!(msg);
-            return Err(Status::new(Code::Internal, msg));
-        }
-        debug!("Firewall config update sent for network {}", self.network);
-        Ok(())
-    }
-
-    /// Send firewall disable command to gateway
-    fn send_firewall_disable(&self) -> Result<(), Status> {
-        debug!(
-            "Sending firewall disable command for network {}",
-            self.network
-        );
-        if let Err(err) = self.tx.send(CoreResponse {
-            id: 0,
-            payload: Some(core_response::Payload::Update(Update {
-                update_type: UpdateType::Delete as i32,
-                update: Some(update::Update::DisableFirewall(())),
-            })),
-        }) {
-            let msg = format!(
-                "Failed to send firewall disable command for network {}, error: {err}",
-                self.network,
-            );
-            error!(msg);
-            return Err(Status::new(Code::Internal, msg));
-        }
-        debug!("Firewall disable command sent for network {}", self.network);
         Ok(())
     }
 }

@@ -1,12 +1,12 @@
 import './style.scss';
 import clsx from 'clsx';
 import type { PropsWithChildren } from 'react';
-import { Icon } from '../../../xguard-ui/components/Icon';
-import { IconButton } from '../../../xguard-ui/components/IconButton/IconButton';
 import {
   policyOsVariantToIcon,
   policyOsVariantToText,
 } from '../../../utils/policyPostures';
+import { Icon } from '../../../xguard-ui/components/Icon';
+import { IconButton } from '../../../xguard-ui/components/IconButton/IconButton';
 import type { PolicyOsVariant } from '../../SystemSelector/types';
 
 interface Props extends PropsWithChildren {

@@ -1,7 +1,7 @@
-use xguard_common::db::{Id, models::proxy::Proxy};
-use xguard_core::handlers::{Auth, proxy::ProxyUpdateData};
 use reqwest::StatusCode;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use xguard_common::db::{Id, models::proxy::Proxy};
+use xguard_core::handlers::{Auth, proxy::ProxyUpdateData};
 
 use super::common::{make_test_client, setup_pool};
 

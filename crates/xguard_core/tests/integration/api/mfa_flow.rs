@@ -1,5 +1,8 @@
 use std::{assert_matches, collections::HashSet};
 
+use reqwest::StatusCode;
+use serde_json::{Value, json};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::db::{
     models::{
         Settings, User, mfa_flow::MfaFlow, settings::update_current_settings,
@@ -7,13 +10,7 @@ use xguard_common::db::{
     },
     setup_pool,
 };
-use xguard_core::{
-    enterprise::license::{get_cached_license, set_cached_license},
-    events::ApiEventType,
-};
-use reqwest::StatusCode;
-use serde_json::{Value, json};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use xguard_core::events::ApiEventType;
 
 use super::common::{
     admin_group_id, authenticate_admin, configure_smtp, create_mfa_flow, make_network,
@@ -26,9 +23,7 @@ async fn test_mfa_flow_single_step_no_license(_: PgPoolOptions, options: PgConne
     let pool = setup_pool(options).await;
     let (mut client, _) = make_test_client(pool).await;
     authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
 
-    set_cached_license(None);
     let response = client
         .post("/api/v1/mfa-flow")
         .json(&json!({
@@ -52,147 +47,6 @@ async fn test_mfa_flow_single_step_no_license(_: PgPoolOptions, options: PgConne
                 && snapshot.steps.len() == 1
                 && snapshot.steps[0].methods == HashSet::from([VpnClientMfaMethod::Totp])
     );
-
-    set_cached_license(saved);
-}
-
-/// A free instance may create one flow, while subsequent flows require Business.
-#[sqlx::test]
-async fn test_additional_mfa_flow_requires_business(_: PgPoolOptions, options: PgConnectOptions) {
-    let pool = setup_pool(options).await;
-    let (mut client, _) = make_test_client(pool).await;
-    authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
-    let first_flow = json!({
-        "title": "Free Flow",
-        "steps": [{ "methods": ["totp"] }]
-    });
-    let second_flow = json!({
-        "title": "Business Flow",
-        "steps": [{ "methods": ["biometric"] }]
-    });
-
-    set_cached_license(None);
-    let response = client
-        .post("/api/v1/mfa-flow")
-        .json(&first_flow)
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::CREATED);
-    client.drain_all_events();
-
-    let response = client
-        .post("/api/v1/mfa-flow")
-        .json(&second_flow)
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let body = response.json::<Value>().await;
-    assert_eq!(body["error"], "license_required");
-    assert_eq!(body["fields"][0]["field"], "flow");
-    assert_eq!(
-        body["fields"][0]["code"],
-        "additional_flow_business_license_required"
-    );
-    assert!(
-        client.drain_all_events().is_empty(),
-        "refused request must not emit an audit event"
-    );
-
-    set_cached_license(saved.clone());
-    let response = client
-        .post("/api/v1/mfa-flow")
-        .json(&second_flow)
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::CREATED);
-
-    set_cached_license(saved);
-}
-
-/// Multi-step flow (2+ steps) requires a business license.
-#[sqlx::test]
-async fn test_mfa_flow_multi_step_requires_business(_: PgPoolOptions, options: PgConnectOptions) {
-    let pool = setup_pool(options).await;
-    let (mut client, _) = make_test_client(pool).await;
-    authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
-
-    let body = json!({
-        "title": "Multi-Step Flow",
-        "steps": [
-            { "methods": ["totp"] },
-            { "methods": ["biometric"] }
-        ]
-    });
-
-    // No license → 403, and a refused request must not emit an audit event.
-    set_cached_license(None);
-    let response = client.post("/api/v1/mfa-flow").json(&body).send().await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert!(
-        client.drain_all_events().is_empty(),
-        "refused request must not emit an audit event"
-    );
-
-    // Business license → 201
-    set_cached_license(saved.clone());
-    let response = client.post("/api/v1/mfa-flow").json(&body).send().await;
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let created = response.json::<Value>().await;
-    let created_id = created["id"].as_i64().unwrap();
-
-    let events = client.drain_all_events();
-    assert_eq!(events.len(), 1, "expected exactly 1 event after create");
-    let (event_type, _user_id, _username) = &events[0];
-    assert_matches!(
-        event_type,
-        ApiEventType::MfaFlowCreated { snapshot }
-            if snapshot.flow.id == created_id && snapshot.steps.len() == 2
-    );
-
-    set_cached_license(saved);
-}
-
-/// OIDC method requires a business license + a configured OIDC provider.
-#[sqlx::test]
-async fn test_mfa_flow_oidc_requires_business_and_provider(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
-    let pool = setup_pool(options).await;
-    let (mut client, _) = make_test_client(pool).await;
-    authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
-
-    let body = json!({
-        "title": "OIDC Flow",
-        "steps": [{ "methods": ["oidc"] }]
-    });
-
-    // No license → 403
-    set_cached_license(None);
-    let response = client.post("/api/v1/mfa-flow").json(&body).send().await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert!(
-        client.drain_all_events().is_empty(),
-        "refused request must not emit an audit event"
-    );
-
-    // Business license but no OIDC provider → 400
-    set_cached_license(saved.clone());
-    let response = client.post("/api/v1/mfa-flow").json(&body).send().await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let body = response.json::<Value>().await;
-    assert_eq!(body["error"], "validation_failed");
-    assert_eq!(body["fields"][0]["field"], "steps[0].methods");
-    assert_eq!(body["fields"][0]["code"], "oidc_provider_missing");
-    assert!(
-        client.drain_all_events().is_empty(),
-        "refused request must not emit an audit event"
-    );
-
-    set_cached_license(saved);
 }
 
 /// The Email method cannot be saved while SMTP is unconfigured, otherwise a flow would reference a
@@ -222,235 +76,6 @@ async fn test_mfa_flow_email_requires_smtp(_: PgPoolOptions, options: PgConnectO
         client.drain_all_events().is_empty(),
         "refused request must not emit an audit event"
     );
-}
-
-/// Group-scoped assignments require an enterprise license.
-#[sqlx::test]
-async fn test_mfa_flow_group_scoping_requires_enterprise(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
-    let pool = setup_pool(options).await;
-    let (mut client, _) = make_test_client(pool).await;
-    authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
-
-    // Create two single-step flows
-    let flow1_id = {
-        let resp = client
-            .post("/api/v1/mfa-flow")
-            .json(&json!({
-                "title": "Default Flow",
-                "steps": [{ "methods": ["totp"] }]
-            }))
-            .send()
-            .await;
-        assert_eq!(resp.status(), StatusCode::CREATED);
-        resp.json::<Value>().await["id"].as_i64().unwrap()
-    };
-    let flow2_id = {
-        let resp = client
-            .post("/api/v1/mfa-flow")
-            .json(&json!({
-                "title": "Scoped Flow",
-                "steps": [{ "methods": ["biometric"] }]
-            }))
-            .send()
-            .await;
-        assert_eq!(resp.status(), StatusCode::CREATED);
-        resp.json::<Value>().await["id"].as_i64().unwrap()
-    };
-
-    let admin_group_id = admin_group_id(&client).await;
-
-    // Create a location
-    let network_resp = make_network(&client, "enterprise-test").await;
-    let location_id = network_resp.json::<Value>().await["id"].as_i64().unwrap();
-
-    // Default assignment (empty group_ids) + scoped assignment (non-empty)
-    let assignment_body = json!([
-        {
-            "flow_id": flow1_id,
-            "is_default": true,
-            "group_ids": []
-        },
-        {
-            "flow_id": flow2_id,
-            "is_default": false,
-            "group_ids": [admin_group_id]
-        }
-    ]);
-
-    set_enterprise_license();
-    let _ = client.drain_all_events();
-    let response = update_location_mfa_flows(&client, location_id, assignment_body).await;
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let events = client.drain_all_events();
-    assert_eq!(
-        events.len(),
-        2,
-        "location save must emit assignment and modification events"
-    );
-    let (event_type, _user_id, _username) = events
-        .iter()
-        .find(|event| matches!(event.0, ApiEventType::LocationMfaFlowsAssigned { .. }))
-        .expect("missing MFA assignment event");
-    assert_matches!(
-        event_type,
-        ApiEventType::LocationMfaFlowsAssigned {
-            location_id: ev_location_id,
-            location_name,
-            assignments,
-        } if *ev_location_id == location_id
-            && location_name == "enterprise-test"
-            && assignments.len() == 2
-            && assignments[0].flow_id == flow1_id
-            && assignments[0].position == 0
-            && assignments[0].is_default
-            && assignments[0].group_ids.is_empty()
-            && assignments[1].flow_id == flow2_id
-            && assignments[1].position == 1
-            && !assignments[1].is_default
-            && assignments[1].group_ids == vec![admin_group_id]
-    );
-
-    set_cached_license(saved);
-}
-
-/// A FIDO2 step needs an Enterprise license on create and on update. A Business license gets a
-/// 403 with the `enterprise_license_required` code, and the refusal emits no audit event.
-#[sqlx::test]
-async fn test_mfa_flow_fido2_requires_enterprise(_: PgPoolOptions, options: PgConnectOptions) {
-    let pool = setup_pool(options).await;
-    let (mut client, _) = make_test_client(pool).await;
-    authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
-    let fido2_flow = json!({
-        "title": "Security Key Flow",
-        "steps": [{ "methods": ["fido2"] }]
-    });
-
-    // The test client runs on a Business license.
-    let response = client
-        .post("/api/v1/mfa-flow")
-        .json(&fido2_flow)
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let body = response.json::<Value>().await;
-    assert_eq!(body["fields"][0]["field"], "steps[0].methods");
-    assert_eq!(body["fields"][0]["code"], "enterprise_license_required");
-    assert!(
-        client.drain_all_events().is_empty(),
-        "refused request must not emit an audit event"
-    );
-
-    let response = client
-        .post("/api/v1/mfa-flow")
-        .json(&json!({
-            "title": "Code Flow",
-            "steps": [{ "methods": ["totp"] }]
-        }))
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let flow_id = response.json::<Value>().await["id"].as_i64().unwrap();
-    let _ = client.drain_all_events();
-
-    let response = client
-        .put(format!("/api/v1/mfa-flow/{flow_id}"))
-        .json(&fido2_flow)
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let body = response.json::<Value>().await;
-    assert_eq!(body["fields"][0]["code"], "enterprise_license_required");
-
-    set_enterprise_license();
-    let response = client
-        .post("/api/v1/mfa-flow")
-        .json(&fido2_flow)
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::CREATED);
-
-    set_cached_license(saved);
-}
-
-/// Multi-step guard also applies to updates.
-#[sqlx::test]
-async fn test_mfa_flow_update_multi_step_requires_business(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
-    let pool = setup_pool(options).await;
-    let (mut client, _) = make_test_client(pool).await;
-    authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
-
-    // Create a single-step flow first (allowed)
-    let create_resp = client
-        .post("/api/v1/mfa-flow")
-        .json(&json!({
-            "title": "To Be Updated",
-            "steps": [{ "methods": ["totp"] }]
-        }))
-        .send()
-        .await;
-    assert_eq!(create_resp.status(), StatusCode::CREATED);
-    let flow_id = create_resp.json::<Value>().await["id"].as_i64().unwrap();
-
-    // Clear the create event before exercising the refusal path.
-    let _ = client.drain_all_events();
-
-    // Try updating to multi-step without license → 403, and no audit event on refusal.
-    set_cached_license(None);
-    let response = client
-        .put(format!("/api/v1/mfa-flow/{flow_id}"))
-        .json(&json!({
-            "title": "Updated Flow",
-            "steps": [
-                { "methods": ["totp"] },
-                { "methods": ["biometric"] }
-            ]
-        }))
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert!(
-        client.drain_all_events().is_empty(),
-        "refused request must not emit an audit event"
-    );
-
-    // Restore license → update succeeds
-    set_cached_license(saved.clone());
-    let response = client
-        .put(format!("/api/v1/mfa-flow/{flow_id}"))
-        .json(&json!({
-            "title": "Updated Flow",
-            "steps": [
-                { "methods": ["totp"] },
-                { "methods": ["biometric"] }
-            ]
-        }))
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let events = client.drain_all_events();
-    assert_eq!(events.len(), 1, "expected exactly 1 event after update");
-    let (event_type, _user_id, _username) = &events[0];
-    assert_matches!(
-        event_type,
-        ApiEventType::MfaFlowUpdated { before, after }
-            if before.flow.title == "To Be Updated"
-                && before.steps.len() == 1
-                && after.flow.title == "Updated Flow"
-                && after.steps.len() == 2
-    );
-
-    set_cached_license(saved);
 }
 
 /// A step id belonging to another flow must be refused, not silently applied. Reconciliation
@@ -763,7 +388,6 @@ async fn test_method_availability_basic(_: PgPoolOptions, options: PgConnectOpti
     let pool = setup_pool(options).await;
     let (mut client, _) = make_test_client(pool).await;
     authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
 
     let response = client
         .get("/api/v1/mfa-flow/method-availability")
@@ -788,49 +412,12 @@ async fn test_method_availability_basic(_: PgPoolOptions, options: PgConnectOpti
         Some("smtp_not_configured")
     );
     assert_eq!(find("oidc")["available"].as_bool(), Some(false));
-    assert_eq!(
-        find("oidc")["reason"].as_str(),
-        Some("oidc_provider_missing")
-    );
+    assert_eq!(find("oidc")["reason"].as_str(), Some("not_supported"));
     assert_eq!(find("biometric")["available"].as_bool(), Some(true));
     assert_eq!(find("mobileapprove")["available"].as_bool(), Some(true));
-    // FIDO2 security keys need the Enterprise tier, and the test client runs on Business.
+    // FIDO2 VPN MFA is not supported by XGuard.
     assert_eq!(find("fido2")["available"].as_bool(), Some(false));
-    assert_eq!(
-        find("fido2")["reason"].as_str(),
-        Some("enterprise_licensed")
-    );
-
-    set_enterprise_license();
-    let response = client
-        .get("/api/v1/mfa-flow/method-availability")
-        .send()
-        .await;
-    let items = response.json::<Value>().await;
-    let items = items.as_array().unwrap();
-    let fido2 = items
-        .iter()
-        .find(|m| m["method"].as_str() == Some("fido2"))
-        .unwrap();
-    assert_eq!(fido2["available"].as_bool(), Some(true));
-
-    set_cached_license(None);
-    let response = client
-        .get("/api/v1/mfa-flow/method-availability")
-        .send()
-        .await;
-    let items = response.json::<Value>().await;
-    let items = items.as_array().unwrap();
-    let find = |method: &str| -> &Value {
-        items
-            .iter()
-            .find(|m| m["method"].as_str() == Some(method))
-            .unwrap()
-    };
-    assert_eq!(find("oidc")["available"].as_bool(), Some(false));
-    assert_eq!(find("oidc")["reason"].as_str(), Some("licensed"));
-
-    set_cached_license(saved);
+    assert_eq!(find("fido2")["reason"].as_str(), Some("not_supported"));
 }
 
 /// Updating a flow that already contains email (e.g. backfilled from a
@@ -999,8 +586,6 @@ async fn test_mfa_enabled_disable_preserves_assignments(
         .await;
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let license = get_cached_license().clone();
-    set_cached_license(None);
     let body = network_body("mfa-lifecycle", false, flow_id);
     let resp = client
         .put(format!("/api/v1/network/{location_id}"))
@@ -1025,7 +610,6 @@ async fn test_mfa_enabled_disable_preserves_assignments(
     assert_eq!(assignments[0]["is_default"].as_bool(), Some(true));
 
     // Re-enable: the same policy must be in force, resolving the same flow for a user.
-    set_cached_license(license);
     let resp = client
         .put(format!("/api/v1/network/{location_id}"))
         .json(&network_body("mfa-lifecycle", true, flow_id))
@@ -1114,7 +698,6 @@ async fn test_mfa_flow_delete_flow_is_default(_: PgPoolOptions, options: PgConne
     let pool = setup_pool(options).await;
     let (mut client, _) = make_test_client(pool).await;
     authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
 
     let flow1_id = create_mfa_flow(&client, "Default Flow", json!([{"methods": ["totp"]}])).await;
     let flow2_id =
@@ -1167,8 +750,6 @@ async fn test_mfa_flow_delete_flow_is_default(_: PgPoolOptions, options: PgConne
         &events[0].0,
         ApiEventType::MfaFlowDeleted { snapshot } if snapshot.flow.id == flow2_id
     );
-
-    set_cached_license(saved);
 }
 
 /// Deleting the default of an MFA-disabled location preserves its group override, but MFA cannot
@@ -1181,7 +762,6 @@ async fn test_mfa_flow_delete_disabled_default_with_override(
     let pool = setup_pool(options).await;
     let (mut client, _) = make_test_client(pool).await;
     authenticate_admin(&mut client).await;
-    let saved = get_cached_license().clone();
 
     let default_flow_id =
         create_mfa_flow(&client, "Disabled Default", json!([{"methods": ["totp"]}])).await;
@@ -1243,8 +823,6 @@ async fn test_mfa_flow_delete_disabled_default_with_override(
     assert_eq!(body["error"], "validation_failed");
     assert_eq!(body["fields"][0]["field"], "mfa_enabled");
     assert_eq!(body["fields"][0]["code"], "no_flows_assigned");
-
-    set_cached_license(saved);
 }
 
 /// Plain CRUD over HTTP: create, list (with `step_count`), fetch, update, and delete an

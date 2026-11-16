@@ -3,11 +3,11 @@ use axum::{
     extract::{Path, State, rejection::JsonRejection},
 };
 use chrono::NaiveDateTime;
-use xguard_common::db::{Id, models::gateway::Gateway};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{PgPool, query_as};
+use xguard_common::db::{Id, models::gateway::Gateway};
 
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
@@ -105,8 +105,7 @@ pub struct GatewayUpdateData {
         (status = 500, description = "Unable to list gateways.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn gateway_list(
@@ -137,8 +136,7 @@ pub async fn gateway_list(
         (status = 500, description = "Unable to get gateway.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn gateway_details(
@@ -182,8 +180,7 @@ pub(crate) async fn gateway_details(
         (status = 500, description = "Unable to update gateway.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn update_gateway(
@@ -251,8 +248,7 @@ pub(crate) async fn update_gateway(
         (status = 500, description = "Unable to delete gateway.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_gateway(

@@ -21,10 +21,6 @@ import {
 import { Page } from '../../../shared/components/Page/Page';
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
-import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
@@ -32,14 +28,16 @@ import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
 import { useApp } from '../../../shared/hooks/useApp';
 import { patternValidEmail } from '../../../shared/patterns';
 import {
-  getLicenseInfoQueryOptions,
   getMfaFlowsQueryOptions,
   getSettingsQueryOptions,
   mfaAvailabilityInvalidateKey,
 } from '../../../shared/query';
-import { canUseBusinessFeature, licenseActionCheck } from '../../../shared/utils/license';
 import { smtpResetBody } from '../../../shared/utils/mfaFlowSteps';
 import { Validate } from '../../../shared/validate';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { getConfiguredBadge, getNotConfiguredBadge } from '../SettingsIndexPage/types';
 import {
   type SmtpAuthCardVariant,
@@ -107,7 +105,9 @@ const detectActiveCard = (
   return null;
 };
 
-const AUTH_CARDS: SmtpAuthCardVariant[] = ['none', 'basic', 'google', 'microsoft'];
+// XOAUTH2 (Google / Microsoft) SMTP needs the OAuth2 token integration, which XGuard does not
+// include, so only password-based and unauthenticated SMTP are offered.
+const AUTH_CARDS: SmtpAuthCardVariant[] = ['none', 'basic'];
 
 const formSchema = z.object({
   smtp_server: z
@@ -203,10 +203,8 @@ const Content = ({
     [settings],
   );
 
-  const { data: licenseInfo } = useQuery(getLicenseInfoQueryOptions);
   const { data: mfaFlows = [] } = useQuery(getMfaFlowsQueryOptions);
-  const oauthLocked =
-    licenseInfo !== undefined && !canUseBusinessFeature(licenseInfo).result;
+  const oauthLocked = true;
 
   const { mutateAsync: editSettings } = useMutation({
     mutationFn: api.settings.patchSettings,
@@ -251,14 +249,9 @@ const Content = ({
   };
 
   const openConfigModalGated = (variant: SmtpAuthCardVariant) => {
-    if (variant === 'google' || variant === 'microsoft') {
-      if (licenseInfo === undefined) return;
-      licenseActionCheck(canUseBusinessFeature(licenseInfo), () =>
-        openConfigModal(variant),
-      );
-    } else {
-      openConfigModal(variant);
-    }
+    // XOAUTH2 variants are not supported by XGuard.
+    if (variant === 'google' || variant === 'microsoft') return;
+    openConfigModal(variant);
   };
 
   const handleDelete = () => {

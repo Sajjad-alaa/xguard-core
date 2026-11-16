@@ -1,9 +1,9 @@
 use chrono::Utc;
-use xguard_common::db::{Id, setup_pool};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     query, query_scalar,
 };
+use xguard_common::db::{Id, setup_pool};
 
 use crate::common::{attach_device_to_location, create_device, create_location, create_user};
 

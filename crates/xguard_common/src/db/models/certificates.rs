@@ -156,8 +156,7 @@ impl Certificates {
     /// Returns an error if the CA has not been generated yet.
     pub fn certificate_authority(
         &self,
-    ) -> Result<xguard_certs::CertificateAuthority<'static>, xguard_certs::CertificateError>
-    {
+    ) -> Result<xguard_certs::CertificateAuthority<'static>, xguard_certs::CertificateError> {
         let ca_cert_der = self
             .ca_cert_der
             .as_deref()

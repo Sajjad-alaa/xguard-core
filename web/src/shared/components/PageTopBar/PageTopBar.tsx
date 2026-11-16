@@ -1,12 +1,10 @@
 import { Divider } from '../../xguard-ui/components/Divider/Divider';
 import './style.scss';
+import { useApp } from '../../hooks/useApp';
+import { useAuth } from '../../hooks/useAuth';
 import { IconButton } from '../../xguard-ui/components/IconButton/IconButton';
 import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../xguard-ui/types';
-import { useApp } from '../../hooks/useApp';
-import { useAuth } from '../../hooks/useAuth';
-import { TopBarLicense } from './components/TopBarLicense/TopBarLicense';
-import { TopBarLicenseExpiration } from './components/TopBarLicenseExpiration/TopBarLicenseExpiration';
 import { TopBarProfile } from './components/TopBarProfile/TopBarProfile';
 import { TopBarTheme } from './components/TopBarTheme/TopBarTheme';
 
@@ -34,12 +32,6 @@ export const PageTopBar = ({ title, navOpen }: Props) => {
       )}
       <p className="page-title">{title}</p>
       <div className="right">
-        {isAdmin && (
-          <>
-            <TopBarLicenseExpiration />
-            <TopBarLicense />
-          </>
-        )}
         <Divider orientation="vertical" />
         <TopBarProfile />
         <Divider orientation="vertical" />

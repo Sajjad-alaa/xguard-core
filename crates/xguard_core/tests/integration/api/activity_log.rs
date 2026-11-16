@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
 use chrono::{NaiveDateTime, TimeDelta, Timelike, Utc};
-use xguard_common::db::{Id, NoId, models::User, setup_pool};
-use xguard_core::db::models::activity_log::{ActivityLogEvent, ActivityLogModule, EventType};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
+use xguard_common::db::{Id, NoId, models::User, setup_pool};
+use xguard_core::db::models::activity_log::{ActivityLogEvent, ActivityLogModule, EventType};
 
 use super::common::{client::TestClient, get_db_user, make_client_with_db};
 
@@ -413,7 +413,7 @@ async fn test_activity_log_module_sort_is_alphabetical(
 
     assert_eq!(
         modules,
-        vec!["client", "xguard", "enrollment", "vpn"],
+        vec!["client", "enrollment", "vpn", "xguard"],
         "module sort should be alphabetical (text order), not enum declaration order",
     );
 }

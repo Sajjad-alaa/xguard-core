@@ -1,6 +1,7 @@
 use std::net::IpAddr;
 
 use chrono::{NaiveDateTime, Utc};
+use strum::EnumCount;
 use xguard_common::db::{
     Id,
     models::{
@@ -13,20 +14,9 @@ use xguard_common::db::{
         vpn_client_mfa_session::MfaAttribution,
     },
 };
-use xguard_proto::{client_types::MfaMethod, enterprise::posture::DevicePostureData};
-use strum::EnumCount;
+use xguard_proto::client_types::MfaMethod;
 
-use crate::{
-    db::WebHook,
-    enterprise::db::models::{
-        activity_log_stream::ActivityLogStream,
-        api_tokens::ApiToken,
-        device_posture::{DevicePosture, DevicePostureSnapshot},
-        enterprise_settings::EnterpriseSettingsInfo,
-        openid_provider::OpenIdProvider,
-        snat::UserSnatBinding,
-    },
-};
+use crate::db::WebHook;
 
 /// Shared context that needs to be added to every API event
 ///
@@ -192,16 +182,6 @@ pub enum ApiEventType {
         after: Device<Id>,
         location: WireguardNetwork<Id>,
     },
-    ActivityLogStreamCreated {
-        stream: ActivityLogStream<Id>,
-    },
-    ActivityLogStreamModified {
-        before: ActivityLogStream<Id>,
-        after: ActivityLogStream<Id>,
-    },
-    ActivityLogStreamRemoved {
-        stream: ActivityLogStream<Id>,
-    },
     VpnLocationAdded {
         location: WireguardNetwork<Id>,
     },
@@ -211,20 +191,6 @@ pub enum ApiEventType {
     VpnLocationModified {
         before: WireguardNetwork<Id>,
         after: WireguardNetwork<Id>,
-    },
-    ApiTokenAdded {
-        owner: User<Id>,
-        token: ApiToken<Id>,
-    },
-    ApiTokenRemoved {
-        owner: User<Id>,
-        token: ApiToken<Id>,
-    },
-    ApiTokenRenamed {
-        owner: User<Id>,
-        token: ApiToken<Id>,
-        old_name: String,
-        new_name: String,
     },
     OpenIdAppAdded {
         app: OAuth2Client<Id>,
@@ -240,12 +206,6 @@ pub enum ApiEventType {
         app: OAuth2Client<Id>,
         enabled: bool,
     },
-    OpenIdProviderModified {
-        provider: OpenIdProvider<Id>,
-    },
-    OpenIdProviderRemoved {
-        provider: OpenIdProvider<Id>,
-    },
     SettingsUpdated {
         before: Settings,
         after: Settings,
@@ -255,10 +215,6 @@ pub enum ApiEventType {
         after: Settings,
     },
     SettingsDefaultBrandingRestored,
-    EnterpriseSettingsUpdated {
-        before: EnterpriseSettingsInfo,
-        after: EnterpriseSettingsInfo,
-    },
     GroupsBulkAssigned {
         users: Vec<User<Id>>,
         groups: Vec<Group<Id>>,
@@ -317,22 +273,6 @@ pub enum ApiEventType {
     ClientConfigurationTokenAdded {
         user: User<Id>,
     },
-    UserSnatBindingAdded {
-        user: User<Id>,
-        location: WireguardNetwork<Id>,
-        binding: UserSnatBinding<Id>,
-    },
-    UserSnatBindingRemoved {
-        user: User<Id>,
-        location: WireguardNetwork<Id>,
-        binding: UserSnatBinding<Id>,
-    },
-    UserSnatBindingModified {
-        user: User<Id>,
-        location: WireguardNetwork<Id>,
-        before: UserSnatBinding<Id>,
-        after: UserSnatBinding<Id>,
-    },
     ProxyModified {
         before: Proxy<Id>,
         after: Proxy<Id>,
@@ -346,28 +286,6 @@ pub enum ApiEventType {
     },
     GatewayDeleted {
         gateway: Gateway<Id>,
-    },
-    DevicePostureCreated {
-        snapshot: DevicePostureSnapshot,
-    },
-    DevicePostureUpdated {
-        before: DevicePostureSnapshot,
-        after: DevicePostureSnapshot,
-    },
-    DevicePostureDeleted {
-        snapshot: DevicePostureSnapshot,
-    },
-    DevicePostureDuplicated {
-        original: DevicePostureSnapshot,
-        duplicate: DevicePostureSnapshot,
-    },
-    DevicePostureLocationsAssigned {
-        device_posture: DevicePosture<Id>,
-        location_ids: Vec<Id>,
-    },
-    LocationPosturesAssigned {
-        location: WireguardNetwork<Id>,
-        posture_ids: Vec<Id>,
     },
     MfaFlowCreated {
         snapshot: MfaFlowSnapshot,
@@ -485,17 +403,6 @@ pub enum DesktopClientMfaEvent {
         device: Device<Id>,
         location: WireguardNetwork<Id>,
         is_mfa_session: bool,
-    },
-    PostureCheckPassed {
-        device: Device<Id>,
-        location: WireguardNetwork<Id>,
-        device_posture_data: Option<DevicePostureData>,
-    },
-    PostureCheckFailed {
-        device: Device<Id>,
-        location: WireguardNetwork<Id>,
-        device_posture_data: Option<DevicePostureData>,
-        failed_checks: Vec<String>,
     },
     /// An authorized VPN session was replaced by a new authorization.
     SessionSuperseded {

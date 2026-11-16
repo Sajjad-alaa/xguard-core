@@ -1,13 +1,13 @@
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import { SmtpAuthentication, SmtpEncryption } from '../../../../shared/api/types';
+import { useAppForm } from '../../../../shared/form';
+import { formChangeLogic } from '../../../../shared/formLogic';
+import { patternValidEmail } from '../../../../shared/patterns';
 import { EvenSplit } from '../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
 import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { useAppForm } from '../../../../shared/form';
-import { formChangeLogic } from '../../../../shared/formLogic';
-import { patternValidEmail } from '../../../../shared/patterns';
 import { isMicrosoftIssuerUrl } from '../smtpAuthUtils';
 import {
   MICROSOFT_ISSUER_URL,

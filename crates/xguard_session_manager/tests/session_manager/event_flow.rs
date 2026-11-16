@@ -1,10 +1,10 @@
 use std::net::SocketAddr;
 
 use chrono::{TimeDelta, Utc};
-use xguard_common::db::{models::vpn_client_session::VpnClientSession, setup_pool};
-use xguard_session_manager::events::SessionManagerEventType;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::time::{Duration, timeout};
+use xguard_common::db::{models::vpn_client_session::VpnClientSession, setup_pool};
+use xguard_session_manager::events::SessionManagerEventType;
 
 use crate::common::{
     SessionManagerHarness, attach_device_to_location, build_stats_update, create_device,

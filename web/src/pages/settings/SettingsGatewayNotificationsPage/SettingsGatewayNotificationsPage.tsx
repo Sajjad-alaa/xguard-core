@@ -15,6 +15,10 @@ import { Page } from '../../../shared/components/Page/Page';
 import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCard';
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
+import { useAppForm } from '../../../shared/form';
+import { formChangeLogic } from '../../../shared/formLogic';
+import { useApp } from '../../../shared/hooks/useApp';
+import { getSettingsQueryOptions } from '../../../shared/query';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { Fold } from '../../../shared/xguard-ui/components/Fold/Fold';
 import { InfoBanner } from '../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
@@ -22,10 +26,6 @@ import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
-import { useAppForm } from '../../../shared/form';
-import { formChangeLogic } from '../../../shared/formLogic';
-import { useApp } from '../../../shared/hooks/useApp';
-import { getSettingsQueryOptions } from '../../../shared/query';
 
 const breadcrumbsLinks = [
   <Link to="/settings" search={{ tab: 'notifications' }} key={0}>

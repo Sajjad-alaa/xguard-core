@@ -3,10 +3,10 @@ use axum::{
     http::StatusCode,
 };
 use chrono::Utc;
-use xguard_common::db::models::{gateway::Gateway, proxy::Proxy};
 use serde_json::json;
 use sqlx::query_scalar;
-use tera::Context;
+use xguard_common::db::models::{gateway::Gateway, proxy::Proxy};
+
 use thiserror::Error;
 
 use super::{ApiResponse, ApiResult};
@@ -45,8 +45,7 @@ pub struct TestMail {
         (status = 503, description = "SMTP is not configured.", body = ApiErrorResponse, example = json!({"msg": "SMTP is not configured", "code": "smtp_not_configured"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn test_mail(
@@ -109,8 +108,7 @@ async fn read_logs() -> String {
         (status = 503, description = "SMTP is not configured.", body = ApiErrorResponse, example = json!({"msg": "SMTP is not configured", "code": "smtp_not_configured"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn send_support_data(
@@ -257,17 +255,4 @@ async fn get_admins_emails(pool: &PgPool) -> Result<Vec<String>, sqlx::Error> {
     )
     .fetch_all(pool)
     .await
-}
-
-pub(crate) async fn send_user_import_blocked_email(pool: &PgPool) -> Result<(), MailError> {
-    debug!("Sending blocked user import mail to all admin users");
-    let admin_emails = get_admins_emails(pool).await?;
-    let mut conn = pool.acquire().await?;
-
-    for email in admin_emails {
-        templates::user_import_blocked_mail(&email, &mut conn, Context::new()).await?;
-        debug!("Scheduled blocked user import mail to admin {email}");
-    }
-
-    Ok(())
 }

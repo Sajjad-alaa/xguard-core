@@ -4,9 +4,12 @@ use std::{
 };
 
 use chrono::{NaiveDateTime, TimeDelta, Timelike, Utc};
+use ipnetwork::IpNetwork;
+use sqlx::{PgExecutor, PgPool, query, query_scalar};
+use tokio::{sync::mpsc, time::interval};
 use xguard_common::{
     db::{
-        Id, NoId,
+        Id,
         models::{
             Device, DeviceType, User, WireguardNetwork,
             device::WireguardNetworkDevice,
@@ -19,16 +22,10 @@ use xguard_common::{
     gateway_event::GatewayCommand,
     messages::peer_stats_update::PeerStatsUpdate,
 };
-use xguard_core::enterprise::db::models::device_posture::{
-    DevicePosture, DevicePostureLocation, DevicePostureOsRule, OsType,
-};
 use xguard_session_manager::{
     IterationOutcome, SESSION_UPDATE_INTERVAL, SessionManager, events::SessionManagerEvent,
     run_session_manager_iteration,
 };
-use ipnetwork::IpNetwork;
-use sqlx::{PgExecutor, PgPool, query, query_scalar};
-use tokio::{sync::mpsc, time::interval};
 
 pub(crate) struct SessionManagerHarness {
     pub(crate) manager: SessionManager,
@@ -181,45 +178,6 @@ pub(crate) async fn attach_device_to_location(pool: &PgPool, location_id: Id, de
         .insert(pool)
         .await
         .expect("failed to attach device to location");
-}
-
-pub(crate) async fn enable_linux_posture_for_location(pool: &PgPool, location_id: Id) {
-    let policy = DevicePosture {
-        id: NoId,
-        name: "session-manager-test-posture".to_owned(),
-        description: None,
-        min_desktop_client_version: None,
-        min_mobile_client_version: None,
-        allow_prerelease_client: true,
-    }
-    .save(pool)
-    .await
-    .expect("failed to save posture policy");
-
-    DevicePostureOsRule {
-        id: NoId,
-        posture_id: policy.id,
-        os_type: OsType::Linux,
-        min_os_version: None,
-        disk_encryption_required: Some(true),
-        antivirus_required: None,
-        ad_domain_joined_required: None,
-        windows_security_update_max_age: None,
-        min_kernel_version: None,
-        device_integrity_required: None,
-        android_security_patch_level_max_age: None,
-    }
-    .save(pool)
-    .await
-    .expect("failed to save posture OS rule");
-
-    DevicePostureLocation::set_for_location(
-        &mut pool.acquire().await.expect("failed to acquire connection"),
-        location_id,
-        &[policy.id],
-    )
-    .await
-    .expect("failed to assign posture policy to location");
 }
 
 pub(crate) async fn create_gateway(

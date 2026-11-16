@@ -1,5 +1,14 @@
 import { m } from '../../../../paraglide/messages';
 import { DescriptionBlock } from '../../../../shared/components/DescriptionBlock/DescriptionBlock';
+import {
+  closeModal,
+  subscribeCloseModal,
+  subscribeOpenModal,
+} from '../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
+import type { OpenNetworkDeviceConfigModal } from '../../../../shared/hooks/modalControls/types';
+import { downloadText } from '../../../../shared/utils/download';
+import { formatFileName } from '../../../../shared/utils/formatFileName';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import { CodeBox } from '../../../../shared/xguard-ui/components/CodeBox/CodeBox';
 import { IconKind } from '../../../../shared/xguard-ui/components/Icon';
@@ -10,15 +19,6 @@ import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/Sized
 import { useClipboard } from '../../../../shared/xguard-ui/hooks/useClipboard';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
-import {
-  closeModal,
-  subscribeCloseModal,
-  subscribeOpenModal,
-} from '../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
-import type { OpenNetworkDeviceConfigModal } from '../../../../shared/hooks/modalControls/types';
-import { downloadText } from '../../../../shared/utils/download';
-import { formatFileName } from '../../../../shared/utils/formatFileName';
 import './style.scss';
 import { useEffect, useState } from 'react';
 

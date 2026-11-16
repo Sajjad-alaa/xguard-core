@@ -5,10 +5,10 @@ import type {
   MfaFlowErrorResponse,
   MfaFlowListItemResponse,
 } from '../../shared/api/types';
-import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import type { OpenConfirmActionModal } from '../../shared/hooks/modalControls/types';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 
 export const getMfaFlowDeleteBlockingLocations = (
   flow: Pick<MfaFlowListItemResponse, 'locations'>,

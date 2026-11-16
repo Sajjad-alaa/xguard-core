@@ -12,7 +12,6 @@ import { AddLocationFirewallStep } from './steps/AddLocationFirewallStep';
 import { AddLocationInternalVpnStep } from './steps/AddLocationInternalVpnStep';
 import { AddLocationMfaStep } from './steps/AddLocationMfaStep';
 import { AddLocationNetworkStep } from './steps/AddLocationNetworkStep';
-import { AddLocationPostureCheckStep } from './steps/AddLocationPostureCheckStep/AddLocationPostureCheckStep';
 import { AddLocationServiceStep } from './steps/AddLocationServiceStep';
 import { AddLocationStartStep } from './steps/AddLocationStartStep';
 import { AddLocationWelcomeStep } from './steps/AddLocationWelcomeStep';
@@ -87,17 +86,11 @@ export const AddLocationPage = () => {
         label: m.add_location_step_access_control_label(),
         description: m.add_location_step_access_control_description(),
       },
-      postureCheck: {
-        id: AddLocationPageStep.PostureCheck,
-        order: 6,
-        label: m.add_location_step_posture_check_label(),
-        description: m.add_location_step_posture_check_description(),
-      },
       firewall: {
         id: AddLocationPageStep.Firewall,
-        order: 7,
-        label: m.add_location_step_firewall_label(),
-        description: m.add_location_step_firewall_description(),
+        order: 6,
+        label: m.add_location_firewall_gateway_activation_title(),
+        description: m.add_location_firewall_gateway_activation_subtitle(),
       },
     }),
     [locationType],
@@ -112,7 +105,6 @@ export const AddLocationPage = () => {
       mfa: <AddLocationMfaStep />,
       networkSettings: <AddLocationNetworkStep />,
       serviceLocationSettings: <AddLocationServiceStep />,
-      postureCheck: <AddLocationPostureCheckStep />,
     }),
     [],
   );

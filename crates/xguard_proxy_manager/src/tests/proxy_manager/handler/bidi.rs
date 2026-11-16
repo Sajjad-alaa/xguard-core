@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::sync::Semaphore;
+use tonic::Code;
 use xguard_proto::{
     client_types::{AuthFlowType, AuthInfoRequest},
     proxy::{CoreRequest, core_request},
 };
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::sync::Semaphore;
-use tonic::Code;
 
 use super::support::{assert_error_response, clear_test_license, complete_proxy_handshake};
 use crate::tests::common::HandlerTestContext;
@@ -40,8 +40,9 @@ async fn test_bidi_processes_concurrent_requests_with_their_request_ids(
     let mut ids = [first.id, second.id];
     ids.sort_unstable();
     assert_eq!(ids, [101, 202]);
-    assert_eq!(assert_error_response(&first), Code::FailedPrecondition);
-    assert_eq!(assert_error_response(&second), Code::FailedPrecondition);
+    // External OpenID login is not supported by XGuard.
+    assert_eq!(assert_error_response(&first), Code::Unimplemented);
+    assert_eq!(assert_error_response(&second), Code::Unimplemented);
 
     context.finish().await.expect_server_finished().await;
 }
@@ -81,12 +82,12 @@ async fn test_bidi_request_errors_do_not_prevent_later_requests(
     context.mock_proxy().send_request(auth_info_request(401));
     let failed = context.mock_proxy_mut().recv_outbound().await;
     assert_eq!(failed.id, 401);
-    assert_eq!(assert_error_response(&failed), Code::FailedPrecondition);
+    assert_eq!(assert_error_response(&failed), Code::Unimplemented);
 
     context.mock_proxy().send_request(auth_info_request(402));
     let subsequent = context.mock_proxy_mut().recv_outbound().await;
     assert_eq!(subsequent.id, 402);
-    assert_eq!(assert_error_response(&subsequent), Code::FailedPrecondition);
+    assert_eq!(assert_error_response(&subsequent), Code::Unimplemented);
 
     context.finish().await.expect_server_finished().await;
 }

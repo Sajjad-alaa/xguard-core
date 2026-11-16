@@ -1,5 +1,7 @@
 use std::{collections::HashSet, net::IpAddr};
 
+use thiserror::Error;
+use tracing::{debug, error, warn};
 use xguard_common::db::{
     Id,
     models::{
@@ -7,23 +9,46 @@ use xguard_common::db::{
         vpn_client_mfa_session::VpnMfaFlowKind, vpn_client_session::VpnClientMfaMethod,
     },
 };
-use thiserror::Error;
-use tracing::{debug, error, warn};
 
 use super::{
     LoadedFinishContext, MfaEngine,
     authorize::ClientMfaServerError,
     error::{FinishCoreError, StartError},
-    filter_unlicensed_mfa_methods, is_code_method,
+    filter_supported_mfa_methods, is_code_method,
     method::{Verdict, VerifyError, check_mobile_approval, verify, verify_mobile_signature},
     poll_allowed, throttle_key,
     types::{FinishOutcome, MultiStepStartOutcome, VerificationProof},
 };
-pub use crate::enterprise::fido2::{Fido2Assertion, ProofConversionError};
-use crate::{
-    enterprise::{fido2::map_proof_conversion_error, is_business_license_active},
-    events::{BidiRequestContext, BidiStreamEvent, BidiStreamEventType, DesktopClientMfaEvent},
+use crate::events::{
+    BidiRequestContext, BidiStreamEvent, BidiStreamEventType, DesktopClientMfaEvent,
 };
+
+/// FIDO2 assertion fields as submitted by a client.
+///
+/// XGuard does not support FIDO2 VPN MFA (see [`crate::features`]); a submitted assertion is
+/// always rejected as a malformed proof.
+#[derive(Debug, Eq, PartialEq)]
+pub struct Fido2Assertion {
+    pub rp_id_hash: Vec<u8>,
+    pub authenticator_data: Vec<u8>,
+    pub signature: Vec<u8>,
+    pub credential_id: Vec<u8>,
+}
+
+/// Error converting a submitted credential into a verifiable proof.
+#[derive(Debug, Eq, thiserror::Error, PartialEq)]
+pub enum ProofConversionError {
+    #[error("FIDO2 MFA is not supported")]
+    Fido2Unsupported,
+}
+
+fn map_proof_conversion_error(error: ProofConversionError) -> StepFinishError {
+    match error {
+        ProofConversionError::Fido2Unsupported => StepFinishError::MalformedProof {
+            message: "FIDO2 MFA is not supported",
+        },
+    }
+}
 
 /// Proof fields accepted by an attempt-bound finish.
 #[derive(Debug, Eq, PartialEq)]
@@ -141,7 +166,7 @@ impl TryFrom<StepCredential> for VerificationProof {
             StepCredential::BiometricSignature(signature) => {
                 Ok(Self::BiometricSignature(signature))
             }
-            StepCredential::Fido2(assertion) => Self::try_from(assertion),
+            StepCredential::Fido2(_) => Err(ProofConversionError::Fido2Unsupported),
         }
     }
 }
@@ -157,17 +182,6 @@ impl MfaEngine {
         steps: Vec<HashSet<VpnClientMfaMethod>>,
         selected_methods: Vec<VpnClientMfaMethod>,
     ) -> Result<StartResult, StartError> {
-        let business = is_business_license_active();
-
-        // A multi-step flow requires a Business license; fail closed.
-        if steps.len() > 1 && !business {
-            error!(
-                "Multi-step MFA requires a business license; location {} has a {}-step flow",
-                location.name,
-                steps.len()
-            );
-            return Err(StartError::MultiStepNotAvailable);
-        }
         if selected_methods.len() != steps.len() {
             error!(
                 "MFA plan length {} does not match the {}-step flow of location {}",
@@ -180,7 +194,7 @@ impl MfaEngine {
 
         let filtered_steps = steps
             .iter()
-            .map(filter_unlicensed_mfa_methods)
+            .map(filter_supported_mfa_methods)
             .collect::<Vec<HashSet<_>>>();
 
         let smtp_configured = Settings::get_current_settings().smtp_configured();
@@ -735,54 +749,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_step_credential_converts_structured_fido2_assertion_without_loss() {
-        let rp_id_hash = vec![1; 32];
-        let mut authenticator_data = rp_id_hash.clone();
-        authenticator_data.extend([2, 3, 4]);
-        let signature = vec![5, 6, 7];
-        let credential_id = vec![8, 9, 10];
-        let proof = VerificationProof::try_from(StepCredential::Fido2(Fido2Assertion {
-            rp_id_hash: rp_id_hash.clone(),
-            authenticator_data: authenticator_data.clone(),
-            signature: signature.clone(),
-            credential_id: credential_id.clone(),
-        }))
-        .expect("valid FIDO2 assertion should convert");
-
-        assert_eq!(
-            proof,
-            VerificationProof::Fido2 {
-                rp_id_hash,
-                signature,
-                authenticator_data,
-                credential_id,
-            }
-        );
-    }
-
-    #[test]
-    fn test_step_credential_rejects_mismatched_fido2_rp_id_hash() {
+    fn test_step_credential_rejects_fido2_assertion() {
         let error = VerificationProof::try_from(StepCredential::Fido2(Fido2Assertion {
-            rp_id_hash: vec![1; 32],
-            authenticator_data: vec![2; 32],
-            signature: vec![3],
-            credential_id: vec![4],
+            rp_id_hash: vec![0; 32],
+            authenticator_data: vec![0; 37],
+            signature: vec![1],
+            credential_id: vec![2],
         }))
-        .expect_err("mismatched RP ID hash must be rejected");
-
-        assert_eq!(error, ProofConversionError::Fido2RpIdHashMismatch);
-    }
-
-    #[test]
-    fn test_step_credential_rejects_short_fido2_authenticator_data() {
-        let error = VerificationProof::try_from(StepCredential::Fido2(Fido2Assertion {
-            rp_id_hash: vec![1; 32],
-            authenticator_data: vec![1; 31],
-            signature: vec![3],
-            credential_id: vec![4],
-        }))
-        .expect_err("short FIDO2 authenticator data must be rejected");
-
-        assert_eq!(error, ProofConversionError::Fido2AuthenticatorDataTooShort);
+        .unwrap_err();
+        assert_eq!(error, ProofConversionError::Fido2Unsupported);
     }
 }

@@ -1,19 +1,13 @@
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::time::timeout;
 use xguard_common::{
-    db::{
-        NoId,
-        models::{
-            Device, Settings, User, biometric_auth::BiometricAuth, polling_token::PollingToken,
-            settings::update_current_settings,
-        },
+    db::models::{
+        Device, Settings, User, biometric_auth::BiometricAuth, polling_token::PollingToken,
+        settings::update_current_settings,
     },
     gateway_event::GatewayCommand,
 };
-use xguard_core::{
-    enterprise::db::models::openid_provider::{
-        DirectorySyncTarget, DirectorySyncUserBehavior, OpenIdProvider, OpenIdProviderKind,
-    },
-    events::{BidiStreamEventType, EnrollmentEvent},
-};
+use xguard_core::events::{BidiStreamEventType, EnrollmentEvent};
 use xguard_proto::{
     client_types::{
         EnrollmentStartRequest, ExistingDevice, LocationMfaMode, MfaMethod, NewDevice,
@@ -21,21 +15,16 @@ use xguard_proto::{
     },
     proxy::{CoreErrorCode, CoreRequest, DeviceInfo, core_request, core_response},
 };
-use ipnetwork::IpNetwork;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::time::timeout;
 
 use super::support::{
     STRONG_PASSWORD, assert_device_config_response, assert_error_response,
     assert_error_response_full, clear_test_license, complete_proxy_handshake, configure_ldap,
-    configure_smtp, create_acl_network, create_enrollment_token, create_mfa_network,
-    create_multi_step_mfa_network, create_multi_step_mfa_network_with_steps, create_network,
-    create_polling_token, create_user, create_user_with_device, generate_totp_code,
-    insert_acl_rule_for_network, make_device_info, send_activate_user,
+    configure_smtp, create_enrollment_token, create_mfa_network, create_multi_step_mfa_network,
+    create_multi_step_mfa_network_with_steps, create_network, create_polling_token, create_user,
+    create_user_with_device, generate_totp_code, make_device_info, send_activate_user,
     send_activate_user_without_password, send_code_mfa_setup_finish, send_code_mfa_setup_start,
     send_mfa_config_authorize, send_mfa_config_start, set_test_license_business,
-    set_test_license_enterprise, setup_user_totp_mfa, start_enrollment_session,
-    totp_code_from_base32_secret,
+    setup_user_totp_mfa, start_enrollment_session, totp_code_from_base32_secret,
 };
 use crate::tests::common::{HandlerTestContext, TEST_TIMEOUT};
 
@@ -274,7 +263,7 @@ async fn test_new_device_omits_multi_step_location_for_legacy_client(
 /// client even when the step has no legacy equivalent, and must omit a multi-step location.
 #[sqlx::test]
 #[allow(deprecated)]
-async fn test_new_device_sends_single_step_location_on_free_tier(
+async fn test_new_device_sends_multi_step_locations_without_license(
     _: PgPoolOptions,
     options: PgConnectOptions,
 ) {
@@ -285,7 +274,7 @@ async fn test_new_device_sends_single_step_location_on_free_tier(
     let single_step =
         create_multi_step_mfa_network_with_steps(&context.pool, vec![vec![MfaMethod::Totp.into()]])
             .await;
-    create_multi_step_mfa_network(&context.pool).await;
+    let multi_step = create_multi_step_mfa_network(&context.pool).await;
 
     let user = create_user(&context.pool).await;
     let token = create_enrollment_token(&context.pool, user.id, Some(user.id)).await;
@@ -310,7 +299,11 @@ async fn test_new_device_sends_single_step_location_on_free_tier(
         .iter()
         .map(|config| config.network_name.as_str())
         .collect();
-    assert_eq!(names, vec![single_step.name.as_str()]);
+    // XGuard has no license tiers: multi-step locations are sent as well.
+    assert_eq!(
+        names,
+        vec![single_step.name.as_str(), multi_step.name.as_str()]
+    );
     let config = &cfg.configs[0];
     assert_eq!(config.location_mfa_mode, None);
     assert_eq!(config.steps.len(), 1);
@@ -1461,57 +1454,6 @@ async fn test_activate_user_without_password_returns_error_for_local_user(
     context.finish().await.expect_server_finished().await;
 }
 
-/// When enrolling a new device on a location with the ACL AllowedIPs toggle
-/// enabled, the returned config should contain both manual and ACL-derived IPs.
-#[sqlx::test]
-async fn test_enrollment_config_includes_acl_allowed_ips(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
-    let mut context = HandlerTestContext::new(options).await;
-    complete_proxy_handshake(&mut context).await;
-
-    set_test_license_enterprise();
-
-    let network = create_acl_network(&context.pool).await;
-    let acl_destination: IpNetwork = "192.168.1.0/24".parse().unwrap();
-    insert_acl_rule_for_network(&context.pool, network.id, acl_destination).await;
-
-    let user = create_user(&context.pool).await;
-    let token = create_enrollment_token(&context.pool, user.id, Some(user.id)).await;
-    start_enrollment_session(&mut context, &token.id).await;
-
-    let pubkey = "AA0aJzRBTltodYKPnKm2w9Dd6vcEER4rOEVSX2x5hpM=";
-    context.mock_proxy().send_request(CoreRequest {
-        id: 1,
-        device_info: Some(make_device_info()),
-        payload: Some(core_request::Payload::NewDevice(NewDevice {
-            name: "ACL Test Device".to_owned(),
-            pubkey: pubkey.to_owned(),
-            token: Some(token.id.clone()),
-        })),
-    });
-
-    let response = context.mock_proxy_mut().recv_outbound().await;
-    let cfg = assert_device_config_response(&response);
-    assert!(
-        !cfg.configs.is_empty(),
-        "DeviceConfigResponse should contain at least one network config"
-    );
-
-    let allowed_ips = &cfg.configs[0].allowed_ips;
-    assert!(
-        allowed_ips.contains("10.100.0.0/16"),
-        "config allowed_ips should contain manual IP 10.100.0.0/16, got: {allowed_ips}"
-    );
-    assert!(
-        allowed_ips.contains("192.168.1.0/24"),
-        "config allowed_ips should contain ACL-derived IP 192.168.1.0/24, got: {allowed_ips}"
-    );
-
-    context.finish().await.expect_server_finished().await;
-}
-
 /// A location's `client_mtu` must reach the client as `DeviceConfig.mtu`, and a location
 /// that leaves it unset must send no MTU at all so the client keeps picking its own.
 #[sqlx::test]
@@ -1563,92 +1505,6 @@ async fn test_enrollment_config_carries_client_mtu(_: PgPoolOptions, options: Pg
     assert_eq!(
         without_mtu.mtu, None,
         "a location without client_mtu should send no MTU"
-    );
-
-    context.finish().await.expect_server_finished().await;
-}
-
-/// An OIDC-sourced user whose provider has `disable_password_management` enabled must:
-///  - be able to complete activation WITHOUT supplying a password, and
-///  - remain without a local password hash after activation (authentication is delegated to
-///    the external IdP).
-#[sqlx::test]
-async fn test_activate_oidc_user_with_password_management_disabled_skips_password(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
-    let mut context = HandlerTestContext::new(options).await;
-    complete_proxy_handshake(&mut context).await;
-
-    // Create an OIDC provider with disable_password_management enabled.
-    OpenIdProvider::<NoId> {
-        id: NoId,
-        name: "test-oidc".to_owned(),
-        base_url: "https://test-oidc.example.com".to_owned(),
-        kind: OpenIdProviderKind::Custom,
-        client_id: "client-id".to_owned(),
-        client_secret: "client-secret".to_owned().into(),
-        display_name: Some("Test OIDC".to_owned()),
-        google_service_account_key: None,
-        google_service_account_email: None,
-        admin_email: None,
-        directory_sync_enabled: false,
-        directory_sync_interval: 600,
-        directory_sync_user_behavior: DirectorySyncUserBehavior::Keep,
-        directory_sync_admin_behavior: DirectorySyncUserBehavior::Keep,
-        directory_sync_target: DirectorySyncTarget::All,
-        okta_private_jwk: None,
-        okta_dirsync_client_id: None,
-        directory_sync_group_match: Vec::new(),
-        jumpcloud_api_key: None,
-        prefetch_users: false,
-        disable_password_management: true,
-        directory_sync_user_groups: None,
-    }
-    .save(&context.pool)
-    .await
-    .expect("failed to save OIDC provider");
-
-    // Create an OIDC-sourced user with no local password.
-    let mut user = create_user(&context.pool).await;
-    user.openid_sub = Some("oidc-sub-123".to_owned());
-    // Set enrollment_pending so is_enrolled() returns false even though openid_sub is set.
-    user.enrollment_pending = true;
-    user.save(&context.pool)
-        .await
-        .expect("failed to save OIDC user");
-    assert!(!user.has_password());
-
-    let token = create_enrollment_token(&context.pool, user.id, Some(user.id)).await;
-    start_enrollment_session(&mut context, &token.id).await;
-    // Drain the EnrollmentStarted bidi event.
-    let _ = timeout(TEST_TIMEOUT, context.bidi_events_rx.recv()).await;
-
-    // Activation WITHOUT a password must succeed.
-    let response = send_activate_user_without_password(&mut context, &token.id, None).await;
-    match &response.payload {
-        Some(core_response::Payload::Empty(())) => {}
-        Some(core_response::Payload::CoreError(e)) => {
-            panic!("expected Empty, got CoreError: {}", e.message)
-        }
-        other => panic!(
-            "expected Empty response, got: {:?}",
-            other.as_ref().map(std::mem::discriminant)
-        ),
-    }
-
-    // The user must remain without a local password hash, and be enrolled.
-    let updated = User::find_by_username(&context.pool, &user.username)
-        .await
-        .expect("db query failed")
-        .expect("user not found");
-    assert!(
-        !updated.has_password(),
-        "externally-managed OIDC user must not gain a local password hash during enrollment"
-    );
-    assert!(
-        !updated.enrollment_pending,
-        "enrollment_pending must be cleared after activation"
     );
 
     context.finish().await.expect_server_finished().await;

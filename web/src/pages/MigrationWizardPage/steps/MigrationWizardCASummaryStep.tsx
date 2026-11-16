@@ -5,9 +5,9 @@ import api from '../../../shared/api/api';
 import { ActionCard } from '../../../shared/components/ActionCard/ActionCard';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
+import { downloadFile } from '../../../shared/utils/download';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
-import { downloadFile } from '../../../shared/utils/download';
 import caIcon from '../../SetupPage/assets/ca.png';
 import { useMigrationWizardStore } from '../store/useMigrationWizardStore';
 

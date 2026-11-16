@@ -1,10 +1,9 @@
+use sqlx::PgPool;
+use tokio::sync::mpsc::{UnboundedSender, error::SendError};
+use tonic::Status;
 use xguard_common::db::models::{Settings, User};
 use xguard_core::{
     db::models::enrollment::{PASSWORD_RESET_TOKEN_TYPE, Token},
-    enterprise::{
-        db::models::{enterprise_settings::EnterpriseSettings, openid_provider::OpenIdProvider},
-        ldap::utils::ldap_change_password,
-    },
     events::{
         BidiRequestContext, BidiStreamEvent, BidiStreamEventType, LdapSyncEventType,
         PasswordResetEvent,
@@ -20,13 +19,12 @@ use xguard_proto::proxy::{
     DeviceInfo, PasswordResetInitializeRequest, PasswordResetRequest, PasswordResetStartRequest,
     PasswordResetStartResponse,
 };
-use sqlx::PgPool;
-use tokio::sync::mpsc::{UnboundedSender, error::SendError};
-use tonic::Status;
 
 pub(crate) struct PasswordResetServer {
     pool: PgPool,
     bidi_event_tx: UnboundedSender<BidiStreamEvent>,
+    // Reserved for the XGuard LDAP sync rebuild.
+    #[allow(dead_code)]
     ldap_tx: UnboundedSender<LdapSyncEventType>,
 }
 
@@ -100,13 +98,6 @@ impl PasswordResetServer {
     ) -> Result<(), Status> {
         debug!("Starting password reset request");
 
-        let settings = EnterpriseSettings::get(&self.pool)
-            .await
-            .map_err(|_| Status::internal("failed to read enterprise settings"))?;
-        if !settings.display_password_reset {
-            return Err(Status::permission_denied("password reset disabled"));
-        }
-
         let ip_address;
         let device_info;
         if let Some(info) = &req_device_info {
@@ -155,13 +146,7 @@ impl PasswordResetServer {
                 Status::internal("unexpected error")
             })?;
             let settings = Settings::get_current_settings();
-            let oidc_disable_password_management =
-                OpenIdProvider::current_disables_password_management(&self.pool)
-                    .await
-                    .map_err(|err| {
-                        error!("Failed to check OIDC password management flag: {err}");
-                        Status::internal("unexpected error")
-                    })?;
+            let oidc_disable_password_management = false;
 
             if user.password_management_disabled(
                 is_admin,
@@ -266,13 +251,6 @@ impl PasswordResetServer {
     ) -> Result<PasswordResetStartResponse, Status> {
         debug!("Starting password reset session.");
 
-        let settings = EnterpriseSettings::get(&self.pool)
-            .await
-            .map_err(|_| Status::internal("failed to read enterprise settings"))?;
-        if !settings.display_password_reset {
-            return Err(Status::permission_denied("password reset disabled"));
-        }
-
         let mut enrollment = Token::find_by_id(&self.pool, &request.token).await?;
 
         if enrollment.token_type != Some("PASSWORD_RESET".to_owned()) {
@@ -342,13 +320,6 @@ impl PasswordResetServer {
     ) -> Result<(), Status> {
         debug!("Starting password reset");
 
-        let settings = EnterpriseSettings::get(&self.pool)
-            .await
-            .map_err(|_| Status::internal("failed to read enterprise settings"))?;
-        if !settings.display_password_reset {
-            return Err(Status::permission_denied("password reset disabled"));
-        }
-
         let enrollment = self.validate_session(request.token.as_ref()).await?;
 
         let ip_address;
@@ -413,8 +384,6 @@ impl PasswordResetServer {
             error!("Failed to commit transaction");
             Status::internal("unexpected error")
         })?;
-
-        ldap_change_password(&mut user, &request.password, &self.pool, &self.ldap_tx).await;
 
         // Prepare event context and push the event
         let (ip, user_agent) = parse_client_ip_agent(&req_device_info).map_err(Status::internal)?;

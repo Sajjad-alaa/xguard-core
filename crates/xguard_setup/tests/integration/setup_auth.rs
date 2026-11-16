@@ -1,3 +1,6 @@
+use reqwest::StatusCode;
+use serde_json::json;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::{
     config::XGuardConfig,
     db::{
@@ -9,9 +12,6 @@ use xguard_common::{
         setup_pool,
     },
 };
-use reqwest::StatusCode;
-use serde_json::json;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::common::make_setup_test_client;
 

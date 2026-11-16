@@ -7,6 +7,10 @@ import {
   UserMfaMethod,
   type UserMfaMethodValue,
 } from '../../../../../../../shared/api/types';
+import { openModal } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
+import { useApp } from '../../../../../../../shared/hooks/useApp';
+import { useAuth } from '../../../../../../../shared/hooks/useAuth';
 import { Badge } from '../../../../../../../shared/xguard-ui/components/Badge/Badge';
 import { Divider } from '../../../../../../../shared/xguard-ui/components/Divider/Divider';
 import { IconButtonMenu } from '../../../../../../../shared/xguard-ui/components/IconButtonMenu/IconButtonMenu';
@@ -16,10 +20,6 @@ import type {
 } from '../../../../../../../shared/xguard-ui/components/Menu/types';
 import { Snackbar } from '../../../../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
-import { openModal } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
-import { useApp } from '../../../../../../../shared/hooks/useApp';
-import { useAuth } from '../../../../../../../shared/hooks/useAuth';
 import { ProfileCard } from '../../../../components/ProfileCard/ProfileCard';
 import { useUserProfile } from '../../../../hooks/useUserProfilePage';
 import { AuthCardEmptyState } from './components/AuthCardEmptyState/AuthCardEmptyState';

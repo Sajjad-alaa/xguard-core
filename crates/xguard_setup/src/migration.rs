@@ -10,13 +10,19 @@ use axum::{
     serve,
 };
 use axum_extra::extract::cookie::Key;
+use semver::Version;
+use sqlx::PgPool;
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, mpsc, oneshot::Sender},
+};
+use tracing::{info, instrument};
 use xguard_common::{
     VERSION, db::models::Settings, gateway_event::GatewayCommand, types::proxy::ProxyControlMessage,
 };
 use xguard_core::{
     appstate::AppState,
     db::AppEvent,
-    enterprise::handlers::openid_login::{auth_callback, get_auth_info},
     events::ApiEvent,
     handle_404,
     handlers::{
@@ -37,20 +43,13 @@ use xguard_core::{
     version::IncompatibleComponents,
 };
 use xguard_web_ui::{index, svg, web_asset};
-use semver::Version;
-use sqlx::PgPool;
-use tokio::{
-    net::TcpListener,
-    sync::{broadcast, mpsc, oneshot::Sender},
-};
-use tracing::{info, instrument};
 
 use crate::handlers::{
     auto_wizard::{get_external_ssl_info, get_internal_ssl_info},
     initial_wizard::{create_ca, get_ca, upload_ca},
     migration::{
         finish_setup, get_migration_state, migration_set_external_url_settings,
-        migration_set_internal_url_settings, repair_ldap_migration, update_migration_state,
+        migration_set_internal_url_settings, update_migration_state,
     },
     version::get_version,
 };
@@ -147,7 +146,6 @@ pub fn build_migration_webapp(
                             "/state",
                             get(get_migration_state).put(update_migration_state),
                         )
-                        .route("/ldap/repair", post(repair_ldap_migration))
                         .route("/ca", post(create_ca).get(get_ca))
                         .route("/ca/upload", post(upload_ca))
                         .route("/finish", post(finish_setup))
@@ -160,12 +158,6 @@ pub fn build_migration_webapp(
                             post(migration_set_external_url_settings).get(get_external_ssl_info),
                         ),
                 ),
-        )
-        .nest(
-            "/api/v1/openid",
-            Router::new()
-                .route("/callback", post(auth_callback))
-                .route("/auth_info", get(get_auth_info)),
         )
         .fallback_service(get(handle_404))
         .with_state(app_state)

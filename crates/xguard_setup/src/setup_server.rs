@@ -9,6 +9,10 @@ use axum::{
     routing::{get, post},
     serve,
 };
+use semver::Version;
+use sqlx::PgPool;
+use tokio::{net::TcpListener, sync::oneshot::Sender as OneshotSender};
+use tracing::{info, instrument};
 use xguard_common::VERSION;
 use xguard_core::{
     handle_404,
@@ -20,10 +24,6 @@ use xguard_core::{
     health_check,
 };
 use xguard_web_ui::{index, svg, web_asset};
-use semver::Version;
-use sqlx::PgPool;
-use tokio::{net::TcpListener, sync::oneshot::Sender as OneshotSender};
-use tracing::{info, instrument};
 
 use crate::handlers::{
     auto_wizard::{

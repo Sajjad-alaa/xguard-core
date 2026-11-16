@@ -1,4 +1,6 @@
 use axum::http::StatusCode;
+use thiserror::Error;
+use tokio::sync::mpsc::error::SendError;
 use xguard_common::{
     db::models::{
         DeviceError, ModelError, WireguardNetworkError,
@@ -8,16 +10,10 @@ use xguard_common::{
     types::UrlParseError,
 };
 use xguard_static_ip::error::StaticIpError;
-use thiserror::Error;
-use tokio::sync::mpsc::error::SendError;
 
 use crate::{
     cert_settings::CertSettingsError,
     db::models::enrollment::TokenError,
-    enterprise::{
-        activity_log_stream::error::ActivityLogStreamError, db::models::acl::AclError,
-        firewall::FirewallError, license::LicenseError,
-    },
     events::ApiEvent,
     handlers::{openid_flow::OidcFlowError, user::ValidationError},
     location_management::LocationManagementError,
@@ -70,18 +66,10 @@ pub enum WebError {
     BadRequest(String),
     #[error(transparent)]
     TemplateError(TemplateError),
-    #[error("License error: {0}")]
-    LicenseError(#[from] LicenseError),
     #[error("Failed to get client IP address")]
     ClientIpError,
-    #[error("ACL error: {0}")]
-    AclError(#[from] AclError),
-    #[error("Firewall config error: {0}")]
-    FirewallError(#[from] FirewallError),
     #[error("API event channel error: {0}")]
     ApiEventChannelError(#[from] SendError<ApiEvent>),
-    #[error("Activity log stream error: {0}")]
-    ActivityLogStreamError(#[from] ActivityLogStreamError),
     #[error(transparent)]
     CertificateError(#[from] xguard_certs::CertificateError),
     #[error(transparent)]
@@ -149,8 +137,7 @@ impl From<MailError> for WebError {
             MailError::Lettre(_)
             | MailError::Address(_)
             | MailError::Smtp(_)
-            | MailError::InvalidPort(_)
-            | MailError::OAuth2(_) => Self::MailSendFailed,
+            | MailError::InvalidPort(_) => Self::MailSendFailed,
         }
     }
 }
@@ -259,7 +246,6 @@ impl From<LocationManagementError> for WebError {
     fn from(err: LocationManagementError) -> Self {
         error!("{err}");
         match err {
-            LocationManagementError::FirewallError(firewall_error) => firewall_error.into(),
             LocationManagementError::DbError(error) => error.into(),
             LocationManagementError::WireguardNetworkError(wireguard_network_error) => {
                 wireguard_network_error.into()
@@ -283,10 +269,6 @@ impl From<UserManagementError> for WebError {
             UserManagementError::Network(e) => {
                 error!("WireGuard network error: {e}");
                 Self::from(e)
-            }
-            UserManagementError::Firewall(e) => {
-                error!("Firewall error: {e}");
-                Self::FirewallError(e)
             }
         }
     }

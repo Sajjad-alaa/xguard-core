@@ -1,24 +1,12 @@
 import dayjs from 'dayjs';
 import { cloneDeep } from 'lodash-es';
-import { isPresent } from '../xguard-ui/utils/isPresent';
-import { narrowLicenseSupport } from '../utils/license';
 import { removeEmptyStrings } from '../utils/removeEmptyStrings';
 import { client } from './api-client';
 import { fetchAllPages, fetchPage } from './pagination';
 import type {
-  AclAlias,
-  AclCount,
-  AclDestination,
-  AclRule,
   ActivityLogEvent,
   ActivityLogEventDetails,
   ActivityLogRequestParams,
-  ActivityLogStream,
-  AddAclAliasRequest,
-  AddAclDestination,
-  AddAclRuleRequest,
-  AddApiTokenRequest,
-  AddApiTokenResponse,
   AddAuthKeyRequest,
   AddDeviceRequest,
   AddDeviceResponse,
@@ -27,13 +15,10 @@ import type {
   AddNetworkDeviceResponse,
   AddNetworkLocation,
   AddOpenIdClient,
-  AddOpenIdProvider,
   AddUserRequest,
   AddUsersToGroupsRequest,
   AddWebhookRequest,
   AdminChangeUserPasswordRequest,
-  ApiDevicePosture,
-  ApiToken,
   ApplicationInfo,
   AssignStaticIpsRequest,
   AuthKey,
@@ -44,23 +29,15 @@ import type {
   CheckReservedParams,
   CheckReservedResponse,
   CountResponse,
-  CreateActivityLogStreamRequest,
   CreateAdminRequest,
   CreateCARequest,
   CreateGroupRequest,
   CreateMfaFlowRequest,
-  DeleteApiTokenRequest,
   DeleteAuthKeyRequest,
   Device,
   DeviceLocationIpsResponse,
-  DevicePostureListFilters,
-  DevicePostureVersionMetadata,
   Edge,
   EdgeInfo,
-  EditAclAliasRequest,
-  EditAclDestination,
-  EditAclRuleRequest,
-  EditDevicePostureRequest,
   EditGroupRequest,
   EditNetworkDeviceRequest,
   EditNetworkLocationRequest,
@@ -74,11 +51,8 @@ import type {
   GetInternalSslInfoResponse,
   GroupInfo,
   IpValidation,
-  LdapDryRunResult,
   LdapMigrationRepairResponse,
-  LicenseCheckResponse,
   LicenseInfo,
-  LicenseInfoResponse,
   LocationConnectedNetworkDevice,
   LocationConnectedNetworkDevicesRequest,
   LocationConnectedUser,
@@ -100,11 +74,8 @@ import type {
   MigrationWizardStateResponse,
   NetworkDevice,
   NetworkLocation,
-  OpenIdAuthInfo,
   OpenIdClient,
-  OpenIdProvidersResponse,
   PublicKeyCredentialJSON,
-  RenameApiTokenRequest,
   RenameAuthKeyRequest,
   ResourceDisplay,
   SessionInfo,
@@ -120,12 +91,10 @@ import type {
   SetEdgeExternalUrlSettingsResponse,
   SetGeneralConfigRequest,
   Settings,
-  SettingsEnterprise,
   SettingsEssentials,
   SetupAutoAdoptionResponse,
   StartEnrollmentRequest,
   StartEnrollmentResponse,
-  TestDirectorySyncResponse,
   TotpInitResponse,
   UpdateInfo,
   UpdateMfaFlowRequest,
@@ -186,10 +155,6 @@ const api = {
     setAutoAdoptionMfaSettings: (data: SetAutoAdoptionMfaSettingsRequest) =>
       client.post('/initial_setup/auto_wizard/mfa_settings', data),
     finishSetup: () => client.post('/initial_setup/finish'),
-  },
-  openid: {
-    authInfo: () => client.get<OpenIdAuthInfo>(`/openid/auth_info`),
-    callback: (data: unknown) => client.post<LoginResponse>(`/openid/callback`, data),
   },
   openIdClient: {
     getOpenIdClients: () => fetchAllPages<OpenIdClient>(`/oauth`),
@@ -253,14 +218,6 @@ const api = {
       client.post(`/user/${username}/auth_key/${id}/rename`, data),
     deleteAuthKey: ({ username, id }: DeleteAuthKeyRequest) =>
       client.delete(`/user/${username}/auth_key/${id}`),
-    addApiToken: ({ username, ...data }: AddApiTokenRequest) =>
-      client.post<AddApiTokenResponse>(`/user/${username}/api_token`, data),
-    getApiTokens: (username: string) =>
-      client.get<ApiToken[]>(`/user/${username}/api_token`),
-    renameApiToken: ({ username, id, ...data }: RenameApiTokenRequest) =>
-      client.post(`/user/${username}/api_token/${id}/rename`, data),
-    deleteApiToken: ({ username, id }: DeleteApiTokenRequest) =>
-      client.delete(`/user/${username}/api_token/${id}`),
     disableMfa: (username: string) => client.delete(`/user/${username}/mfa`),
     activeStateChange: async ({
       active,
@@ -461,45 +418,11 @@ const api = {
     validateUserDeviceIp: (username: string, data: ValidateIpAssignmentRequest) =>
       client.post(`/device/user/${username}/ip/validate`, data),
   },
-  devicePosture: {
-    addDevicePosture: (data: EditDevicePostureRequest) =>
-      client.post<ApiDevicePosture>('/device-posture', removeEmptyStrings(data)),
-    deleteDevicePosture: (id: number) => client.delete(`/device-posture/${id}`),
-    duplicateDevicePosture: (id: number) =>
-      client.post<ApiDevicePosture>(`/device-posture/${id}/duplicate`),
-    editDevicePosture: (id: number, data: EditDevicePostureRequest) =>
-      client.put<ApiDevicePosture>(`/device-posture/${id}`, removeEmptyStrings(data)),
-    getDevicePosture: (id: number) =>
-      client.get<ApiDevicePosture>(`/device-posture/${id}`),
-    getDevicePostureVersionMetadata: () =>
-      client.get<DevicePostureVersionMetadata>('/device-posture/versions'),
-    getDevicePostures: () => fetchAllPages<ApiDevicePosture>('/device-posture'),
-    getDevicePosturesPage: (params?: DevicePostureListFilters) =>
-      fetchPage<ApiDevicePosture>('/device-posture', params),
-    setLocationsForDevicePosture: (id: number, locations: number[]) =>
-      client.put<number[]>(`/device-posture/${id}/locations`, { locations }),
-  },
   settings: {
     getSettings: () => client.get<Settings>('/settings'),
     editSettings: (data: Settings) => client.put('/settings', data),
     patchSettings: (data: Partial<Settings>) => client.patch('/settings', data),
-    getEnterpriseSettings: () => client.get<SettingsEnterprise>('/settings_enterprise'),
-    patchEnterpriseSettings: (data: Partial<SettingsEnterprise>) =>
-      client.patch('/settings_enterprise', data),
     getSettingsEssentials: () => client.get<SettingsEssentials>('/settings_essentials'),
-    getLdapConnectionStatus: () => client.get(`/ldap/test`),
-    testLdapSettings: (data: Settings) => client.post('/ldap/test', data),
-    ldapDryRun: (data: Settings) => client.post<LdapDryRunResult>('/ldap/dry_run', data),
-  },
-  openIdProvider: {
-    getOpenIdProvider: () =>
-      client.get<OpenIdProvidersResponse>('/openid/provider/current'),
-    addOpenIdProvider: (data: AddOpenIdProvider) => client.post('/openid/provider', data),
-    deleteOpenIdProvider: (name: string) => client.delete(`/openid/provider/${name}`),
-    editOpenIdProvider: (data: AddOpenIdProvider) =>
-      client.put(`/openid/provider/${data.name}`, data),
-    testDirectorySync: () =>
-      client.get<TestDirectorySyncResponse>(`/test_directory_sync`),
   },
   mail: {
     sendTestEmail: (data: { to: string }) => client.post('/mail/test', data),
@@ -548,66 +471,6 @@ const api = {
       client.put<MfaFlowDetailResponse>(`/mfa-flow/${id}`, data),
     delete: (id: number) => client.delete(`/mfa-flow/${id}`),
   },
-  acl: {
-    destination: {
-      getCount: () => client.get<AclCount>('acl/destination/count'),
-      getDestinations: () => client.get<AclDestination[]>('/acl/destination'),
-      getDestination: (destinationId: number | string) =>
-        client.get<AclDestination>(`/acl/destination/${destinationId}`),
-      addDestination: (data: AddAclDestination) => client.post(`/acl/destination`, data),
-      editDestination: (data: EditAclDestination) =>
-        client.put(`/acl/destination/${data.id}`, data),
-      deleteDestination: (destinationId: number | string) =>
-        client.delete(`/acl/destination/${destinationId}`),
-      applyDestinations: (destinations: number[]) =>
-        client.put(`/acl/destination/apply`, {
-          destinations,
-        }),
-      bulkDeleteDestinations: (destinations: number[]) =>
-        client.post('/acl/destination/bulk-delete', { destinations }),
-    },
-    alias: {
-      getCount: () => client.get<AclCount>('acl/alias/count'),
-      getAliases: () => client.get<AclAlias[]>('/acl/alias'),
-      getAlias: (aliasId: number | string) =>
-        client.get<AclAlias>(`/acl/alias/${aliasId}`),
-      addAlias: (data: AddAclAliasRequest) => client.post(`/acl/alias`, data),
-      editAlias: (data: EditAclAliasRequest) => client.put(`/acl/alias/${data.id}`, data),
-      deleteAlias: (aliasId: number | string) => client.delete(`/acl/alias/${aliasId}`),
-      applyAliases: (aliases: number[]) =>
-        client.put(`/acl/alias/apply`, {
-          aliases,
-        }),
-      bulkDeleteAliases: (aliases: number[]) =>
-        client.post('/acl/alias/bulk-delete', { aliases }),
-    },
-    rule: {
-      getCount: () => client.get<AclCount>('acl/rule/count'),
-      getRules: () => fetchAllPages<AclRule>(`/acl/rule`),
-      getRule: (ruleId: number | string) => client.get<AclRule>(`/acl/rule/${ruleId}`),
-      addRule: (data: AddAclRuleRequest) => client.post(`/acl/rule`, data),
-      editRule: (data: EditAclRuleRequest) => client.put(`/acl/rule/${data.id}`, data),
-      applyRules: (rules: number[]) =>
-        client.put(`/acl/rule/apply`, {
-          rules,
-        }),
-      deleteRule: (ruleId: number | string) => client.delete(`/acl/rule/${ruleId}`),
-      bulkEnableRules: (rules: number[]) =>
-        client.post('/acl/rule/bulk-enable', { rules }),
-      bulkDisableRules: (rules: number[]) =>
-        client.post('/acl/rule/bulk-disable', { rules }),
-      bulkDeleteRules: (rules: number[]) =>
-        client.post('/acl/rule/bulk-delete', { rules }),
-    },
-  },
-  activityLogStream: {
-    getStreams: () => client.get<ActivityLogStream[]>('/activity_log_stream'),
-    createStream: (data: CreateActivityLogStreamRequest) =>
-      client.post('/activity_log_stream', data),
-    updateStream: (id: number, data: CreateActivityLogStreamRequest) =>
-      client.put(`/activity_log_stream/${id}`, data),
-    deleteStream: (id: number) => client.delete(`/activity_log_stream/${id}`),
-  },
   migration: {
     finish: () => client.post(`/migration/finish`),
     ca: {
@@ -641,24 +504,13 @@ const api = {
     check: (params: CheckReservedParams) =>
       client.get<CheckReservedResponse>('/reserved', { params }),
   },
-  checkLicense: (data: { license: string }) =>
-    client.post<LicenseCheckResponse>('/license/check', data),
   getSessionInfo: () => client.get<SessionInfo>(`/session-info`),
   getActivityLog: (data?: ActivityLogRequestParams) =>
     fetchPage<ActivityLogEvent>(`/activity_log`, data),
   getActivityLogEvent: (id: number) =>
     client.get<ActivityLogEventDetails>(`/activity_log/${id}`),
-  getLicenseInfo: () =>
-    client
-      .get<LicenseInfoResponse>(`/enterprise_info`)
-      .then((res): LicenseInfo | null => {
-        const licenseInfo = res.data?.license_info;
-        if (!isPresent(licenseInfo)) return null;
-        return {
-          ...licenseInfo,
-          support_type_narrow: narrowLicenseSupport(licenseInfo),
-        };
-      }),
+  // XGuard has no license; kept so existing queries resolve without a request.
+  getLicenseInfo: (): Promise<LicenseInfo | null> => Promise.resolve(null),
   support: {
     getSupportData: () => client.get<object>('/support/configuration'),
     getLogs: () => client.get<string>('/support/logs'),

@@ -11,6 +11,24 @@ use axum::{
     http::StatusCode,
     response::sse::{Event, KeepAlive, Sse},
 };
+use futures::Stream;
+use reqwest::Url;
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use tokio::{
+    sync::{
+        mpsc::{Sender, UnboundedReceiver, UnboundedSender, unbounded_channel},
+        oneshot,
+    },
+    time::{Instant, sleep_until, timeout},
+};
+use tokio_stream::StreamExt;
+use tonic::{
+    Request, Status,
+    service::Interceptor,
+    transport::{Certificate, ClientTlsConfig, Endpoint},
+};
+use tracing::Instrument;
 use xguard_certs::der_to_pem;
 use xguard_common::{
     VERSION,
@@ -36,31 +54,12 @@ use xguard_proto::{
     proxy::{AcmeStep, proxy_setup_client::ProxySetupClient},
 };
 use xguard_version::{Version, client::ClientVersionInterceptor};
-use futures::Stream;
-use reqwest::Url;
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
-use tokio::{
-    sync::{
-        mpsc::{Sender, UnboundedReceiver, UnboundedSender, unbounded_channel},
-        oneshot,
-    },
-    time::{Instant, sleep_until, timeout},
-};
-use tokio_stream::StreamExt;
-use tonic::{
-    Request, Status,
-    service::Interceptor,
-    transport::{Certificate, ClientTlsConfig, Endpoint},
-};
-use tracing::Instrument;
 
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
 use crate::{
     auth::{AdminRole, SessionInfo},
     cert_settings::ensure_https,
-    enterprise::{LicenseFeature, has_enterprise_access},
     error::WebError,
     handlers::settings::broadcast_public_settings,
     letsencrypt::{ACME_TIMEOUT, acme_step_name, call_proxy_trigger_acme, parse_cert_expiry},
@@ -251,8 +250,7 @@ impl SetupFlow {
         (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn setup_proxy_tls_stream(
@@ -268,25 +266,6 @@ pub async fn setup_proxy_tls_stream(
     let inner_stream = async_stream::stream! {
         let mut flow = SetupFlow::new(log_rx, inner_log_buffer.clone());
 
-        // check if tries to connect more then 1 proxy without active enterprise license
-        if !has_enterprise_access(Some(LicenseFeature::ComponentHa)) {
-            match Proxy::list(&pool).await {
-                Ok(current_proxies) => {
-                    if !current_proxies.is_empty() {
-                        yield Ok(flow.error(
-                            "Enterprise license is required for connecting more than one Edge.",
-                        ));
-                        return;
-                    }
-                }
-                Err(e) => {
-                    yield Ok(flow.error(&format!("Failed to query existing proxies: {e}")));
-                    return;
-                }
-            }
-        }
-
-        debug!("License check passed");
 
         let ip_or_domain = strip_scheme(&request.ip_or_domain);
 
@@ -746,16 +725,6 @@ async fn perform_gateway_adoption(
         return Err("grpc_port must not be 0".to_owned());
     }
 
-    // License check: non-enterprise installs are limited to one gateway per network.
-    if !has_enterprise_access(Some(LicenseFeature::ComponentHa)) {
-        let gateways = Gateway::find_by_location_id(pool, network_id)
-            .await
-            .map_err(|e| format!("Failed to query existing Gateways: {e}"))?;
-        if !gateways.is_empty() {
-            return Err("Enterprise license is required.".to_owned());
-        }
-    }
-
     // Step 1: Check configuration
     step(SetupStep::CheckingConfiguration);
 
@@ -952,9 +921,8 @@ async fn perform_gateway_adoption(
         .ca_key_der
         .ok_or_else(|| "CA key pair not found in settings".to_owned())?;
 
-    let ca =
-        xguard_certs::CertificateAuthority::from_cert_der_key_pair(&ca_cert_der, &ca_key_pair)
-            .map_err(|e| format!("Failed to create CA: {e}"))?;
+    let ca = xguard_certs::CertificateAuthority::from_cert_der_key_pair(&ca_cert_der, &ca_key_pair)
+        .map_err(|e| format!("Failed to create CA: {e}"))?;
 
     debug!("Certificate authority loaded and ready to sign certificates");
 
@@ -1039,8 +1007,7 @@ async fn perform_gateway_adoption(
         (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn setup_gateway_tls_stream(
@@ -1168,8 +1135,7 @@ pub struct GatewayAdoptRequest {
         (status = 500, description = "Unable to adopt gateway.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn adopt_gateway(
@@ -1278,8 +1244,7 @@ async fn apply_acme_certificate(
         (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn stream_proxy_acme(
@@ -1455,6 +1420,8 @@ pub async fn stream_proxy_acme(
 
 #[cfg(test)]
 mod tests {
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use tokio::sync::mpsc;
     use xguard_common::db::{
         models::{
             Settings,
@@ -1462,8 +1429,6 @@ mod tests {
         },
         setup_pool,
     };
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-    use tokio::sync::mpsc;
 
     use super::*;
 

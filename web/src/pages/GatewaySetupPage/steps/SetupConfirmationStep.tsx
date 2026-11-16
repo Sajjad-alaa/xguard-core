@@ -8,22 +8,18 @@ import type { MigrationWizardLocationState } from '../../../shared/api/types';
 import { ActionCard } from '../../../shared/components/ActionCard/ActionCard';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { AppText } from '../../../shared/xguard-ui/components/AppText/AppText';
-import { Button } from '../../../shared/xguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
-import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
-import {
-  TextStyle,
-  ThemeSpacing,
-  ThemeVariable,
-} from '../../../shared/xguard-ui/types';
 import {
   getLocationsDisplayQueryOptions,
   getMigrationStateQueryOptions,
   getSessionInfoQueryOptions,
 } from '../../../shared/query';
 import { migrationWizardFinishPromise } from '../../../shared/wizard/migrationWizardFinishPromise';
+import { AppText } from '../../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
 import { useMigrationWizardStore } from '../../MigrationWizardPage/store/useMigrationWizardStore';
 import { MigrationWizardStep } from '../../MigrationWizardPage/types';
 import addMoreImage from '../assets/add_more.svg';

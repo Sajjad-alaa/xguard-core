@@ -5,13 +5,6 @@ use std::{
     time::Duration,
 };
 
-use xguard_certs::{Csr, DnType, generate_key_pair};
-use xguard_common::db::models::gateway::Gateway;
-use xguard_core::setup_logs::{CoreSetupLogLayer, MAX_CORE_LOG_LINES, scope_setup_logs};
-use xguard_proto::{
-    common::{CertBundle, CertificateInfo, DerPayload, LogEntry},
-    gateway::gateway_setup_server::{GatewaySetup, GatewaySetupServer},
-};
 use reqwest::{StatusCode, header::CONTENT_TYPE};
 use serde_json::Value;
 use sqlx::{
@@ -28,6 +21,13 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{Request, Response, Status, transport::Server};
 use tracing::{debug, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use xguard_certs::{Csr, DnType, generate_key_pair};
+use xguard_common::db::models::gateway::Gateway;
+use xguard_core::setup_logs::{CoreSetupLogLayer, MAX_CORE_LOG_LINES, scope_setup_logs};
+use xguard_proto::{
+    common::{CertBundle, CertificateInfo, DerPayload, LogEntry},
+    gateway::gateway_setup_server::{GatewaySetup, GatewaySetupServer},
+};
 
 use super::common::{make_network, make_test_client, set_enterprise_license, setup_ca, setup_pool};
 use crate::api::common::client::TestClient;

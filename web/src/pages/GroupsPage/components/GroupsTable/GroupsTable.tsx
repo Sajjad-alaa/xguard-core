@@ -13,6 +13,8 @@ import type {
   NetworkLocation,
   User,
 } from '../../../../shared/api/types';
+import { openModal } from '../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import { Badge } from '../../../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import type { MenuItemProps } from '../../../../shared/xguard-ui/components/Menu/types';
@@ -23,8 +25,6 @@ import { TableCell } from '../../../../shared/xguard-ui/components/table/TableCe
 import { TableEditCell } from '../../../../shared/xguard-ui/components/table/TableEditCell/TableEditCell';
 import { TableTop } from '../../../../shared/xguard-ui/components/table/TableTop/TableTop';
 import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
-import { openModal } from '../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 
 type Props = {
   groups: GroupInfo[];

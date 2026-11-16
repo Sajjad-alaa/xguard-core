@@ -30,8 +30,7 @@ use crate::{
         (status = 500, description = "Unable to check for updates.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn check_new_version(_admin: AdminRole, session: SessionInfo) -> ApiResult {
@@ -66,8 +65,7 @@ pub(crate) async fn check_new_version(_admin: AdminRole, session: SessionInfo) -
         (status = 500, description = "Unable to list outdated components.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn outdated_components(

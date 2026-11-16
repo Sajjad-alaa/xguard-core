@@ -1,3 +1,7 @@
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
 use xguard_common::{
     db::{
         Id,
@@ -13,10 +17,6 @@ use xguard_core::events::ApiEventType;
 use xguard_proto::{
     client_types::MfaMethod,
     proxy::{CoreErrorCode, core_response},
-};
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
 };
 
 use super::support::{

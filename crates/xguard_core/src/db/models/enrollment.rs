@@ -1,6 +1,11 @@
 use std::{fmt, time::Duration};
 
 use chrono::{NaiveDateTime, TimeDelta, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::{PgConnection, PgExecutor, PgPool, query, query_as};
+use tera::Context;
+use thiserror::Error;
+use tonic::{Code, Status};
 use xguard_common::{
     VERSION,
     db::{
@@ -10,11 +15,6 @@ use xguard_common::{
     random::gen_alphanumeric,
     types::UrlParseError,
 };
-use serde::{Deserialize, Serialize};
-use sqlx::{PgConnection, PgExecutor, PgPool, query, query_as};
-use tera::Context;
-use thiserror::Error;
-use tonic::{Code, Status};
 
 use crate::mail::templates;
 
@@ -681,8 +681,8 @@ fn enrollment_welcome_email(settings: &Settings) -> Result<String, TokenError> {
 
 #[cfg(test)]
 mod tests {
-    use xguard_common::db::setup_pool;
     use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use xguard_common::db::setup_pool;
 
     use super::*;
 

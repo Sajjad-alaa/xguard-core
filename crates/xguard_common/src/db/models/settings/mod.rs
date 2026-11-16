@@ -605,16 +605,10 @@ impl Settings {
         let url = self.parse_xguard_url()?;
         let rp_id = self.webauthn_rp_id()?;
         let builder = WebauthnBuilder::new(&rp_id, &url).map_err(|err| {
-            SettingsUrlError::InvalidWebauthnConfiguration(
-                self.xguard_url.clone(),
-                err.to_string(),
-            )
+            SettingsUrlError::InvalidWebauthnConfiguration(self.xguard_url.clone(), err.to_string())
         })?;
         builder.build().map_err(|err| {
-            SettingsUrlError::InvalidWebauthnConfiguration(
-                self.xguard_url.clone(),
-                err.to_string(),
-            )
+            SettingsUrlError::InvalidWebauthnConfiguration(self.xguard_url.clone(), err.to_string())
         })
     }
 

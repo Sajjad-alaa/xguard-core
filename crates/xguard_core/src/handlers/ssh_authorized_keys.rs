@@ -3,12 +3,12 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
+use sqlx::{PgExecutor, PgPool, query, query_as};
+use ssh_key::PublicKey;
 use xguard_common::db::{
     Id,
     models::{AuthenticationKey, AuthenticationKeyType, User, group::Group},
 };
-use sqlx::{PgExecutor, PgPool, query, query_as};
-use ssh_key::PublicKey;
 
 use super::{ApiResponse, ApiResult, user_for_admin_or_self};
 #[cfg(feature = "openapi")]
@@ -173,8 +173,7 @@ pub struct AddAuthenticationKeyData {
         (status = 500, description = "Unable to add authentication key.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn add_authentication_key(
@@ -268,8 +267,7 @@ pub async fn add_authentication_key(
         (status = 500, description = "Unable to list authentication keys.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn fetch_authentication_keys(
@@ -301,8 +299,7 @@ pub async fn fetch_authentication_keys(
         (status = 500, description = "Unable to delete authentication key.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn delete_authentication_key(
@@ -358,8 +355,7 @@ pub struct RenameRequest {
         (status = 500, description = "Unable to rename authentication key.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn rename_authentication_key(

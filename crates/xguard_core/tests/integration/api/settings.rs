@@ -1,5 +1,13 @@
 use std::time::Duration;
 
+use reqwest::StatusCode;
+use serde_json::json;
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
+use tokio::{sync::mpsc, time::timeout};
+use uuid::Uuid;
 use xguard_common::{
     db::models::{
         Settings, User,
@@ -9,16 +17,8 @@ use xguard_common::{
     types::proxy::ProxyControlMessage,
 };
 use xguard_core::handlers::Auth;
-use reqwest::StatusCode;
-use serde_json::json;
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
-};
-use tokio::{sync::mpsc, time::timeout};
-use uuid::Uuid;
 
-use super::common::{exceed_enterprise_limits, make_test_client, setup_pool};
+use super::common::{login_and_add_two_networks, make_test_client, setup_pool};
 
 #[sqlx::test]
 async fn test_settings(_: PgPoolOptions, options: PgConnectOptions) {
@@ -231,78 +231,6 @@ async fn test_ldap_settings_validation(_: PgPoolOptions, options: PgConnectOptio
         response.status(),
         StatusCode::OK,
         "enabling LDAP with all required fields should return 200"
-    );
-}
-
-#[sqlx::test]
-async fn test_ldap_connection_test_with_submitted_settings(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
-    let pool = setup_pool(options).await;
-    let (client, _client_state) = make_test_client(pool).await;
-
-    let auth = Auth::new("admin", "pass123");
-    let response = client.post("/api/v1/auth").json(&auth).send().await;
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let response = client.get("/api/v1/settings").send().await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let saved_settings: Settings = response.json().await;
-
-    let mut submitted = saved_settings.clone();
-    submitted.ldap_url = Some("ldap://127.0.0.1:1".to_owned());
-    submitted.ldap_bind_username = Some("cn=admin,dc=example,dc=com".to_owned());
-    submitted.ldap_username_attr = Some("uid".to_owned());
-    submitted.ldap_user_search_base = Some("ou=users,dc=example,dc=com".to_owned());
-    submitted.ldap_user_obj_class = Some("inetOrgPerson".to_owned());
-    submitted.ldap_member_attr = Some("memberUid".to_owned());
-    submitted.ldap_groupname_attr = Some("cn".to_owned());
-    submitted.ldap_group_obj_class = Some("posixGroup".to_owned());
-    submitted.ldap_group_member_attr = Some("memberUid".to_owned());
-    submitted.ldap_group_search_base = Some("ou=groups,dc=example,dc=com".to_owned());
-    let mut submitted = serde_json::to_value(&submitted).unwrap();
-    submitted["ldap_bind_password"] = json!("secret");
-    let response = client
-        .post("/api/v1/ldap/test")
-        .json(&submitted)
-        .send()
-        .await;
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "connection test against an unreachable server should return 400"
-    );
-    let body: serde_json::Value = response.json().await;
-    let msg = body["msg"].as_str().unwrap_or_default();
-    assert!(
-        msg.starts_with("LDAP error:"),
-        "connection test should return the LDAP error, got {body}"
-    );
-
-    let response = client
-        .post("/api/v1/ldap/dry_run")
-        .json(&submitted)
-        .send()
-        .await;
-    assert_eq!(
-        response.status(),
-        StatusCode::BAD_REQUEST,
-        "dry run against an unreachable server should return 400"
-    );
-    let body: serde_json::Value = response.json().await;
-    let msg = body["msg"].as_str().unwrap_or_default();
-    assert!(
-        msg.starts_with("LDAP error:"),
-        "dry run should return the LDAP error, got {body}"
-    );
-
-    let response = client.get("/api/v1/settings").send().await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let settings_after: Settings = response.json().await;
-    assert_eq!(
-        settings_after, saved_settings,
-        "the connection test must not save the submitted settings"
     );
 }
 
@@ -582,7 +510,7 @@ async fn test_smtp_change_triggers_public_settings_broadcast(
     let (client, client_state) = make_test_client(pool).await;
     let mut proxy_control_rx = client_state.proxy_control_rx;
 
-    exceed_enterprise_limits(&client).await;
+    login_and_add_two_networks(&client).await;
 
     // Drain any messages sent during setup (e.g. from app startup).
     while proxy_control_rx.try_recv().is_ok() {}
@@ -630,7 +558,7 @@ async fn test_public_proxy_url_patch_triggers_public_settings_broadcast(
     let (client, client_state) = make_test_client(pool).await;
     let mut proxy_control_rx = client_state.proxy_control_rx;
 
-    exceed_enterprise_limits(&client).await;
+    login_and_add_two_networks(&client).await;
     seed_public_proxy_url(
         &client_state.pool,
         &mut proxy_control_rx,
@@ -665,7 +593,7 @@ async fn test_public_proxy_url_update_triggers_public_settings_broadcast(
     let (client, client_state) = make_test_client(pool).await;
     let mut proxy_control_rx = client_state.proxy_control_rx;
 
-    exceed_enterprise_limits(&client).await;
+    login_and_add_two_networks(&client).await;
     seed_public_proxy_url(
         &client_state.pool,
         &mut proxy_control_rx,
@@ -687,47 +615,6 @@ async fn test_public_proxy_url_update_triggers_public_settings_broadcast(
         broadcast.public_url.as_deref(),
         Some(expected_public_url),
         "public_url should match the updated proxy URL"
-    );
-}
-
-/// Removing the license through the PATCH settings API changes the effective Edge payload even
-/// though no SMTP or proxy URL field changed, so the handler must broadcast the unlicensed
-/// defaults to the still-connected Edge.
-#[sqlx::test]
-async fn test_license_removal_triggers_public_settings_broadcast(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
-    let pool = setup_pool(options).await;
-    let (client, client_state) = make_test_client(pool).await;
-    let mut proxy_control_rx = client_state.proxy_control_rx;
-
-    exceed_enterprise_limits(&client).await;
-
-    // Hide the download step while licensed, so the unlicensed broadcast is observable.
-    let response = client
-        .patch("/api/v1/settings_enterprise")
-        .json(&json!({ "display_download_step": false }))
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    while proxy_control_rx.try_recv().is_ok() {}
-
-    let response = client
-        .patch("/api/v1/settings")
-        .json(&json!({ "license": "" }))
-        .send()
-        .await;
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let broadcast = next_public_settings_broadcast(&mut proxy_control_rx).await;
-    assert!(
-        broadcast.display_download_step,
-        "unlicensed Edge must fall back to showing the download step"
-    );
-    assert!(
-        !broadcast.display_password_reset,
-        "SMTP is not configured, so password reset stays hidden"
     );
 }
 

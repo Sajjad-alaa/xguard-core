@@ -4,13 +4,13 @@ import { useShallow } from 'zustand/react/shallow';
 import { m } from '../../../paraglide/messages';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
+import { useAppForm } from '../../../shared/form';
+import { formChangeLogic } from '../../../shared/formLogic';
+import { Validate } from '../../../shared/validate';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { InfoBanner } from '../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { useAppForm } from '../../../shared/form';
-import { formChangeLogic } from '../../../shared/formLogic';
-import { Validate } from '../../../shared/validate';
 import { useMigrationWizardStore } from '../store/useMigrationWizardStore';
 
 type FormFields = StoreValues;

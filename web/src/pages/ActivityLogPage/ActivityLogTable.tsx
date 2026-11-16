@@ -19,6 +19,8 @@ import {
 } from '../../shared/api/activity-log-types';
 import type { ActivityLogEvent } from '../../shared/api/types';
 import type { SelectionOption } from '../../shared/components/SelectionSection/type';
+import { displayDate } from '../../shared/utils/displayDate';
+import { formatIpForDisplay } from '../../shared/utils/formatIpForDisplay';
 import { DateInput } from '../../shared/xguard-ui/components/DateInput/DateInput';
 import type { DateRange } from '../../shared/xguard-ui/components/DateInput/types';
 import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
@@ -27,8 +29,6 @@ import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/Tab
 import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
 import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
 import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
-import { displayDate } from '../../shared/utils/displayDate';
-import { formatIpForDisplay } from '../../shared/utils/formatIpForDisplay';
 import { hasLogDetails, missingValuePlaceholder } from './logDetails';
 
 type RowData = ActivityLogEvent;

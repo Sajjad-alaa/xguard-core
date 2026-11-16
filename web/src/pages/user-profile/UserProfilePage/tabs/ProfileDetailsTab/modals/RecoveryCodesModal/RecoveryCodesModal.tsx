@@ -1,15 +1,15 @@
 import { useNavigate } from '@tanstack/react-router';
 import { m } from '../../../../../../../paraglide/messages';
 import api from '../../../../../../../shared/api/api';
+import { subscribeOpenModal } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
+import type { ModalNameValue } from '../../../../../../../shared/hooks/modalControls/modalTypes';
+import { useAuth } from '../../../../../../../shared/hooks/useAuth';
 import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
 import { Checkbox } from '../../../../../../../shared/xguard-ui/components/Checkbox/Checkbox';
 import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
 import { SizedBox } from '../../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { useClipboard } from '../../../../../../../shared/xguard-ui/hooks/useClipboard';
 import { ThemeSpacing } from '../../../../../../../shared/xguard-ui/types';
-import { subscribeOpenModal } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
-import type { ModalNameValue } from '../../../../../../../shared/hooks/modalControls/modalTypes';
-import { useAuth } from '../../../../../../../shared/hooks/useAuth';
 import './style.scss';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';

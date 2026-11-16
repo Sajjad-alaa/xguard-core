@@ -1,27 +1,22 @@
 import z from 'zod';
 import { m } from '../../../paraglide/messages';
 import { LoginPage } from '../../../shared/components/LoginPage/LoginPage';
+import { useAppForm } from '../../../shared/form';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSize, ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { useAppForm } from '../../../shared/form';
 import './style.scss';
 import { revalidateLogic } from '@tanstack/react-form';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import type { AxiosError } from 'axios';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../../../shared/api/api';
 import { getAuthErrorText } from '../../../shared/api/apiErrorMessages';
-import type { OpenIdAuthInfo, OpenIdProviderKindValue } from '../../../shared/api/types';
-import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
-import { ExternalProviderButton } from '../../../shared/xguard-ui/components/ExternalProviderButton/ExternalProviderButton';
-import type { ExternalProviderButtonProps } from '../../../shared/xguard-ui/components/ExternalProviderButton/types';
+import { useAuth } from '../../../shared/hooks/useAuth';
 import { InfoBanner } from '../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
 import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { createZodIssue } from '../../../shared/xguard-ui/utils/zod';
-import { useTheme } from '../../../shared/hooks/theme/useTheme';
-import { useAuth } from '../../../shared/hooks/useAuth';
 
 const formSchema = z.object({
   username: z.string(m.form_error_required()).trim().min(1, m.form_error_required()),
@@ -49,13 +44,6 @@ export const LoginMainPage = () => {
     setAuthErrorText(getAuthErrorText(authError, authErrorDetail));
     void navigate({ search: {}, replace: true });
   }, [authError, authErrorDetail, navigate]);
-
-  const { data: openIdAuthInfo } = useQuery({
-    queryFn: api.openid.authInfo,
-    queryKey: ['openid', 'auth_info'],
-    select: (resp) => resp.data,
-    retry: false,
-  });
 
   const form = useAppForm({
     defaultValues: defaults,
@@ -130,7 +118,6 @@ export const LoginMainPage = () => {
           <SizedBox height={ThemeSpacing.Xl2} />
         </>
       )}
-      {isPresent(openIdAuthInfo) && <LoginWithExternalProvider {...openIdAuthInfo} />}
       <form.AppForm>
         <form
           id="login-main-form"
@@ -172,41 +159,5 @@ export const LoginMainPage = () => {
         </form>
       </form.AppForm>
     </LoginPage>
-  );
-};
-
-const buttonProvider: Record<
-  OpenIdProviderKindValue,
-  ExternalProviderButtonProps['provider']
-> = {
-  Custom: 'custom',
-  Google: 'google',
-  JumpCloud: 'jumpcloud',
-  Microsoft: 'microsoft',
-  Okta: 'okta',
-  Zitadel: 'custom',
-};
-
-const LoginWithExternalProvider = (data: OpenIdAuthInfo) => {
-  const { theme } = useTheme();
-  const text = useMemo(() => {
-    if (data.button_display_name) {
-      return m.login_main_sign_in_with({ provider: data.button_display_name });
-    }
-    return m.login_main_sign_in_with_external_provider();
-  }, [data.button_display_name]);
-
-  return (
-    <div id="external-login">
-      <a href={data.url} target="_self" rel="noopener noreferrer">
-        <ExternalProviderButton
-          variant="default"
-          provider={buttonProvider[data.provider_kind]}
-          theme={theme}
-          text={text}
-        />
-      </a>
-      <Divider text={m.misc_or()} spacing={ThemeSpacing.Xl2} />
-    </div>
   );
 };

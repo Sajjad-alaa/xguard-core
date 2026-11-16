@@ -3,10 +3,10 @@ import { useCallback } from 'react';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
 import { LoginPage } from '../../../shared/components/LoginPage/LoginPage';
+import { useAuth } from '../../../shared/hooks/useAuth';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { useAuth } from '../../../shared/hooks/useAuth';
 import { MfaLinks } from '../shared/MfaLinks/MfaLinks';
 
 export const LoginWebauthn = () => {

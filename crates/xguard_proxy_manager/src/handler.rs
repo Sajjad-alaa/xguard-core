@@ -11,60 +11,6 @@ use std::{
 
 use axum_extra::extract::cookie::Key;
 use chrono::NaiveDateTime;
-use xguard_common::{
-    VERSION,
-    db::{
-        Id,
-        models::{
-            Certificates, Settings, proxy::Proxy, vpn_client_mfa_session::VpnClientMfaSession,
-        },
-    },
-    types::AuthFlowType,
-};
-use xguard_core::{
-    db::models::enrollment::{ENROLLMENT_TOKEN_TYPE, Token},
-    enrollment_management::clear_unused_enrollment_tokens,
-    enterprise::{
-        db::models::{enterprise_settings::EnterpriseSettings, openid_provider::OpenIdProvider},
-        directory_sync::sync_user_groups_if_configured,
-        grpc::polling::PollingServer,
-        handlers::openid_login::{
-            ClaimsUserResolution, MfaOidcState, SELECT_ACCOUNT_SUPPORTED_PROVIDERS, build_state,
-            make_oidc_client, user_from_claims,
-        },
-        is_business_license_active,
-        ldap::utils::ldap_update_user_state,
-    },
-    error::WebError,
-    events::{ApiEvent, DirectorySyncEvent, LdapSyncEventType, ProxyConnectionEvent},
-    grpc::{
-        GatewayCommand,
-        proxy::client_mfa::{
-            ClientMfaServer, MfaStartRejection, PostureCheckOutcome, RemoteAuthWaiters,
-        },
-    },
-    version::{IncompatibleComponents, IncompatibleProxyData, is_proxy_version_supported},
-};
-use xguard_grpc_tls::certs::{ProxyTlsTarget, proxy_mtls_channel};
-use xguard_proto::{
-    client_types::{
-        AuthFlowType as ProtoAuthFlowType, AuthInfoRequest,
-        OpenIdProviderKind as ProtoOpenIdProviderKind,
-    },
-    enterprise::posture::{DevicePostureCheckResponse, DevicePostureRejection},
-    proxy::{
-        AuthCallbackRequest, AuthCallbackResponse, AuthInfoResponse, CoreError, CoreRequest,
-        CoreResponse, HttpsCerts, InitialInfo, core_request, core_response,
-        proxy_client::ProxyClient,
-    },
-};
-use xguard_version::{
-    ComponentInfo, XGuardComponent, client::ClientVersionInterceptor, get_tracing_variables,
-};
-use openidconnect::{
-    AuthorizationCode, EndpointMaybeSet, EndpointNotSet, EndpointSet, Nonce, Scope,
-    core::{CoreAuthenticationFlow, CoreClient},
-};
 use reqwest::Url;
 use semver::Version;
 use sqlx::PgPool;
@@ -82,124 +28,41 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(test)]
 use tonic::transport::Endpoint;
 use tonic::{
-    Code, Request, Streaming, service::interceptor::InterceptedService, transport::Channel,
+    Code, Request, Status, Streaming, service::interceptor::InterceptedService, transport::Channel,
+};
+use xguard_common::{
+    VERSION,
+    db::{
+        Id,
+        models::{Certificates, Settings, proxy::Proxy},
+    },
+};
+use xguard_core::{
+    events::{ApiEvent, DirectorySyncEvent, LdapSyncEventType, ProxyConnectionEvent},
+    grpc::{
+        GatewayCommand,
+        proxy::client_mfa::{ClientMfaServer, MfaStartRejection, RemoteAuthWaiters},
+    },
+    handlers::settings::edge_public_settings,
+    version::{IncompatibleComponents, IncompatibleProxyData, is_proxy_version_supported},
+};
+use xguard_grpc_tls::certs::{ProxyTlsTarget, proxy_mtls_channel};
+use xguard_proto::proxy::{
+    CoreError, CoreRequest, CoreResponse, HttpsCerts, InitialInfo, core_request, core_response,
+    proxy_client::ProxyClient,
+};
+use xguard_version::{
+    ComponentInfo, XGuardComponent, client::ClientVersionInterceptor, get_tracing_variables,
 };
 
 #[cfg(test)]
 use crate::ProxyManagerTestSupport;
 use crate::{
     HandlerTxMap, ProxyError, ProxyTxSet, TEN_SECS,
-    servers::{
-        EnrollmentServer, MfaConfigServer, PasswordResetServer, mfa_config_oidc_begin,
-        mfa_config_oidc_state,
-    },
+    servers::{EnrollmentServer, MfaConfigServer, PasswordResetServer},
 };
 
 const VERSION_ZERO: Version = Version::new(0, 0, 0);
-
-/// Builds OIDC state with the current MFA attempt, leaving legacy and non-MFA inputs unchanged.
-async fn build_auth_info_state(
-    pool: &PgPool,
-    auth_flow_type: ProtoAuthFlowType,
-    state: Option<String>,
-) -> Result<Option<String>, CoreError> {
-    if auth_flow_type != ProtoAuthFlowType::Mfa {
-        return Ok(state);
-    }
-
-    let Some(state) = state else {
-        debug!("OIDC MFA AuthInfo request is missing the session token");
-        return Err(CoreError::invalid_argument("missing MFA session token"));
-    };
-
-    // A bare token may name an MFA configuration session, which starts its own attempt here.
-    if !state.contains('.')
-        && let Some(state) = mfa_config_oidc_begin(pool, &state).await?
-    {
-        return Ok(Some(state));
-    }
-
-    let (token, requested_attempt_id) = if state.contains('.') {
-        let parsed = MfaOidcState::parse(&state)
-            .ok_or_else(|| CoreError::invalid_argument("invalid state data"))?;
-        (parsed.token, Some(parsed.attempt_id))
-    } else {
-        (state, None)
-    };
-
-    let Some(session) = VpnClientMfaSession::<Id>::find_active_by_token(pool, &token)
-        .await
-        .map_err(|err| {
-            error!("Failed to find MFA session: {err}");
-            CoreError::internal("failed to find MFA session")
-        })?
-    else {
-        debug!("OIDC MFA AuthInfo request references an unknown or expired session");
-        return Err(CoreError::invalid_argument("MFA session not found"));
-    };
-
-    let Some(ephemeral) = session.ephemeral_state.as_ref() else {
-        debug!("OIDC MFA AuthInfo request references a session with no attempt in progress");
-        return Err(CoreError::invalid_argument("no MFA attempt in progress"));
-    };
-
-    if let Some(requested_attempt_id) = requested_attempt_id
-        && requested_attempt_id != ephemeral.step_attempt_id
-    {
-        debug!("OIDC MFA AuthInfo request references a stale attempt");
-        return Err(CoreError::invalid_argument("stale MFA attempt"));
-    }
-
-    Ok(Some(MfaOidcState::build(
-        &token,
-        &ephemeral.step_attempt_id,
-    )))
-}
-
-/// The concrete OpenID Connect client `make_oidc_client` builds for the Core auth flow.
-type CoreOidcClient = CoreClient<
-    EndpointSet,
-    EndpointNotSet,
-    EndpointNotSet,
-    EndpointNotSet,
-    EndpointMaybeSet,
-    EndpointMaybeSet,
->;
-
-/// Build the `AuthInfo` payload for a successfully built state: construct the authorize URL from
-/// the client, the provider, and the state data, and wrap the resulting CSRF token, nonce,
-/// provider display name and provider kind.
-fn build_auth_info_payload(
-    client: &CoreOidcClient,
-    provider: &OpenIdProvider<Id>,
-    state_data: Option<String>,
-) -> core_response::Payload {
-    let mut authorize_url_builder = client
-        .authorize_url(
-            CoreAuthenticationFlow::AuthorizationCode,
-            || build_state(state_data),
-            Nonce::new_random,
-        )
-        .add_scope(Scope::new("email".to_owned()))
-        .add_scope(Scope::new("profile".to_owned()));
-
-    if SELECT_ACCOUNT_SUPPORTED_PROVIDERS
-        .iter()
-        .all(|p| p.eq_ignore_ascii_case(&provider.name))
-    {
-        authorize_url_builder =
-            authorize_url_builder.add_prompt(openidconnect::core::CoreAuthPrompt::SelectAccount);
-    }
-    let (url, csrf_token, nonce) = authorize_url_builder.url();
-
-    core_response::Payload::AuthInfo(AuthInfoResponse {
-        url: url.into(),
-        csrf_token: csrf_token.secret().to_owned(),
-        nonce: nonce.secret().to_owned(),
-        button_display_name: provider.display_name.clone(),
-        provider_kind: ProtoOpenIdProviderKind::from(&provider.kind) as i32,
-    })
-}
 
 type ShutdownReceiver = oneshot::Receiver<bool>;
 
@@ -545,14 +408,11 @@ impl ProxyHandler {
             });
 
             // Push public settings (Edge UI controls) to the newly-connected proxy.
-            if let Ok(settings) = EnterpriseSettings::get(&self.pool).await {
-                let public_settings =
-                    settings.edge_public_settings(&Settings::get_current_settings());
-                let _ = tx.send(CoreResponse {
-                    id: 0,
-                    payload: Some(core_response::Payload::PublicSettings(public_settings)),
-                });
-            }
+            let public_settings = edge_public_settings(&Settings::get_current_settings());
+            let _ = tx.send(CoreResponse {
+                id: 0,
+                payload: Some(core_response::Payload::PublicSettings(public_settings)),
+            });
 
             // If a certificate has already been provisioned, push it to the newly-connected
             // proxy immediately so it can start serving HTTPS without a manual trigger.
@@ -653,7 +513,7 @@ impl ProxyHandler {
         received: CoreRequest,
         response_tx: UnboundedSender<CoreResponse>,
         services: Arc<ProxyServices>,
-        gateway_tx: UnboundedSender<GatewayCommand>,
+        _gateway_tx: UnboundedSender<GatewayCommand>,
         handler_tx_map: HandlerTxMap,
     ) -> Result<(), ProxyError> {
         let payload = match received.payload {
@@ -899,11 +759,6 @@ impl ProxyHandler {
                     Ok(response_payload) => {
                         Some(core_response::Payload::ClientMfaStart(response_payload))
                     }
-                    Err(MfaStartRejection::PostureFailed { failed_checks }) => Some(
-                        core_response::Payload::DevicePostureRejected(DevicePostureRejection {
-                            failed_posture_checks: failed_checks,
-                        }),
-                    ),
                     Err(MfaStartRejection::Status(err)) => {
                         error!("client MFA start error {err}");
                         Some(core_response::Payload::CoreError(err.into()))
@@ -920,11 +775,6 @@ impl ProxyHandler {
                 .await
                 {
                     Ok(response) => Some(core_response::Payload::MfaFlowStart(response)),
-                    Err(MfaStartRejection::PostureFailed { failed_checks }) => Some(
-                        core_response::Payload::DevicePostureRejected(DevicePostureRejection {
-                            failed_posture_checks: failed_checks,
-                        }),
-                    ),
                     Err(MfaStartRejection::Status(err)) => {
                         error!("client MFA flow start error {err}");
                         Some(core_response::Payload::CoreError(err.into()))
@@ -1035,70 +885,26 @@ impl ProxyHandler {
                     }
                 }
             }
-            Some(core_request::Payload::ClientMfaOidcAuthenticate(request)) => {
-                // Edge's OpenID MFA callback serves both VPN MFA and MFA configuration sessions.
-                let result = match boxed(mfa_config_oidc_state(&pool, &request.state)).await {
-                    Ok(Some(state)) => {
-                        boxed(services.mfa_config.mfa_config_oidc_authenticate(
-                            state,
-                            request,
-                            received.device_info,
-                        ))
-                        .await
-                    }
-                    Ok(None) => {
-                        boxed(
-                            services
-                                .client_mfa
-                                .auth_mfa_session_with_oidc(request, received.device_info),
-                        )
-                        .await
-                    }
-                    Err(err) => Err(err.into()),
-                };
-                match result {
-                    Ok(()) => Some(core_response::Payload::Empty(())),
-                    Err(err) => {
-                        error!("client MFA OIDC authenticate error {err:?}");
-                        Some(core_response::Payload::CoreError(err))
-                    }
-                }
+            Some(core_request::Payload::ClientMfaOidcAuthenticate(_)) => {
+                // OpenID MFA needs an external identity provider integration (not in XGuard).
+                Some(core_response::Payload::CoreError(
+                    Status::unimplemented("OpenID MFA is not supported").into(),
+                ))
             }
             // rpc LocationInfo (LocationInfoRequest) returns (LocationInfoResponse)
-            Some(core_request::Payload::InstanceInfo(request)) => {
-                match boxed(services.polling.info(request, received.device_info)).await {
-                    Ok(response_payload) => {
-                        Some(core_response::Payload::InstanceInfo(response_payload))
-                    }
-                    Err(err) => {
-                        if Code::FailedPrecondition == err.code() {
-                            // Ignore the case when we are not enterprise but the client is
-                            // trying to fetch the instance config,
-                            // to avoid spamming the logs with misleading errors.
-
-                            debug!(
-                                "A client tried to fetch the instance config, but we are \
-                                            not enterprise."
-                            );
-                            Some(core_response::Payload::CoreError(err.into()))
-                        } else {
-                            error!("Instance info error {err}");
-                            Some(core_response::Payload::CoreError(err.into()))
-                        }
-                    }
-                }
-            }
-            Some(core_request::Payload::AuthInfo(request)) => {
-                boxed(Self::handle_auth_info(&pool, request)).await?
-            }
-            Some(core_request::Payload::AuthCallback(request)) => {
-                boxed(Self::handle_auth_callback(
-                    &pool,
-                    request,
-                    &gateway_tx,
-                    &services,
+            Some(core_request::Payload::InstanceInfo(_)) => {
+                // Instance config polling (desktop client config sync) is not part of XGuard.
+                // Clients treat FailedPrecondition as "feature unavailable".
+                debug!("A client tried to fetch the instance config, which is not supported.");
+                Some(core_response::Payload::CoreError(
+                    Status::failed_precondition("instance config polling is not supported").into(),
                 ))
-                .await?
+            }
+            Some(core_request::Payload::AuthInfo(_) | core_request::Payload::AuthCallback(_)) => {
+                // Login through an external OpenID provider is not part of XGuard.
+                Some(core_response::Payload::CoreError(
+                    Status::unimplemented("external OpenID login is not supported").into(),
+                ))
             }
             None => None,
             Some(core_request::Payload::AcmeCertificate(cert)) => {
@@ -1137,30 +943,6 @@ impl ProxyHandler {
                     }
                 }
                 None
-            }
-            Some(core_request::Payload::DevicePostureCheck(request)) => {
-                match boxed(
-                    services
-                        .client_mfa
-                        .handle_posture_check(request, received.device_info),
-                )
-                .await
-                {
-                    Ok(PostureCheckOutcome::Approved { preshared_key }) => {
-                        Some(core_response::Payload::DevicePostureCheck(
-                            DevicePostureCheckResponse { preshared_key },
-                        ))
-                    }
-                    Ok(PostureCheckOutcome::Rejected { failed_checks }) => Some(
-                        core_response::Payload::DevicePostureRejected(DevicePostureRejection {
-                            failed_posture_checks: failed_checks,
-                        }),
-                    ),
-                    Err(err) => {
-                        error!("Posture check error: {err}");
-                        Some(core_response::Payload::CoreError(err.into()))
-                    }
-                }
             }
         };
 
@@ -1267,185 +1049,6 @@ impl ProxyHandler {
             }
         }
         Ok(())
-    }
-
-    async fn handle_auth_info(
-        pool: &PgPool,
-        request: AuthInfoRequest,
-    ) -> Result<Option<core_response::Payload>, ProxyError> {
-        let payload = if is_business_license_active() {
-            let auth_flow_type = request.auth_flow_type();
-            let redirect_url = match auth_flow_type {
-                ProtoAuthFlowType::Enrollment => {
-                    let settings = Settings::get_current_settings();
-                    settings.edge_callback_url(AuthFlowType::Enrollment)
-                }
-                ProtoAuthFlowType::Mfa => {
-                    let settings = Settings::get_current_settings();
-                    settings.edge_callback_url(AuthFlowType::Mfa)
-                }
-                // fall back for legacy pre-2.0 clients
-                ProtoAuthFlowType::Unspecified =>
-                {
-                    #[allow(deprecated)]
-                    Url::parse(&request.redirect_url)
-                }
-            };
-
-            if let Ok(redirect_url) = redirect_url {
-                if let Some(provider) = OpenIdProvider::get_current(pool).await? {
-                    match make_oidc_client(redirect_url, &provider).await {
-                        Ok((_client_id, client)) => {
-                            match build_auth_info_state(pool, auth_flow_type, request.state).await {
-                                Ok(state_data) => {
-                                    Some(build_auth_info_payload(&client, &provider, state_data))
-                                }
-                                Err(err) => {
-                                    error!("Failed to build OIDC state: {}", err.message);
-                                    Some(core_response::Payload::CoreError(err))
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            error!("Failed to setup external OIDC provider client: {err}");
-                            Some(core_response::Payload::CoreError(CoreError::internal(
-                                "failed to build OIDC client",
-                            )))
-                        }
-                    }
-                } else {
-                    error!("Failed to get current OpenID provider");
-                    Some(core_response::Payload::CoreError(CoreError::not_found(
-                        "failed to get current OpenID provider",
-                    )))
-                }
-            } else {
-                error!("Invalid redirect URL in authentication info request");
-                Some(core_response::Payload::CoreError(CoreError::internal(
-                    "invalid redirect URL",
-                )))
-            }
-        } else {
-            warn!("Enterprise license required");
-            Some(core_response::Payload::CoreError(
-                CoreError::failed_precondition("no valid license"),
-            ))
-        };
-        Ok(payload)
-    }
-
-    async fn handle_auth_callback(
-        pool: &PgPool,
-        request: AuthCallbackRequest,
-        gateway_tx: &UnboundedSender<GatewayCommand>,
-        services: &Arc<ProxyServices>,
-    ) -> Result<Option<core_response::Payload>, ProxyError> {
-        let payload = match Settings::get_current_settings()
-            .edge_callback_url(AuthFlowType::Enrollment)
-        {
-            Ok(callback_url) => {
-                let code = AuthorizationCode::new(request.code);
-                match user_from_claims(
-                    pool,
-                    Nonce::new(request.nonce),
-                    code,
-                    callback_url,
-                    None,
-                    None,
-                    Some(&services.event_tx),
-                    // Enrollment provisions the account.
-                    ClaimsUserResolution::GetOrCreate,
-                )
-                .await
-                {
-                    Ok(mut user) => {
-                        clear_unused_enrollment_tokens(&user, pool).await?;
-                        if let Err(err) = sync_user_groups_if_configured(
-                            &user,
-                            pool,
-                            gateway_tx,
-                            &services.ldap,
-                            &services.dirsync,
-                        )
-                        .await
-                        {
-                            error!(
-                                "Failed to sync user groups for user {} with the \
-                                                directory while the user was logging in through an \
-                                                external provider: {err}",
-                                user.username,
-                            );
-                        } else {
-                            ldap_update_user_state(&mut user, pool, gateway_tx, &services.ldap)
-                                .await;
-                        }
-                        debug!("Cleared unused tokens for {}.", user.username);
-                        debug!(
-                            "Creating a new desktop activation token for user {} \
-                                            as a result of proxy OpenID auth callback.",
-                            user.username
-                        );
-                        let settings = Settings::get_current_settings();
-                        let desktop_configuration = Token::new(
-                            user.id,
-                            Some(user.id),
-                            Some(user.email),
-                            settings.enrollment_token_timeout().as_secs(),
-                            Some(ENROLLMENT_TOKEN_TYPE.to_owned()),
-                        );
-                        debug!("Saving a new desktop configuration token...");
-                        desktop_configuration.save(pool).await?;
-                        debug!(
-                            "Saved desktop configuration token. Responding to \
-                                            proxy with the token."
-                        );
-                        let public_proxy_url = settings.proxy_public_url()?;
-
-                        Some(core_response::Payload::AuthCallback(AuthCallbackResponse {
-                            url: public_proxy_url.into(),
-                            token: desktop_configuration.id,
-                        }))
-                    }
-                    Err(err) => {
-                        error!("OpenID auth error {err}");
-                        let (status_code, message) = match err {
-                            WebError::Authorization(message) => {
-                                (Code::PermissionDenied as i32, message)
-                            }
-                            WebError::ObjectNotFound(message) => (Code::NotFound as i32, message),
-                            WebError::Forbidden(message) => {
-                                (Code::PermissionDenied as i32, message.to_owned())
-                            }
-                            WebError::BadRequest(message) => {
-                                (Code::InvalidArgument as i32, message)
-                            }
-                            WebError::LicenseLimitReached(message) => {
-                                (Code::ResourceExhausted as i32, message)
-                            }
-                            _ => (
-                                Code::Internal as i32,
-                                "OpenID authentication failed".to_owned(),
-                            ),
-                        };
-                        Some(core_response::Payload::CoreError(CoreError {
-                            status_code,
-                            message,
-                            ..Default::default()
-                        }))
-                    }
-                }
-            }
-            Err(err) => {
-                error!(
-                    "Proxy requested an OpenID authentication info for a \
-                                        callback URL that couldn't be built. Details: {err}"
-                );
-                Some(core_response::Payload::CoreError(CoreError::internal(
-                    "invalid callback URL",
-                )))
-            }
-        };
-        Ok(payload)
     }
 }
 
@@ -1590,13 +1193,11 @@ impl ProxyHandler {
         });
 
         // Push public settings to the test proxy.
-        if let Ok(settings) = EnterpriseSettings::get(&self.pool).await {
-            let public_settings = settings.edge_public_settings(&Settings::get_current_settings());
-            let _ = tx.send(CoreResponse {
-                id: 0,
-                payload: Some(core_response::Payload::PublicSettings(public_settings)),
-            });
-        }
+        let public_settings = edge_public_settings(&Settings::get_current_settings());
+        let _ = tx.send(CoreResponse {
+            id: 0,
+            payload: Some(core_response::Payload::PublicSettings(public_settings)),
+        });
 
         let result = self
             .message_loop(tx, tx_set.wireguard.clone(), &mut resp_stream)
@@ -1610,16 +1211,19 @@ impl ProxyHandler {
 /// from a proxy instance.
 ///
 /// Each `ProxyServices` instance is owned by a single `Proxy` and provides
-/// the concrete handlers for enrollment, authentication, and polling-related
+/// the concrete handlers for enrollment and authentication-related
 /// requests received over the gRPC bidirectional stream.
 struct ProxyServices {
     enrollment: EnrollmentServer,
     password_reset: PasswordResetServer,
     client_mfa: ClientMfaServer,
-    polling: PollingServer,
     mfa_config: MfaConfigServer,
+    // Directory-sync channels are reserved for the XGuard LDAP / directory sync rebuild.
+    #[allow(dead_code)]
     ldap: UnboundedSender<LdapSyncEventType>,
+    #[allow(dead_code)]
     dirsync: UnboundedSender<DirectorySyncEvent>,
+    #[allow(dead_code)]
     event_tx: UnboundedSender<ApiEvent>,
 }
 
@@ -1640,14 +1244,12 @@ impl ProxyServices {
             tx.bidi_events.clone(),
             remote_mfa_responses,
         );
-        let polling = PollingServer::new(pool.clone());
         let mfa_config = MfaConfigServer::new(pool.clone(), tx.event_tx.clone());
 
         Self {
             enrollment,
             password_reset,
             client_mfa,
-            polling,
             mfa_config,
             ldap: tx.ldap.clone(),
             dirsync: tx.dirsync.clone(),

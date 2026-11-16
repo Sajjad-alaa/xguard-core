@@ -1,9 +1,9 @@
+use model_derive::Model;
+use sqlx::{AssertSqlSafe, FromRow, PgPool, query_as};
 use xguard_common::{
     db::{Id, NoId},
     types::user_info::UserInfo,
 };
-use model_derive::Model;
-use sqlx::{AssertSqlSafe, FromRow, PgPool, query_as};
 
 /// App events which triggers webhook action
 #[derive(Debug)]

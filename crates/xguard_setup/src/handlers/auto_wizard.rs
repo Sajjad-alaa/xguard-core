@@ -1,4 +1,9 @@
 use axum::{Extension, Json};
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sqlx::{PgPool, query_scalar};
+use tracing::{debug, info};
 use xguard_certs::{PemLabel, der_to_pem};
 use xguard_common::{
     db::{
@@ -25,11 +30,6 @@ use xguard_core::{
     error::WebError,
     handlers::{ApiResponse, ApiResult, wireguard::validate_mfa_flows_exist},
 };
-use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use sqlx::{PgPool, query_scalar};
-use tracing::{debug, info};
 
 use crate::handlers::initial_wizard::advance_initial_wizard_to_step;
 

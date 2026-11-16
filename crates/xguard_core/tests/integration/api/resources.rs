@@ -1,7 +1,7 @@
-use xguard_core::handlers::Auth;
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use xguard_core::handlers::Auth;
 
 use super::common::{make_test_client, setup_pool};
 

@@ -7,6 +7,8 @@ import './style.scss';
 import { useQuery } from '@tanstack/react-query';
 import { titleCase } from 'text-case';
 import { externalLink } from '../../../../../constants';
+import { clientArtifactsQueryOptions } from '../../../../../query';
+import { openClientLink } from '../../../../../utils/openVirtualLink';
 import { Button } from '../../../../../xguard-ui/components/Button/Button';
 import { CopyField } from '../../../../../xguard-ui/components/CopyField/CopyField';
 import { Divider } from '../../../../../xguard-ui/components/Divider/Divider';
@@ -16,8 +18,6 @@ import { IconButton } from '../../../../../xguard-ui/components/IconButton/IconB
 import { IconButtonMenu } from '../../../../../xguard-ui/components/IconButtonMenu/IconButtonMenu';
 import type { MenuItemsGroup } from '../../../../../xguard-ui/components/Menu/types';
 import { QrCard } from '../../../../../xguard-ui/components/QrCard/QrCard';
-import { clientArtifactsQueryOptions } from '../../../../../query';
-import { openClientLink } from '../../../../../utils/openVirtualLink';
 import { ContainerWithIcon } from '../../../../ContainerWithIcon/ContainerWithIcon';
 import { Controls } from '../../../../Controls/Controls';
 

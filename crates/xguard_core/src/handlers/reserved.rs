@@ -61,8 +61,7 @@ async fn username_exists(pool: &PgPool, username: &str) -> Result<bool, sqlx::Er
         (status = 500, description = "Unable to check the value.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn check_reserved(

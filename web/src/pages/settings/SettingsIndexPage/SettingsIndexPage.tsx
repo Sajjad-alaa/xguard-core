@@ -6,11 +6,8 @@ import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox
 import { Tabs } from '../../../shared/xguard-ui/components/Tabs/Tabs';
 import type { TabProps } from '../../../shared/xguard-ui/components/Tabs/types';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { SettingsActivityLogStreamingPage } from '../SettingsActivityLogStreamingPage/SettingsActivityStreamingTab';
 import { SettingsCertificatesTab } from './tabs/SettingsCertificatesTab/SettingsCertificatesTab';
-import { SettingsExternalProvidersTab } from './tabs/SettingsExternalProvidersTab';
 import { SettingsGeneralTab } from './tabs/SettingsGeneralTab';
-import { SettingsLicenseTab } from './tabs/SettingsLicenseTab/SettingsLicenseTab';
 import { SettingsNotificationsTab } from './tabs/SettingsNotificationsTab';
 import { type SettingsTabValue, settingsTabsSchema } from './types';
 import { useCertificatesWarningState } from './useCertificatesWarningState';
@@ -18,9 +15,6 @@ import { useCertificatesWarningState } from './useCertificatesWarningState';
 const tabComponent: Record<SettingsTabValue, JSX.Element> = {
   general: <SettingsGeneralTab />,
   notifications: <SettingsNotificationsTab />,
-  activity: <SettingsActivityLogStreamingPage />,
-  license: <SettingsLicenseTab />,
-  identity: <SettingsExternalProvidersTab />,
   certs: <SettingsCertificatesTab />,
 };
 
@@ -28,14 +22,8 @@ const tabToTitle = (tab: SettingsTabValue): string => {
   switch (tab) {
     case 'general':
       return m.settings_tab_general();
-    case 'activity':
-      return m.settings_tab_activity_streaming();
-    case 'license':
-      return m.settings_tab_license();
     case 'notifications':
       return m.settings_tab_notifications();
-    case 'identity':
-      return m.settings_tab_identity_providers();
     case 'certs':
       return m.settings_tab_certificates();
   }

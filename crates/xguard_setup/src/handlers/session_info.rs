@@ -1,12 +1,12 @@
 use axum::{Extension, http::StatusCode};
+use serde::Serialize;
+use sqlx::PgPool;
 use xguard_common::db::models::{ActiveWizard, User, Wizard};
 use xguard_core::{
     auth::SessionExtractor,
     error::WebError,
     handlers::{ApiResponse, ApiResult},
 };
-use serde::Serialize;
-use sqlx::PgPool;
 
 #[derive(Serialize)]
 struct SessionInfoResponse {

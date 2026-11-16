@@ -1,7 +1,5 @@
 import z from 'zod';
 import { m } from '../../../../../../../paraglide/messages';
-import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import { useAppForm } from '../../../../../../../shared/form';
 import {
   closeModal,
@@ -10,6 +8,8 @@ import {
   subscribeOpenModal,
 } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
+import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import './style.scss';
 import { useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
@@ -18,14 +18,14 @@ import { useEffect, useState } from 'react';
 import api from '../../../../../../../shared/api/api';
 import { getApiErrorMessage } from '../../../../../../../shared/api/apiErrorMessages';
 import type { ApiError } from '../../../../../../../shared/api/types';
+import { formChangeLogic } from '../../../../../../../shared/formLogic';
+import { useTimer } from '../../../../../../../shared/hooks/useTimer';
 import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
 import { SizedBox } from '../../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { useEffectOnce } from '../../../../../../../shared/xguard-ui/hooks/useEffectOnce';
 import { Snackbar } from '../../../../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
-import { formChangeLogic } from '../../../../../../../shared/formLogic';
-import { useTimer } from '../../../../../../../shared/hooks/useTimer';
 import { useUserProfile } from '../../../../hooks/useUserProfilePage';
 
 const modalName = ModalName.EmailMfaSetup;

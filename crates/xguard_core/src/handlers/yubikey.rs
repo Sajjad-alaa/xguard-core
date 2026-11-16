@@ -27,8 +27,7 @@ use crate::{appstate::AppState, auth::SessionInfo, error::WebError};
         (status = 500, description = "Unable to delete YubiKey.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_yubikey(
@@ -78,8 +77,7 @@ pub(crate) struct RenameRequest {
         (status = 500, description = "Unable to rename YubiKey.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn rename_yubikey(

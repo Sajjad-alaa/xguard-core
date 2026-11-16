@@ -1,4 +1,10 @@
 use chrono::Utc;
+use sqlx::{PgConnection, PgPool};
+use tokio::{
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    time::{Duration, Interval, interval},
+};
+use tracing::{debug, error, info, trace};
 use xguard_common::{
     db::{
         Id,
@@ -10,12 +16,6 @@ use xguard_common::{
     gateway_event::GatewayCommand,
     messages::peer_stats_update::PeerStatsUpdate,
 };
-use sqlx::{PgConnection, PgPool};
-use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    time::{Duration, Interval, interval},
-};
-use tracing::{debug, error, info, trace};
 
 use crate::{
     error::SessionManagerError,

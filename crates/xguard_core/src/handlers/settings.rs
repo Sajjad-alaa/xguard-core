@@ -3,6 +3,9 @@ use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
+use sqlx::PgPool;
+use struct_patch::Patch;
+use tokio::sync::mpsc;
 use xguard_common::{
     db::{
         Id,
@@ -14,24 +17,13 @@ use xguard_common::{
     types::proxy::ProxyControlMessage,
 };
 use xguard_proto::proxy::PublicSettings;
-use sqlx::PgPool;
-use struct_patch::Patch;
-use tokio::sync::mpsc;
 
-use super::{ApiResponse, ApiResponseCode, ApiResult};
+use super::{ApiResponse, ApiResult};
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
 use crate::{
     AppState,
     auth::{AdminRole, SessionInfo},
-    enterprise::{
-        db::models::enterprise_settings::EnterpriseSettings,
-        handlers::LicenseInfo,
-        is_business_license_active,
-        ldap::{LDAPConnection, sync::Authority},
-        license::{License, LicenseTier, get_cached_license, update_cached_license},
-        limits::{Counts, get_counts},
-    },
     error::WebError,
     events::{ApiEvent, ApiEventType, ApiRequestContext},
 };
@@ -39,9 +31,18 @@ use crate::{
 static DEFAULT_NAV_LOGO_URL: &str = "/svg/xguard-nav-logo.svg";
 static DEFAULT_MAIN_LOGO_URL: &str = "/svg/logo-xguard-white.svg";
 
+/// Settings the Edge (proxy) shows on its public pages.
+#[must_use]
+pub fn edge_public_settings(settings: &Settings) -> PublicSettings {
+    PublicSettings {
+        display_password_reset: settings.smtp_configured(),
+        display_download_step: true,
+        public_url: settings.configured_public_proxy_url(),
+    }
+}
+
 /// Wrap `PublicSettings` in the control message the proxy manager fans out to every connected
-/// proxy. Build the payload with [`EnterpriseSettings::edge_public_settings`] or
-/// [`unlicensed_edge_public_settings`] rather than by hand, so the two cases stay distinguishable.
+/// proxy. Build the payload with [`edge_public_settings`].
 #[must_use]
 pub(crate) fn public_settings_message(public_settings: PublicSettings) -> ProxyControlMessage {
     ProxyControlMessage::BroadcastPublicSettings {
@@ -55,18 +56,11 @@ pub(crate) fn public_settings_message(public_settings: PublicSettings) -> ProxyC
 /// logged rather than propagated, since proxies also receive the current values when they next
 /// connect.
 pub(crate) async fn broadcast_public_settings(
-    pool: &PgPool,
+    _pool: &PgPool,
     settings: &Settings,
     proxy_control_tx: &mpsc::Sender<ProxyControlMessage>,
 ) {
-    let enterprise_settings = match EnterpriseSettings::get(pool).await {
-        Ok(enterprise_settings) => enterprise_settings,
-        Err(err) => {
-            error!("Failed to load enterprise settings for public settings broadcast: {err:?}");
-            return;
-        }
-    };
-    let message = public_settings_message(enterprise_settings.edge_public_settings(settings));
+    let message = public_settings_message(edge_public_settings(settings));
     if let Err(err) = proxy_control_tx.send(message).await {
         error!("Failed to broadcast PublicSettings after public proxy URL change: {err:?}");
     }
@@ -107,8 +101,7 @@ impl From<Settings> for SettingsResponse {
         (status = 500, description = "Unable to get settings.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_settings(_admin: AdminRole, State(appstate): State<AppState>) -> ApiResult {
@@ -145,8 +138,7 @@ pub async fn get_settings(_admin: AdminRole, State(appstate): State<AppState>) -
         (status = 500, description = "Unable to update settings.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn update_settings(
@@ -160,9 +152,6 @@ pub(crate) async fn update_settings(
 
     // fetch current settings for event
     let before = Settings::get_current_settings();
-    let license = data.license.clone();
-    let licensed_before = is_business_license_active();
-
     data.uuid = before.uuid;
     data.default_admin_id = before.default_admin_id;
     data.ldap_sync_status = before.ldap_sync_status;
@@ -186,13 +175,8 @@ pub(crate) async fn update_settings(
     let after = data.clone();
 
     update_current_settings(&appstate.pool, data).await?;
-    update_cached_license(license.as_deref())?;
 
-    // A license flip changes the effective Edge payload even when no setting field did, so
-    // compare licensing too.
-    if before.edge_public_settings_changed(&after)
-        || licensed_before != is_business_license_active()
-    {
+    if before.edge_public_settings_changed(&after) {
         broadcast_public_settings(&appstate.pool, &after, &appstate.proxy_control_tx).await;
     }
 
@@ -255,8 +239,7 @@ pub async fn get_settings_essentials(Extension(pool): Extension<PgPool>) -> ApiR
         (status = 500, description = "Unable to restore default branding settings.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn set_default_branding(
@@ -294,21 +277,6 @@ pub(crate) async fn set_default_branding(
     }
 }
 
-fn is_license_reactivation(
-    current_license: Option<&License>,
-    new_license: &License,
-    counts: &Counts,
-) -> bool {
-    let Some(current_license) = current_license else {
-        return false;
-    };
-    let current_license_invalid = current_license
-        .validate(counts, LicenseTier::Business)
-        .is_err();
-    let new_license_valid = new_license.validate(counts, LicenseTier::Business).is_ok();
-    current_license_invalid && new_license_valid
-}
-
 /// Update selected instance settings
 ///
 /// Only the fields present in the request body are modified. Sending `null` clears a field.
@@ -318,15 +286,14 @@ fn is_license_reactivation(
     tag = "settings",
     request_body = Object,
     responses(
-        (status = 200, description = "Settings updated. The body carries a `license_reactivated` code when an invalid license has been replaced with a valid one.", body = Object, example = json!({"code": "license_reactivated"})),
+        (status = 200, description = "Settings updated."),
         (status = 400, description = "Invalid settings.", body = ApiErrorResponse, example = json!({"msg": "Invalid settings"})),
         (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
         (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
         (status = 500, description = "Unable to update settings.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn patch_settings(
@@ -340,9 +307,6 @@ pub async fn patch_settings(
     let mut settings = Settings::get_current_settings();
     // Keep the pre-patch settings for validation and event reporting.
     let before = settings.clone();
-    let license = data.license.clone();
-    let licensed_before = is_business_license_active();
-
     settings.apply(data);
     settings.invalidate_ldap_sync_status(&before);
     settings.validate_against(&before)?;
@@ -350,33 +314,8 @@ pub async fn patch_settings(
     // clone for event
     let after = settings.clone();
     update_current_settings(&appstate.pool, settings).await?;
-    let mut license_reactivated = false;
-    if let Some(license_key) = &license {
-        if let Some(new_key) = license_key.as_deref()
-            && let Ok(new_license) = License::from_base64(new_key)
-        {
-            let counts = get_counts();
-            license_reactivated =
-                is_license_reactivation(get_cached_license().as_ref(), &new_license, &counts);
-            if license_reactivated {
-                info!(
-                    "Admin {} replaced a previously invalid license with a valid one",
-                    session.user.username
-                );
-            }
-        } else {
-            info!("Couldn't obtain current license");
-        }
 
-        update_cached_license(license_key.as_deref())?;
-        debug!("Updated cached license after saving settings patch");
-    }
-
-    // A license flip changes the effective Edge payload even when no setting field did, so
-    // compare licensing too.
-    if before.edge_public_settings_changed(&after)
-        || licensed_before != is_business_license_active()
-    {
+    if before.edge_public_settings_changed(&after) {
         broadcast_public_settings(&appstate.pool, &after, &appstate.proxy_control_tx).await;
     }
 
@@ -386,215 +325,5 @@ pub async fn patch_settings(
         event: Box::new(ApiEventType::SettingsUpdatedPartial { before, after }),
     })?;
 
-    if license_reactivated {
-        Ok(ApiResponseCode::LicenseReactivated.into())
-    } else {
-        Ok(ApiResponse::default())
-    }
-}
-
-fn fill_ldap_password(settings: &mut Settings) {
-    let stored_settings = Settings::get_current_settings();
-    if settings.ldap_bind_password.is_none()
-        && settings.ldap_url == stored_settings.ldap_url
-        && settings.ldap_bind_username == stored_settings.ldap_bind_username
-    {
-        settings.ldap_bind_password = stored_settings.ldap_bind_password;
-    }
-}
-
-/// Test the LDAP connection using the currently saved settings
-#[cfg_attr(feature = "openapi", utoipa::path(
-    get,
-    path = "/api/v1/ldap/test",
-    tag = "LDAP",
-    responses(
-        (status = 200, description = "LDAP connection established."),
-        (status = 400, description = "Unable to connect to LDAP.", body = ApiErrorResponse, example = json!({"msg": "LDAP error: LDAP operation result: rc=49 (invalidCredentials)"})),
-        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
-        (status = 403, description = "Requires admin privileges and an active enterprise license.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
-        (status = 500, description = "Unable to test LDAP connection.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
-    ),
-    security(
-        ("cookie" = []),
-        ("api_token" = [])
-    )
-))]
-pub(crate) async fn test_ldap_settings(_admin: AdminRole, _license: LicenseInfo) -> ApiResult {
-    debug!("Testing LDAP connection");
-    LDAPConnection::create()
-        .await
-        .map_err(|err| WebError::BadRequest(err.to_string()))?;
-    debug!("LDAP connected successfully");
-    Ok(ApiResponse::with_status(StatusCode::OK))
-}
-
-/// Test the LDAP connection
-///
-/// Uses the settings from the request body, which do not have to be saved yet.
-#[cfg_attr(feature = "openapi", utoipa::path(
-    post,
-    path = "/api/v1/ldap/test",
-    tag = "LDAP",
-    request_body = Object,
-    responses(
-        (status = 200, description = "LDAP connection established."),
-        (status = 400, description = "Unable to connect to LDAP.", body = ApiErrorResponse, example = json!({"msg": "LDAP error: LDAP operation result: rc=49 (invalidCredentials)"})),
-        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
-        (status = 403, description = "Requires admin privileges and an active enterprise license.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
-        (status = 500, description = "Unable to test LDAP connection.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
-    ),
-    security(
-        ("cookie" = []),
-        ("api_token" = [])
-    )
-))]
-pub(crate) async fn test_submitted_ldap_settings(
-    _admin: AdminRole,
-    _license: LicenseInfo,
-    Json(mut settings): Json<Settings>,
-) -> ApiResult {
-    fill_ldap_password(&mut settings);
-    debug!("Testing LDAP connection with provided settings");
-    LDAPConnection::create_with_settings(settings)
-        .await
-        .map_err(|err| WebError::BadRequest(err.to_string()))?;
-    debug!("LDAP connected successfully");
-    Ok(ApiResponse::with_status(StatusCode::OK))
-}
-
-/// Preview the changes a full LDAP sync would make
-///
-/// Uses the settings from the request body, which do not have to be saved yet. Read-only:
-/// nothing is imported, removed or persisted.
-#[cfg_attr(feature = "openapi", utoipa::path(
-    post,
-    path = "/api/v1/ldap/dry_run",
-    tag = "LDAP",
-    request_body = Object,
-    responses(
-        (status = 200, description = "Dry run result.", body = Object, example = json!({
-            "xguard": [{"username": "jane", "email": "jane@example.com", "first_name": "Jane", "last_name": "Doe", "action": "add"}],
-            "ldap": [{"username": "john", "email": "john@example.com", "first_name": "John", "last_name": "Doe", "action": "remove"}]
-        })),
-        (status = 400, description = "Unable to connect to LDAP or to perform the dry run.", body = ApiErrorResponse, example = json!({"msg": "LDAP error: LDAP operation result: rc=49 (invalidCredentials)"})),
-        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
-        (status = 403, description = "Requires admin privileges and an active enterprise license.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
-        (status = 500, description = "Unable to perform LDAP dry run.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
-    ),
-    security(
-        ("cookie" = []),
-        ("api_token" = [])
-    )
-))]
-pub(crate) async fn ldap_dry_run(
-    _admin: AdminRole,
-    _license: LicenseInfo,
-    State(appstate): State<AppState>,
-    Json(mut settings): Json<Settings>,
-) -> ApiResult {
-    fill_ldap_password(&mut settings);
-    debug!("Performing LDAP dry run with provided settings");
-    let authority = if settings.ldap_is_authoritative {
-        Authority::LDAP
-    } else {
-        Authority::XGuard
-    };
-
-    let mut connection = LDAPConnection::create_with_settings(settings)
-        .await
-        .map_err(|err| WebError::BadRequest(err.to_string()))?;
-    let result = connection
-        .dry_run(&appstate.pool, authority)
-        .await
-        .map_err(|err| WebError::BadRequest(err.to_string()))?;
-    debug!("LDAP dry run completed successfully");
-    Ok(ApiResponse::json(result, StatusCode::OK))
-}
-
-#[cfg(test)]
-mod tests {
-    use chrono::{TimeDelta, Utc};
-
-    use super::is_license_reactivation;
-    use crate::enterprise::{
-        license::{License, LicenseTier, SupportType},
-        limits::Counts,
-    };
-
-    fn license(subscription: bool, valid_until_days: i64) -> License {
-        License::new(
-            "test-customer".into(),
-            subscription,
-            Some(Utc::now() + TimeDelta::days(valid_until_days)),
-            None,
-            None,
-            LicenseTier::Business,
-            SupportType::Basic,
-            Vec::new(),
-        )
-    }
-
-    #[test]
-    fn reactivation_past_grace_subscription_replaced_by_valid() {
-        assert!(is_license_reactivation(
-            Some(&license(true, -20)),
-            &license(true, 365),
-            &Counts::default()
-        ));
-    }
-
-    #[test]
-    fn reactivation_expired_non_subscription_replaced_by_valid() {
-        assert!(is_license_reactivation(
-            Some(&license(false, -1)),
-            &license(true, 365),
-            &Counts::default()
-        ));
-    }
-
-    #[test]
-    fn reactivation_when_new_subscription_still_within_grace() {
-        assert!(is_license_reactivation(
-            Some(&license(true, -20)),
-            &license(true, -5),
-            &Counts::default()
-        ));
-    }
-
-    #[test]
-    fn no_reactivation_when_current_subscription_within_grace() {
-        assert!(!is_license_reactivation(
-            Some(&license(true, -5)),
-            &license(true, 365),
-            &Counts::default()
-        ));
-    }
-
-    #[test]
-    fn no_reactivation_when_current_still_valid() {
-        assert!(!is_license_reactivation(
-            Some(&license(true, 365)),
-            &license(true, 365),
-            &Counts::default()
-        ));
-    }
-
-    #[test]
-    fn no_reactivation_when_new_license_also_unusable() {
-        assert!(!is_license_reactivation(
-            Some(&license(true, -20)),
-            &license(true, -20),
-            &Counts::default()
-        ));
-    }
-
-    #[test]
-    fn no_reactivation_without_current_license() {
-        assert!(!is_license_reactivation(
-            None,
-            &license(true, 365),
-            &Counts::default()
-        ));
-    }
+    Ok(ApiResponse::default())
 }

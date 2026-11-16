@@ -3,6 +3,7 @@ import './style.scss';
 import { ZipArchive } from '@shortercode/webzip';
 import { useCallback, useMemo, useState } from 'react';
 import { m } from '../../../paraglide/messages';
+import { downloadFile, downloadText } from '../../utils/download';
 import { Button } from '../../xguard-ui/components/Button/Button';
 import { ButtonMenu } from '../../xguard-ui/components/ButtonMenu/MenuButton';
 import type { MenuItemsGroup } from '../../xguard-ui/components/Menu/types';
@@ -13,7 +14,6 @@ import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
 import { useClipboard } from '../../xguard-ui/hooks/useClipboard';
 import { ThemeSpacing } from '../../xguard-ui/types';
 import { isPresent } from '../../xguard-ui/utils/isPresent';
-import { downloadFile, downloadText } from '../../utils/download';
 
 const configToOption = (
   item: AddDeviceResponseConfig,

@@ -1,22 +1,19 @@
 import './style.scss';
-import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { titleCase } from 'text-case';
 import { m } from '../../../paraglide/messages';
+import type { ApiToken } from '../../../shared/api/types';
 import { Page } from '../../../shared/components/Page/Page';
-import { Tabs } from '../../../shared/xguard-ui/components/Tabs/Tabs';
-import type { TabsItem } from '../../../shared/xguard-ui/components/Tabs/types';
 import { useAuth } from '../../../shared/hooks/useAuth';
 import {
-  getLicenseInfoQueryOptions,
-  getUserApiTokensQueryOptions,
   getUserAuthKeysQueryOptions,
   userProfileQueryOptions,
 } from '../../../shared/query';
-import { canUseBusinessFeature } from '../../../shared/utils/license';
+import { Tabs } from '../../../shared/xguard-ui/components/Tabs/Tabs';
+import type { TabsItem } from '../../../shared/xguard-ui/components/Tabs/types';
 import { createUserProfileStore, UserProfileContext } from './hooks/useUserProfilePage';
-import { ProfileApiTokensTab } from './tabs/ProfileApiTokensTab/ProfileApiTokensTab';
 import { ProfileAuthKeysTab } from './tabs/ProfileAuthKeysTab/ProfileAuthKeysTab';
 import { ProfileDetailsTab } from './tabs/ProfileDetailsTab/ProfileDetailsTab';
 import { ProfileDevicesTab } from './tabs/ProfileDevicesTab/ProfileDevicesTab';
@@ -29,10 +26,11 @@ import {
 
 const defaultTab = UserProfileTab.Details;
 
+// API tokens are not part of XGuard yet (stable empty list for hook deps).
+const NO_API_TOKENS: ApiToken[] = [];
 export const UserProfilePage = () => {
   const navigate = useNavigate();
   const authUsername = useAuth((s) => s.user?.username as string);
-  const isAdmin = useAuth((s) => s.isAdmin);
   const search = useSearch({ from: '/_authorized/_default/user/$username' });
   const activeTab = search.tab ?? defaultTab;
 
@@ -47,31 +45,12 @@ export const UserProfilePage = () => {
 
   const { data: userProfile } = useSuspenseQuery(userProfileQueryOptions(username));
   const { data: userAuthKeys } = useSuspenseQuery(getUserAuthKeysQueryOptions(username));
-  const { data: licenseInfo } = useQuery({
-    ...getLicenseInfoQueryOptions,
-    enabled: isAdmin,
-  });
 
-  const apiTokensTabAvailability = useMemo((): ApiTokensTabAvailabilityValue => {
-    if (!userProfile.user.is_admin) {
-      return ApiTokensTabAvailability.Hidden;
-    }
+  // API tokens are not part of XGuard yet (enterprise code removed); the tab stays hidden.
+  const apiTokensTabAvailability: ApiTokensTabAvailabilityValue =
+    ApiTokensTabAvailability.Hidden;
 
-    if (licenseInfo === undefined) {
-      return ApiTokensTabAvailability.Loading;
-    }
-
-    return canUseBusinessFeature(licenseInfo).result
-      ? ApiTokensTabAvailability.Available
-      : ApiTokensTabAvailability.Unavailable;
-  }, [licenseInfo, userProfile.user.is_admin]);
-
-  const { data: userApiTokens, isPending: userApiTokensPending } = useQuery(
-    getUserApiTokensQueryOptions(
-      username,
-      apiTokensTabAvailability === ApiTokensTabAvailability.Available,
-    ),
-  );
+  const userApiTokens = NO_API_TOKENS;
 
   const pageTitle = useMemo(() => {
     if (isSelf) {
@@ -110,7 +89,7 @@ export const UserProfilePage = () => {
     }
 
     setActiveTab(UserProfileTab.ApiTokens);
-  }, [apiTokensTabAvailability, setActiveTab]);
+  }, [setActiveTab]);
 
   const tabsConfiguration = useMemo(() => {
     const res: TabsItem[] = [
@@ -137,7 +116,7 @@ export const UserProfilePage = () => {
       },
     ];
     return res;
-  }, [apiTokensTabAvailability, setActiveTab, setApiTokensTabIfAllowed, activeTab]);
+  }, [setActiveTab, setApiTokensTabIfAllowed, activeTab]);
 
   const activeTabContent = useMemo(() => {
     switch (activeTab) {
@@ -148,19 +127,11 @@ export const UserProfilePage = () => {
       case UserProfileTab.AuthKeys:
         return <ProfileAuthKeysTab />;
       case UserProfileTab.ApiTokens:
-        return (
-          <ProfileApiTokensTab
-            availability={apiTokensTabAvailability}
-            isLoading={
-              apiTokensTabAvailability === ApiTokensTabAvailability.Available &&
-              userApiTokensPending
-            }
-          />
-        );
+        return null;
       default:
         return <ProfileDetailsTab />;
     }
-  }, [activeTab, apiTokensTabAvailability, userApiTokensPending]);
+  }, [activeTab]);
 
   useEffect(() => {
     if (
@@ -176,7 +147,7 @@ export const UserProfilePage = () => {
         tab: UserProfileTab.Details,
       },
     });
-  }, [activeTab, apiTokensTabAvailability, navigate]);
+  }, [activeTab, navigate]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: side effect
   useEffect(() => {

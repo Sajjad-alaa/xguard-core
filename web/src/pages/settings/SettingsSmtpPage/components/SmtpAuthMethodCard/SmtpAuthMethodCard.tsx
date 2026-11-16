@@ -2,15 +2,14 @@ import './style.scss';
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
 import { m } from '../../../../../paraglide/messages';
-import { BusinessBadge } from '../../../../../shared/components/badges/BusinessBadge';
 import { Badge } from '../../../../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../../../../shared/xguard-ui/components/Button/Button';
 import { Icon, IconKind } from '../../../../../shared/xguard-ui/components/Icon';
 import { IconButtonMenu } from '../../../../../shared/xguard-ui/components/IconButtonMenu/IconButtonMenu';
 import type { MenuItemsGroup } from '../../../../../shared/xguard-ui/components/Menu/types';
 import { ThemeVariable } from '../../../../../shared/xguard-ui/types';
-import google from '../../../SettingsExternalOpenIdPage/components/ExternalProviderCard/assets/google.png';
-import microsoft from '../../../SettingsExternalOpenIdPage/components/ExternalProviderCard/assets/microsoft.png';
+import google from './assets/google.png';
+import microsoft from './assets/microsoft.png';
 
 export type SmtpAuthCardVariant = 'none' | 'basic' | 'google' | 'microsoft' | 'custom';
 
@@ -35,7 +34,7 @@ const cardIcon: Record<SmtpAuthCardVariant, ReactNode> = {
 export const SmtpAuthMethodCard = ({
   variant,
   active = false,
-  locked = false,
+  locked: _locked = false,
   onConfigure,
   onEdit,
   onSendTestEmail,
@@ -109,7 +108,6 @@ export const SmtpAuthMethodCard = ({
                 text={m.settings_smtp_auth_card_active_method()}
               />
             )}
-            {locked && <BusinessBadge />}
           </div>
           <p className="description">{cardDescriptions[variant]}</p>
         </div>

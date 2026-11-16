@@ -4,14 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { m } from '../../../paraglide/messages';
 import { type GroupClientMtu, LicenseFeature } from '../../api/types';
+import { getGroupsInfoQueryOptions, getLicenseInfoQueryOptions } from '../../query';
+import { canUseEnterpriseFeature } from '../../utils/license';
 import { AppText } from '../../xguard-ui/components/AppText/AppText';
-import { Badge } from '../../xguard-ui/components/Badge/Badge';
 import { Button } from '../../xguard-ui/components/Button/Button';
 import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
 import { TextStyle, ThemeSpacing, ThemeVariable } from '../../xguard-ui/types';
-import { getGroupsInfoQueryOptions, getLicenseInfoQueryOptions } from '../../query';
-import { canUseEnterpriseFeature } from '../../utils/license';
-import { enterpriseBadgeProps } from '../badges/EnterpriseBadge';
 import type { SelectionOption } from '../SelectionSection/type';
 import { GroupMtuCard } from './GroupMtuCard';
 import { GroupMtuModal } from './GroupMtuModal';
@@ -80,9 +78,6 @@ export const LocationGroupMtuSection = ({ overrides, onChange }: Props) => {
         <AppText font={TextStyle.TBodyPrimary600} color={ThemeVariable.FgDefault}>
           {m.location_network_group_mtu_title()}
         </AppText>
-        {locked && (
-          <Badge {...enterpriseBadgeProps} text={m.license_enterprise_feature_badge()} />
-        )}
       </div>
       <SizedBox height={ThemeSpacing.Xs} />
       <AppText font={TextStyle.TBodySm400} color={ThemeVariable.FgMuted}>

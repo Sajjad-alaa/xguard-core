@@ -1,6 +1,9 @@
 use std::net::IpAddr;
 
 use base64::{DecodeError, Engine, prelude::BASE64_STANDARD};
+use ipnetwork::{IpNetwork, IpNetworkError};
+use thiserror::Error;
+use x25519_dalek::{PublicKey, StaticSecret};
 use xguard_common::{
     KEY_LENGTH,
     db::{
@@ -11,9 +14,6 @@ use xguard_common::{
         },
     },
 };
-use ipnetwork::{IpNetwork, IpNetworkError};
-use thiserror::Error;
-use x25519_dalek::{PublicKey, StaticSecret};
 
 #[derive(Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

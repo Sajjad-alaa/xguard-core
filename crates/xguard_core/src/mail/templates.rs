@@ -1,11 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
 use chrono::{Datelike, NaiveDateTime, Utc};
-use xguard_common::{
-    VERSION,
-    db::models::{Session, Settings, user::MFAMethod},
-    types::UrlParseError,
-};
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd, html};
 use reqwest::Url;
 use serde::Serialize;
@@ -14,6 +9,11 @@ use sqlx::PgConnection;
 use tera::{Context, Function, Tera};
 use thiserror::Error;
 use tracing::{debug, warn};
+use xguard_common::{
+    VERSION,
+    db::models::{Session, Settings, user::MFAMethod},
+    types::UrlParseError,
+};
 
 use super::{Attachment, Mail, MailError, MailMessage};
 

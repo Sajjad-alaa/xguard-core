@@ -1,6 +1,6 @@
 use axum::{extract::State, http::StatusCode};
-use xguard_common::db::models::{ActiveWizard, User, Wizard};
 use serde::Serialize;
+use xguard_common::db::models::{ActiveWizard, User, Wizard};
 
 use super::{ApiResponse, ApiResult};
 #[cfg(feature = "openapi")]

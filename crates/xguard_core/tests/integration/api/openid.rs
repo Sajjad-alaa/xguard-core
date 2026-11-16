@@ -1,18 +1,6 @@
 use std::str::FromStr;
 
 use axum::http::header::ToStrError;
-use xguard_common::{
-    db::{
-        Id,
-        models::{
-            OAuth2AuthorizedApp, Settings, User,
-            oauth2client::OAuth2Client,
-            settings::{OPENID_KEY_SIZE, set_settings, update_current_settings},
-        },
-    },
-    testing::smtp::MockSmtpServer,
-};
-use xguard_core::handlers::{Auth, openid_clients::NewOpenIDClient};
 use openidconnect::{
     AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
     EmptyAdditionalClaims, HttpRequest, HttpResponse, IssuerUrl, Nonce, OAuth2TokenResponse,
@@ -29,6 +17,18 @@ use reqwest::{
 use rsa::{RsaPrivateKey, pkcs8::EncodePrivateKey};
 use serde::Deserialize;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use xguard_common::{
+    db::{
+        Id,
+        models::{
+            OAuth2AuthorizedApp, Settings, User,
+            oauth2client::OAuth2Client,
+            settings::{OPENID_KEY_SIZE, set_settings, update_current_settings},
+        },
+    },
+    testing::smtp::MockSmtpServer,
+};
+use xguard_core::handlers::{Auth, openid_clients::NewOpenIDClient};
 
 use super::{
     TEST_SERVER_URL,

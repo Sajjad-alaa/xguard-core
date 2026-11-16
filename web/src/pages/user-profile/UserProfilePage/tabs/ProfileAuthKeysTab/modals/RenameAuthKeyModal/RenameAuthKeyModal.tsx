@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import z from 'zod';
 import { m } from '../../../../../../../paraglide/messages';
 import api from '../../../../../../../shared/api/api';
-import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../../../../../shared/form';
 import { formChangeLogic } from '../../../../../../../shared/formLogic';
 import {
@@ -16,6 +13,9 @@ import {
 } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
 import type { OpenAuthKeyRenameModal } from '../../../../../../../shared/hooks/modalControls/types';
+import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
 
 const modalNameKey = ModalName.RenameAuthKey;
 

@@ -1,13 +1,13 @@
 use chrono::Duration;
+use reqwest::StatusCode;
+use serde::Deserialize;
+use serde_json::json;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::db::models::{Settings, User, settings::update_current_settings};
 use xguard_core::{
     db::models::enrollment::Token,
     handlers::{AddUserData, Auth},
 };
-use reqwest::StatusCode;
-use serde::Deserialize;
-use serde_json::json;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::common::{
     configure_ldap, configure_smtp, fetch_user_details, get_db_user, make_client_with_db,

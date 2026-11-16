@@ -12,6 +12,20 @@ use std::{
     time::Duration,
 };
 
+use prost_types::Timestamp;
+use sqlx::{PgPool, postgres::PgConnectOptions};
+use tokio::{
+    net::UnixListener,
+    sync::{
+        Notify,
+        mpsc::{self, UnboundedReceiver, UnboundedSender},
+        oneshot, watch,
+    },
+    task::JoinHandle,
+    time::{sleep, timeout},
+};
+use tokio_stream::{once, wrappers::UnboundedReceiverStream};
+use tonic::{Request, Response, Status, Streaming, transport::Server};
 use xguard_common::{
     db::{
         Id, NoId,
@@ -30,20 +44,6 @@ use xguard_core::events::GatewayConnectionEvent;
 use xguard_proto::gateway::{
     CoreRequest, CoreResponse, PeerStats, core_request, core_response, gateway_server,
 };
-use prost_types::Timestamp;
-use sqlx::{PgPool, postgres::PgConnectOptions};
-use tokio::{
-    net::UnixListener,
-    sync::{
-        Notify,
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
-        oneshot, watch,
-    },
-    task::JoinHandle,
-    time::{sleep, timeout},
-};
-use tokio_stream::{once, wrappers::UnboundedReceiverStream};
-use tonic::{Request, Response, Status, Streaming, transport::Server};
 
 use crate::{
     GatewayManagerTestSupport, GatewayTxSet, handler::GatewayHandler, manager::GatewayManager,

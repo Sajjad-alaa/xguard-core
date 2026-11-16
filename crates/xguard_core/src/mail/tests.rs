@@ -1,8 +1,15 @@
 use std::{env, time::Duration};
 
 use chrono::Utc;
+use reqwest::Url;
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
+use tera::Context;
+use tokio::time::sleep;
 use xguard_common::{
-    config::{XGuardConfig, SERVER_CONFIG},
+    config::{SERVER_CONFIG, XGuardConfig},
     db::{
         models::{
             MFAMethod, Settings,
@@ -15,13 +22,6 @@ use xguard_common::{
     },
     secret::SecretStringWrapper,
 };
-use reqwest::Url;
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
-};
-use tera::Context;
-use tokio::time::sleep;
 
 use super::{Attachment, MailMessage, templates};
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Device, DeviceNetworkInfo } from '../src/shared/api/types';
 import { joinCsv, splitCsv } from '../src/shared/utils/csv';
-import { isValidXGuardUrl } from '../src/shared/utils/xguardUrl';
 import { formatFileName } from '../src/shared/utils/formatFileName';
 import { formatIpForDisplay } from '../src/shared/utils/formatIpForDisplay';
 import { smallestNetworkCapacity } from '../src/shared/utils/network';
@@ -9,6 +8,7 @@ import { removeEmptyStrings } from '../src/shared/utils/removeEmptyStrings';
 import { removeNulls } from '../src/shared/utils/removeNulls';
 import { resourceById, resourceDisplayMap } from '../src/shared/utils/resourceById';
 import { isDeviceOnline, isUserOnline } from '../src/shared/utils/userOnlineStatus';
+import { isValidXGuardUrl } from '../src/shared/utils/xguardUrl';
 
 describe('joinCsv', () => {
   it('should join array into comma-separated string', () => {

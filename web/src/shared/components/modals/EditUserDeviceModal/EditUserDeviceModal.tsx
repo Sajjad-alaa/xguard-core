@@ -5,11 +5,6 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../api/api';
-import { Modal } from '../../../xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../xguard-ui/types';
-import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../form';
 import { formChangeLogic } from '../../../formLogic';
 import {
@@ -20,6 +15,11 @@ import {
 import { ModalName } from '../../../hooks/modalControls/modalTypes';
 import type { OpenEditDeviceModal } from '../../../hooks/modalControls/types';
 import { patternValidWireguardKey } from '../../../patterns';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../xguard-ui/types';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 
 const modalName = ModalName.EditUserDevice;
 

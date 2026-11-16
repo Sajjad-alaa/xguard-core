@@ -12,6 +12,10 @@ use axum_extra::{
     },
     headers::UserAgent,
 };
+use sqlx::{PgPool, types::Uuid};
+use time::Duration;
+use webauthn_rs::prelude::PublicKeyCredential;
+use webauthn_rs_proto::options::CollectedClientData;
 use xguard_common::{
     db::{
         Id,
@@ -22,10 +26,6 @@ use xguard_common::{
     },
     types::user_info::UserInfo,
 };
-use sqlx::{PgPool, types::Uuid};
-use time::Duration;
-use webauthn_rs::prelude::PublicKeyCredential;
-use webauthn_rs_proto::options::CollectedClientData;
 
 use super::{
     ApiResponse, ApiResult, Auth, AuthCode, AuthResponse, AuthTotp, RecoveryCode, RecoveryCodes,
@@ -38,10 +38,6 @@ use crate::{
     auth::{
         SessionExtractor, SessionInfo,
         login_throttle::{charge_login_attempt, login_key, refund_login_attempt},
-    },
-    enterprise::{
-        db::models::openid_provider::OpenIdProvider,
-        ldap::{error::LdapError, utils::login_through_ldap},
     },
     error::WebError,
     events::{ApiEvent, ApiEventType, ApiRequestContext},
@@ -109,8 +105,7 @@ pub async fn create_session(
             "User {} has MFA disabled, returning user info for login.",
             user.username
         );
-        let oidc_disable_password_management =
-            OpenIdProvider::current_disables_password_management(pool).await?;
+        let oidc_disable_password_management = false;
         let user_info =
             UserInfo::from_user(pool, user.clone(), oidc_disable_password_management).await?;
 
@@ -162,7 +157,7 @@ pub async fn authenticate(
     let username_or_email = data.username;
     debug!("Authenticating user {username_or_email}");
 
-    let settings = Settings::get_current_settings();
+    let _settings = Settings::get_current_settings();
 
     // Attempt to find a user: first by username, and then by email.
     let mut conn = appstate.pool.acquire().await?;
@@ -175,70 +170,24 @@ pub async fn authenticate(
         match user.verify_password(&data.password) {
             Ok(()) => user,
             Err(err) => {
-                // password authentication failed, try authenticating with LDAP if configured
-                if settings.ldap_enabled {
-                    match login_through_ldap(&appstate.pool, &username_or_email, &data.password)
-                        .await
-                    {
-                        Ok(user) => user,
-                        Err(LdapError::LicenseUserLimitReached(_, _)) => {
-                            refund_login_attempt(&mut *conn, &throttle_key).await?;
-                            return Err(WebError::Forbidden("License limit reached."));
-                        }
-                        Err(ldap_err) => {
-                            warn!(
-                                "Failed to authenticate user {username_or_email} internally and through LDAP. Internal error: {err}, LDAP error: {ldap_err}"
-                            );
-
-                            appstate.emit_event(ApiEvent {
-                            context: ApiRequestContext::new(
-                                user.id,
-                                user.username,
-                                ip_addr,
-                                user_agent.to_string(),
-                            ),
-                            event: Box::new(ApiEventType::UserLoginFailed {
-                                message: format!(
-                                    "Internal and LDAP authentication for {username_or_email} failed. Internal error: {err}, LDAP error: {ldap_err}"
-                                ),
-                            }),
-                        })?;
-                            return Err(WebError::Authentication);
-                        }
-                    }
-                } else {
-                    warn!("Failed to authenticate user {username_or_email}: {err}");
-                    appstate.emit_event(ApiEvent {
-                        context: ApiRequestContext::new(
-                            user.id,
-                            user.username,
-                            ip_addr,
-                            user_agent.to_string(),
-                        ),
-                        event: Box::new(ApiEventType::UserLoginFailed {
-                            message: format!(
-                                "Authentication for {username_or_email} failed: {err}"
-                            ),
-                        }),
-                    })?;
-                    return Err(WebError::Authentication);
-                }
-            }
-        }
-    } else {
-        // try to create user from LDAP
-        debug!("User not found in DB, authenticating user {username_or_email} with LDAP");
-        match login_through_ldap(&appstate.pool, &username_or_email, &data.password).await {
-            Ok(user) => user,
-            Err(LdapError::LicenseUserLimitReached(_, _)) => {
-                refund_login_attempt(&mut *conn, &throttle_key).await?;
-                return Err(WebError::Forbidden("License limit reached."));
-            }
-            Err(err) => {
-                info!("Failed to authenticate user {username_or_email} with LDAP: {err}");
+                warn!("Failed to authenticate user {username_or_email}: {err}");
+                appstate.emit_event(ApiEvent {
+                    context: ApiRequestContext::new(
+                        user.id,
+                        user.username,
+                        ip_addr,
+                        user_agent.to_string(),
+                    ),
+                    event: Box::new(ApiEventType::UserLoginFailed {
+                        message: format!("Authentication for {username_or_email} failed: {err}"),
+                    }),
+                })?;
                 return Err(WebError::Authentication);
             }
         }
+    } else {
+        info!("Failed to authenticate user {username_or_email}: user not found");
+        return Err(WebError::Authentication);
     };
     refund_login_attempt(&mut *conn, &throttle_key).await?;
 
@@ -334,8 +283,7 @@ pub async fn authenticate(
         (status = 500, description = "Unable to remove the session.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn logout(
@@ -385,8 +333,7 @@ pub async fn logout(
         (status = 500, description = "Unable to enable MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn mfa_enable(
@@ -426,8 +373,7 @@ pub async fn mfa_enable(
         (status = 500, description = "Unable to disable MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn mfa_disable(
@@ -462,8 +408,7 @@ pub async fn mfa_disable(
         (status = 500, description = "Unable to disable MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn disable_user_mfa(
@@ -503,8 +448,7 @@ pub async fn disable_user_mfa(
         (status = 500, description = "Unable to start WebAuthn registration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn webauthn_init(
@@ -555,8 +499,7 @@ pub async fn webauthn_init(
         (status = 500, description = "Unable to finish WebAuthn registration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn webauthn_finish(
@@ -647,8 +590,7 @@ pub async fn webauthn_finish(
         (status = 500, description = "Unable to start WebAuthn authentication.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn webauthn_start(
@@ -684,8 +626,7 @@ pub async fn webauthn_start(
         (status = 500, description = "Unable to finish WebAuthn authentication.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn webauthn_end(
@@ -715,9 +656,7 @@ pub async fn webauthn_end(
 
                 return if let Some(user) = User::find_by_id(&appstate.pool, session.user_id).await?
                 {
-                    let oidc_disable_password_management =
-                        OpenIdProvider::current_disables_password_management(&appstate.pool)
-                            .await?;
+                    let oidc_disable_password_management = false;
                     let user_info = UserInfo::from_user(
                         &appstate.pool,
                         user.clone(),
@@ -807,8 +746,7 @@ pub async fn webauthn_end(
         (status = 500, description = "Unable to generate TOTP secret.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn totp_secret(session: SessionInfo, State(appstate): State<AppState>) -> ApiResult {
@@ -835,8 +773,7 @@ pub async fn totp_secret(session: SessionInfo, State(appstate): State<AppState>)
         (status = 500, description = "Unable to enable TOTP.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn totp_enable(
@@ -892,8 +829,7 @@ pub async fn totp_enable(
         (status = 500, description = "Unable to disable TOTP.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn totp_disable(
@@ -930,8 +866,7 @@ pub async fn totp_disable(
         (status = 500, description = "Unable to verify TOTP code.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn totp_code(
@@ -952,8 +887,7 @@ pub async fn totp_code(
             session
                 .set_state(&appstate.pool, SessionState::MultiFactorVerified)
                 .await?;
-            let oidc_disable_password_management =
-                OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+            let oidc_disable_password_management = false;
             let user_info =
                 UserInfo::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
             info!("Verified TOTP for user {username}");
@@ -1040,8 +974,7 @@ pub async fn totp_code(
         (status = 503, description = "SMTP is not configured.", body = ApiErrorResponse, example = json!({"msg": "SMTP is not configured", "code": "smtp_not_configured"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn email_mfa_init(session: SessionInfo, State(appstate): State<AppState>) -> ApiResult {
@@ -1091,8 +1024,7 @@ pub async fn email_mfa_init(session: SessionInfo, State(appstate): State<AppStat
         (status = 500, description = "Unable to enable email MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn email_mfa_enable(
@@ -1147,8 +1079,7 @@ pub async fn email_mfa_enable(
         (status = 500, description = "Unable to disable email MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn email_mfa_disable(
@@ -1184,8 +1115,7 @@ pub async fn email_mfa_disable(
         (status = 503, description = "SMTP is not configured.", body = ApiErrorResponse, example = json!({"msg": "SMTP is not configured", "code": "smtp_not_configured"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn request_email_mfa_code(
@@ -1232,8 +1162,7 @@ pub async fn request_email_mfa_code(
         (status = 500, description = "Unable to verify email MFA code.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn email_mfa_code(
@@ -1254,8 +1183,7 @@ pub async fn email_mfa_code(
             session
                 .set_state(&appstate.pool, SessionState::MultiFactorVerified)
                 .await?;
-            let oidc_disable_password_management =
-                OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+            let oidc_disable_password_management = false;
             let user_info =
                 UserInfo::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
             info!("Verified email MFA code for user {username}");
@@ -1342,8 +1270,7 @@ pub async fn email_mfa_code(
         (status = 500, description = "Unable to verify recovery code.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn recovery_code(
@@ -1364,8 +1291,7 @@ pub async fn recovery_code(
             session
                 .set_state(&appstate.pool, SessionState::MultiFactorVerified)
                 .await?;
-            let oidc_disable_password_management =
-                OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+            let oidc_disable_password_management = false;
             let user_info = UserInfo::from_user(
                 &appstate.pool,
                 user.clone(),

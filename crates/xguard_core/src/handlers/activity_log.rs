@@ -6,9 +6,9 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use chrono::{DateTime, NaiveDateTime, Utc};
-use xguard_common::db::Id;
 use ipnetwork::IpNetwork;
 use sqlx::{FromRow, Postgres, QueryBuilder, Type};
+use xguard_common::db::Id;
 
 use super::pagination::{PaginatedApiResponse, PaginatedApiResult, PaginationParams};
 #[cfg(feature = "openapi")]
@@ -135,8 +135,7 @@ pub struct ApiActivityLogEventDetails {
         (status = 500, description = "Unable to fetch activity log event.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_activity_log_event(
@@ -189,8 +188,7 @@ pub async fn get_activity_log_event(
         (status = 500, description = "Unable to list activity log events.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_activity_log_events(

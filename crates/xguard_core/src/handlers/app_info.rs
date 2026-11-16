@@ -7,11 +7,7 @@ use xguard_common::{
 use super::{ApiResponse, ApiResult};
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
-use crate::{
-    appstate::AppState,
-    auth::SessionInfo,
-    enterprise::{db::models::openid_provider::OpenIdProvider, is_business_license_active},
-};
+use crate::{appstate::AppState, auth::SessionInfo};
 
 #[derive(Serialize)]
 struct LdapInfo {
@@ -48,31 +44,26 @@ pub struct AppInfo {
         (status = 500, description = "Unable to get instance information.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_app_info(State(appstate): State<AppState>, _session: SessionInfo) -> ApiResult {
-    // both `await`s are executed upfront to avoid holding license `RwLock` across an await point
     let networks = WireguardNetwork::all(&appstate.pool).await?;
-    let external_openid_enabled = OpenIdProvider::get_current(&appstate.pool).await?.is_some();
 
     let settings = Settings::get_current_settings();
-    let mut smtp_enabled = settings.smtp_configured();
-    // XOAUTH2 is only for the business licence.
-    if settings.smtp.is_xoauth2() && !is_business_license_active() {
-        smtp_enabled = false;
-    }
+    // XOAUTH2 SMTP needs the Microsoft OAuth2 integration, which XGuard does not include.
+    let smtp_enabled = settings.smtp_configured() && !settings.smtp.is_xoauth2();
 
     let res = AppInfo {
         network_present: !networks.is_empty(),
         smtp_enabled,
         version: REPORTED_VERSION.into(),
+        // LDAP and external OpenID providers are not part of XGuard.
         ldap_info: LdapInfo {
-            enabled: settings.ldap_enabled,
-            ad: settings.ldap_uses_ad,
+            enabled: false,
+            ad: false,
         },
-        external_openid_enabled,
+        external_openid_enabled: false,
     };
 
     Ok(ApiResponse::json(res, StatusCode::OK))

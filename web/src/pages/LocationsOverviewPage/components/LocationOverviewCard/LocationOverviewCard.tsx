@@ -13,6 +13,7 @@ import api from '../../../../shared/api/api';
 import { GatewaysStatusBadge } from '../../../../shared/components/GatewaysStatusBadge/GatewaysStatusBadge';
 import { TransferChart } from '../../../../shared/components/TransferChart/TransferChart';
 import { TransferText } from '../../../../shared/components/TransferText/TransferText';
+import { mapTransferToChart } from '../../../../shared/utils/stats';
 import { Badge } from '../../../../shared/xguard-ui/components/Badge/Badge';
 import { BadgeVariant } from '../../../../shared/xguard-ui/components/Badge/types';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
@@ -24,7 +25,6 @@ import type { IconKindValue } from '../../../../shared/xguard-ui/components/Icon
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
-import { mapTransferToChart } from '../../../../shared/utils/stats';
 
 type Props = {
   location: NetworkLocation;

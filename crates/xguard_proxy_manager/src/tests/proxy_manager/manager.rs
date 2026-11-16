@@ -1,11 +1,11 @@
 use std::time::Duration;
 
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::{
     db::models::settings::{Settings, update_current_settings},
     types::proxy::ProxyControlMessage,
 };
 use xguard_proto::proxy::core_response;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use crate::tests::{
     common::{

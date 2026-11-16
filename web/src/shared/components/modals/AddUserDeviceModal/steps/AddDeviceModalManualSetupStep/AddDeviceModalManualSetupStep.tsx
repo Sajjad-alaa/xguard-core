@@ -1,9 +1,9 @@
 import z from 'zod';
 import { m } from '../../../../../../paraglide/messages';
-import { Button } from '../../../../../xguard-ui/components/Button/Button';
-import { ModalControls } from '../../../../../xguard-ui/components/ModalControls/ModalControls';
 import { useAppForm, withForm } from '../../../../../form';
 import { formChangeLogic } from '../../../../../formLogic';
+import { Button } from '../../../../../xguard-ui/components/Button/Button';
+import { ModalControls } from '../../../../../xguard-ui/components/ModalControls/ModalControls';
 import './style.scss';
 import { useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
@@ -12,11 +12,11 @@ import { useMemo } from 'react';
 import api from '../../../../../api/api';
 import { getApiErrorMessage } from '../../../../../api/apiErrorMessages';
 import type { ApiError } from '../../../../../api/types';
+import { patternValidWireguardKey } from '../../../../../patterns';
+import { generateWGKeys } from '../../../../../utils/generateWGKeys';
 import { SizedBox } from '../../../../../xguard-ui/components/SizedBox/SizedBox';
 import { Snackbar } from '../../../../../xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../../../xguard-ui/types';
-import { patternValidWireguardKey } from '../../../../../patterns';
-import { generateWGKeys } from '../../../../../utils/generateWGKeys';
 import { useAddUserDeviceModal } from '../../store/useAddUserDeviceModal';
 import { AddUserDeviceModalStep } from '../../types';
 

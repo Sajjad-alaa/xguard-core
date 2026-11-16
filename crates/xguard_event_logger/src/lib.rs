@@ -1,30 +1,33 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use description::{get_api_event_description, get_enrollment_event_description};
+use error::EventLoggerError;
+use message::{Event, EventContext, EventLoggerMessage};
+use sqlx::PgPool;
+use tokio::sync::{Notify, broadcast, mpsc};
+use tracing::{debug, error, info, trace};
 use xguard_common::db::NoId;
 use xguard_core::{
     db::models::activity_log::{
         ActivityLogEvent, ActivityLogModule, EventType,
         metadata::{
-            ActivityLogStreamMetadata, ActivityLogStreamModifiedMetadata, ApiTokenMetadata,
-            ApiTokenRenamedMetadata, AuthenticationKeyMetadata, AuthenticationKeyRenamedMetadata,
-            ClientConfigurationTokenMetadata, ClientDeviceMetadata, DeviceMetadata,
-            DeviceModifiedMetadata, EnrollmentDeviceAddedMetadata, EnrollmentTokenMetadata,
-            EnterpriseSettingsUpdateMetadata, GatewayDeletedMetadata, GatewayModifiedMetadata,
-            GroupAssignedMetadata, GroupMembersModifiedMetadata, GroupMetadata,
-            GroupModifiedMetadata, GroupsBulkAssignedMetadata, LoginFailedMetadata,
+            AuthenticationKeyMetadata, AuthenticationKeyRenamedMetadata,
+            ClientConfigurationTokenMetadata, DeviceMetadata, DeviceModifiedMetadata,
+            EnrollmentDeviceAddedMetadata, EnrollmentTokenMetadata, GatewayDeletedMetadata,
+            GatewayModifiedMetadata, GroupAssignedMetadata, GroupMembersModifiedMetadata,
+            GroupMetadata, GroupModifiedMetadata, GroupsBulkAssignedMetadata, LoginFailedMetadata,
             MfaLoginFailedMetadata, MfaLoginMetadata, MfaSecurityKeyMetadata,
             NetworkDeviceMetadata, NetworkDeviceModifiedMetadata,
             OidcDirectorySyncGroupMemberMetadata, OidcDirectorySyncGroupMetadata,
             OidcDirectorySyncUserMetadata, OpenIdAppMetadata, OpenIdAppModifiedMetadata,
-            OpenIdAppStateChangedMetadata, OpenIdProviderMetadata, PasswordChangedByAdminMetadata,
-            PasswordResetMetadata, ProxyDeletedMetadata, ProxyModifiedMetadata,
-            SettingsUpdateMetadata, UserGroupsModifiedMetadata, UserImportBlockedMetadata,
-            UserMetadata, UserMfaDisabledMetadata, UserModifiedMetadata, UserSnatBindingMetadata,
-            UserSnatBindingModifiedMetadata, VpnClientMetadata, VpnClientMfaAbortedMetadata,
-            VpnClientMfaFailedMetadata, VpnClientMfaMetadata, VpnLocationMetadata,
-            VpnLocationModifiedMetadata, WebHookMetadata, WebHookModifiedMetadata,
-            WebHookStateChangedMetadata,
+            OpenIdAppStateChangedMetadata, PasswordChangedByAdminMetadata, PasswordResetMetadata,
+            ProxyDeletedMetadata, ProxyModifiedMetadata, SettingsUpdateMetadata,
+            UserGroupsModifiedMetadata, UserImportBlockedMetadata, UserMetadata,
+            UserMfaDisabledMetadata, UserModifiedMetadata, VpnClientMetadata,
+            VpnClientMfaAbortedMetadata, VpnClientMfaFailedMetadata, VpnClientMfaMetadata,
+            VpnLocationMetadata, VpnLocationModifiedMetadata, WebHookMetadata,
+            WebHookModifiedMetadata, WebHookStateChangedMetadata,
         },
     },
     events::{
@@ -34,12 +37,6 @@ use xguard_core::{
     },
 };
 use xguard_session_manager::events::{SessionManagerEvent, SessionManagerEventType};
-use description::{get_api_event_description, get_enrollment_event_description};
-use error::EventLoggerError;
-use message::{Event, EventContext, EventLoggerMessage};
-use sqlx::PgPool;
-use tokio::sync::{Notify, broadcast, mpsc};
-use tracing::{debug, error, info, trace};
 
 pub mod description;
 pub mod error;
@@ -323,37 +320,6 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     })
                     .ok(),
                 ),
-                ApiEventType::ApiTokenAdded { owner, token } => (
-                    EventType::ApiTokenAdded,
-                    serde_json::to_value(ApiTokenMetadata {
-                        owner: owner.into(),
-                        token: token.into(),
-                    })
-                    .ok(),
-                ),
-                ApiEventType::ApiTokenRemoved { owner, token } => (
-                    EventType::ApiTokenRemoved,
-                    serde_json::to_value(ApiTokenMetadata {
-                        owner: owner.into(),
-                        token: token.into(),
-                    })
-                    .ok(),
-                ),
-                ApiEventType::ApiTokenRenamed {
-                    owner,
-                    token,
-                    old_name,
-                    new_name,
-                } => (
-                    EventType::ApiTokenRenamed,
-                    serde_json::to_value(ApiTokenRenamedMetadata {
-                        owner: owner.into(),
-                        token: token.into(),
-                        old_name,
-                        new_name,
-                    })
-                    .ok(),
-                ),
                 ApiEventType::UserAdded { user } => (
                     EventType::UserAdded,
                     serde_json::to_value(UserMetadata { user: user.into() }).ok(),
@@ -442,20 +408,6 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     })
                     .ok(),
                 ),
-                ApiEventType::OpenIdProviderModified { provider } => (
-                    EventType::OpenIdProviderModified,
-                    serde_json::to_value(OpenIdProviderMetadata {
-                        provider: provider.into(),
-                    })
-                    .ok(),
-                ),
-                ApiEventType::OpenIdProviderRemoved { provider } => (
-                    EventType::OpenIdProviderRemoved,
-                    serde_json::to_value(OpenIdProviderMetadata {
-                        provider: provider.into(),
-                    })
-                    .ok(),
-                ),
                 ApiEventType::SettingsUpdatedPartial { before, after } => (
                     EventType::SettingsUpdatedPartial,
                     serde_json::to_value(SettingsUpdateMetadata::new(before, after)).ok(),
@@ -467,33 +419,6 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 ApiEventType::SettingsDefaultBrandingRestored => {
                     (EventType::SettingsDefaultBrandingRestored, None)
                 }
-                ApiEventType::EnterpriseSettingsUpdated { before, after } => (
-                    EventType::EnterpriseSettingsUpdated,
-                    serde_json::to_value(EnterpriseSettingsUpdateMetadata { before, after })
-                        .ok(),
-                ),
-                ApiEventType::ActivityLogStreamCreated { stream } => (
-                    EventType::ActivityLogStreamCreated,
-                    serde_json::to_value(ActivityLogStreamMetadata {
-                        stream: stream.into(),
-                    })
-                    .ok(),
-                ),
-                ApiEventType::ActivityLogStreamRemoved { stream } => (
-                    EventType::ActivityLogStreamRemoved,
-                    serde_json::to_value(ActivityLogStreamMetadata {
-                        stream: stream.into(),
-                    })
-                    .ok(),
-                ),
-                ApiEventType::ActivityLogStreamModified { before, after } => (
-                    EventType::ActivityLogStreamModified,
-                    serde_json::to_value(ActivityLogStreamModifiedMetadata {
-                        before: before.into(),
-                        after: after.into(),
-                    })
-                    .ok(),
-                ),
                 ApiEventType::GroupsBulkAssigned { users, groups } => (
                     EventType::GroupsBulkAssigned,
                     serde_json::to_value(GroupsBulkAssignedMetadata {
@@ -568,36 +493,6 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     serde_json::to_value(ClientConfigurationTokenMetadata { user: user.into() })
                         .ok(),
                 ),
-                ApiEventType::UserSnatBindingAdded { user, binding, .. } => (
-                    EventType::UserSnatBindingAdded,
-                    serde_json::to_value(UserSnatBindingMetadata {
-                        user: user.into(),
-                        binding,
-                    })
-                    .ok(),
-                ),
-                ApiEventType::UserSnatBindingRemoved { user, binding, .. } => (
-                    EventType::UserSnatBindingRemoved,
-                    serde_json::to_value(UserSnatBindingMetadata {
-                        user: user.into(),
-                        binding,
-                    })
-                    .ok(),
-                ),
-                ApiEventType::UserSnatBindingModified {
-                    user,
-                    before,
-                    after,
-                    ..
-                } => (
-                    EventType::UserSnatBindingModified,
-                    serde_json::to_value(UserSnatBindingModifiedMetadata {
-                        user: user.into(),
-                        before,
-                        after,
-                    })
-                    .ok(),
-                ),
                 ApiEventType::ProxyModified { before, after } => (
                     EventType::ProxyModified,
                     serde_json::to_value(ProxyModifiedMetadata { before, after }).ok(),
@@ -613,19 +508,6 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 ApiEventType::GatewayDeleted { gateway } => (
                     EventType::GatewayDeleted,
                     serde_json::to_value(GatewayDeletedMetadata { gateway }).ok(),
-                ),
-                ApiEventType::DevicePostureCreated { snapshot } => (
-                    EventType::DevicePostureCreated,
-                    serde_json::to_value(snapshot).ok(),
-                ),
-                ApiEventType::DevicePostureUpdated { before, after } => (
-                    EventType::DevicePostureUpdated,
-                    serde_json::to_value(serde_json::json!({"before": before, "after": after}))
-                        .ok(),
-                ),
-                ApiEventType::DevicePostureDeleted { snapshot } => (
-                    EventType::DevicePostureDeleted,
-                    serde_json::to_value(snapshot).ok(),
                 ),
                 ApiEventType::MfaFlowCreated { snapshot } => (
                     EventType::MfaFlowCreated,
@@ -651,36 +533,6 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                         "location_name": location_name,
                         "assignments": assignments,
                     }))
-                    .ok(),
-                ),
-                ApiEventType::DevicePostureDuplicated {
-                    original,
-                    duplicate,
-                } => (
-                    EventType::DevicePostureDuplicated,
-                    serde_json::to_value(
-                        serde_json::json!({"original": original, "duplicate": duplicate}),
-                    )
-                    .ok(),
-                ),
-                ApiEventType::DevicePostureLocationsAssigned {
-                    device_posture,
-                    location_ids,
-                } => (
-                    EventType::DevicePostureLocationsAssigned,
-                    serde_json::to_value(
-                        serde_json::json!({"posture_id": device_posture.id, "location_ids": location_ids}),
-                    )
-                    .ok(),
-                ),
-                ApiEventType::LocationPosturesAssigned {
-                    location,
-                    posture_ids,
-                } => (
-                    EventType::LocationPosturesAssigned,
-                    serde_json::to_value(
-                        serde_json::json!({"location_id": location.id, "posture_ids": posture_ids}),
-                    )
                     .ok(),
                 ),
                 ApiEventType::EnrollmentTokenAdded { user } => (
@@ -735,17 +587,6 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                         ))
                     }
                 }
-                DesktopClientMfaEvent::PostureCheckPassed { device, .. } => {
-                    Some(format!("Device posture check passed for device {device}"))
-                }
-                DesktopClientMfaEvent::PostureCheckFailed {
-                    device,
-                    failed_checks,
-                    ..
-                } => Some(format!(
-                    "Device posture check failed for device {device}: {}",
-                    failed_checks.join(",")
-                )),
                 DesktopClientMfaEvent::SessionSuperseded {
                     device, location, ..
                 } => Some(format!(
@@ -816,22 +657,6 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                         )
                     }
                 }
-                DesktopClientMfaEvent::PostureCheckPassed { device, .. } => (
-                    EventType::DevicePostureCheckPassed,
-                    serde_json::to_value(ClientDeviceMetadata {
-                        device_id: device.id,
-                        device_name: device.name.clone(),
-                    })
-                    .ok(),
-                ),
-                DesktopClientMfaEvent::PostureCheckFailed { device, .. } => (
-                    EventType::DevicePostureCheckFailed,
-                    serde_json::to_value(ClientDeviceMetadata {
-                        device_id: device.id,
-                        device_name: device.name.clone(),
-                    })
-                    .ok(),
-                ),
                 DesktopClientMfaEvent::SessionSuperseded {
                     location,
                     device,

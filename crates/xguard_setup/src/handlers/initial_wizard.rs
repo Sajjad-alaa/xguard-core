@@ -9,6 +9,12 @@ use axum_extra::{
     },
     headers::UserAgent,
 };
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sqlx::PgPool;
+use tokio::sync::oneshot;
+use tracing::{debug, error, info};
 use xguard_certs::{CertificateInfo, der_to_pem, parse_pem_certificate};
 use xguard_common::{
     db::models::{
@@ -31,12 +37,6 @@ use xguard_core::{
     handlers::{ApiResponse, ApiResult, ClientIpAddr, SESSION_COOKIE_NAME},
     headers::get_device_info,
 };
-use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use sqlx::PgPool;
-use tokio::sync::oneshot;
-use tracing::{debug, error, info};
 
 use crate::handlers::{
     auto_wizard::{advance_auto_wizard_to_step, is_auto_wizard_active},

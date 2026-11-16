@@ -2,6 +2,7 @@ use axum::{
     extract::{Json, Path, Query, State},
     http::StatusCode,
 };
+use serde_json::json;
 use xguard_common::{
     db::{
         Id, NoId,
@@ -9,7 +10,6 @@ use xguard_common::{
     },
     random::gen_alphanumeric,
 };
-use serde_json::json;
 
 use super::{ApiResponse, ApiResult, webhooks::ChangeStateData};
 #[cfg(feature = "openapi")]
@@ -68,8 +68,7 @@ impl From<NewOpenIDClient> for OAuth2Client<NoId> {
         (status = 500, description = "Unable to create OAuth2 client.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn add_openid_client(
@@ -135,8 +134,7 @@ pub(crate) async fn add_openid_client(
         (status = 500, description = "Unable to list OAuth2 clients.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn list_openid_clients(
@@ -186,8 +184,7 @@ pub(crate) async fn list_openid_clients(
         (status = 500, description = "Unable to get OAuth2 client.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn get_openid_client(
@@ -228,8 +225,7 @@ pub(crate) async fn get_openid_client(
         (status = 500, description = "Unable to update OAuth2 client.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn change_openid_client(
@@ -303,8 +299,7 @@ pub(crate) async fn change_openid_client(
         (status = 500, description = "Unable to change OAuth2 client state.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn change_openid_client_state(
@@ -357,8 +352,7 @@ pub(crate) async fn change_openid_client_state(
         (status = 500, description = "Unable to delete OAuth2 client.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_openid_client(

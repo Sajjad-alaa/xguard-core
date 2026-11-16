@@ -4,22 +4,6 @@ use std::{
 };
 
 use axum::serve;
-use xguard_certs::{CertificateAuthority, PemLabel, der_to_pem};
-use xguard_common::{
-    VERSION,
-    config::{XGuardConfig, SERVER_CONFIG},
-    db::{
-        models::{
-            Certificates, Session, Settings, User,
-            group::Group,
-            initial_setup_wizard::{InitialSetupState, InitialSetupStep},
-            settings::{initialize_current_settings, set_settings},
-            wizard::Wizard,
-        },
-        setup_pool,
-    },
-};
-use xguard_setup::setup_server::build_setup_webapp;
 use reqwest::{
     Client, StatusCode,
     cookie::Jar,
@@ -33,6 +17,22 @@ use tokio::{
     sync::{Notify, oneshot, oneshot::error::TryRecvError},
     time::timeout,
 };
+use xguard_certs::{CertificateAuthority, PemLabel, der_to_pem};
+use xguard_common::{
+    VERSION,
+    config::{SERVER_CONFIG, XGuardConfig},
+    db::{
+        models::{
+            Certificates, Session, Settings, User,
+            group::Group,
+            initial_setup_wizard::{InitialSetupState, InitialSetupStep},
+            settings::{initialize_current_settings, set_settings},
+            wizard::Wizard,
+        },
+        setup_pool,
+    },
+};
+use xguard_setup::setup_server::build_setup_webapp;
 
 use super::common::{SHUTDOWN_TIMEOUT, make_setup_test_client};
 use crate::common::{SESSION_COOKIE_NAME, TEST_USER_AGENT};

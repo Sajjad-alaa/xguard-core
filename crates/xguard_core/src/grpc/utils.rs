@@ -1,5 +1,7 @@
 use std::{collections::HashMap, net::IpAddr, str::FromStr};
 
+use sqlx::PgPool;
+use tonic::Status;
 use xguard_common::{
     csv::AsCsv,
     db::{
@@ -20,18 +22,15 @@ use xguard_proto::{
     },
     proxy::DeviceInfo,
 };
-use sqlx::PgPool;
-use tonic::Status;
 
 use super::InstanceInfo;
 use crate::{
     device_access::build_device_config,
-    enterprise::db::models::openid_provider::OpenIdProvider,
     grpc::{
         client_version::{ClientFeature, should_omit_location_for_device},
-        should_prevent_mfa_location_usage, should_prevent_service_location_usage,
+        should_prevent_service_location_usage,
     },
-    mfa_engine::filter_unlicensed_mfa_methods,
+    mfa_engine::filter_supported_mfa_methods,
 };
 
 pub async fn build_device_config_response(
@@ -41,11 +40,6 @@ pub async fn build_device_config_response(
     device_info: Option<DeviceInfo>,
 ) -> Result<DeviceConfigResponse, Status> {
     let settings = Settings::get_current_settings();
-
-    let openid_provider = OpenIdProvider::get_current(pool).await.map_err(|err| {
-        error!("Failed to get OpenID provider: {err}");
-        Status::internal(format!("unexpected error: {err}"))
-    })?;
 
     let mut configs = Vec::new();
     let user = User::find_by_id(pool, device.user_id)
@@ -58,13 +52,12 @@ pub async fn build_device_config_response(
             error!("User not found: {}", device.user_id);
             Status::internal("unexpected error")
         })?;
-    let instance_info =
-        InstanceInfo::build(pool, &settings, &user, openid_provider, Some(device.id))
-            .await
-            .map_err(|err| {
-                error!("Failed to build instance info: {err}");
-                Status::internal(format!("unexpected error: {err}"))
-            })?;
+    let instance_info = InstanceInfo::build(pool, &settings, &user, Some(device.id))
+        .await
+        .map_err(|err| {
+            error!("Failed to build instance info: {err}");
+            Status::internal(format!("unexpected error: {err}"))
+        })?;
     if device.device_type == DeviceType::Network {
         let wireguard_network_device = WireguardNetworkDevice::find_first(pool, device.id)
             .await
@@ -147,23 +140,7 @@ pub async fn build_device_config_response(
             };
             if should_prevent_service_location_usage(&location) {
                 warn!(
-                    "Tried to use service location {} with disabled enterprise features.",
-                    location.name
-                );
-                continue;
-            }
-            if should_prevent_mfa_location_usage(pool, &location)
-                .await
-                .map_err(|err| {
-                    error!(
-                        "Failed to read the MFA policy of location {}: {err}",
-                        location.name
-                    );
-                    Status::internal(format!("unexpected error: {err}"))
-                })?
-            {
-                warn!(
-                    "Tried to use location {} whose MFA policy is above the active licence.",
+                    "Skipping service location {}: service locations are not supported.",
                     location.name
                 );
                 continue;
@@ -242,7 +219,7 @@ pub fn build_wire_steps(
     let mut wire_steps = Vec::with_capacity(steps.len());
     for step in steps {
         let mut methods = Vec::with_capacity(step.methods.len());
-        for method in VpnClientMfaMethod::ordered_set(&filter_unlicensed_mfa_methods(&step.methods))
+        for method in VpnClientMfaMethod::ordered_set(&filter_supported_mfa_methods(&step.methods))
         {
             methods.push(MfaStepMethod {
                 method: <VpnClientMfaMethod as Into<MfaMethod>>::into(method) as i32,

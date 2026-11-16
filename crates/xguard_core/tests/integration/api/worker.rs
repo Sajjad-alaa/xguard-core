@@ -1,3 +1,5 @@
+use reqwest::StatusCode;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_core::{
     grpc::{WorkerDetail, worker::JobStatus},
     handlers::{
@@ -5,8 +7,6 @@ use xguard_core::{
         worker::{JobData, Jobid},
     },
 };
-use reqwest::StatusCode;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::common::{make_test_client, setup_pool};
 

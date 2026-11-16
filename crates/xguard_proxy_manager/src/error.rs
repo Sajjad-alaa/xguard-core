@@ -1,5 +1,5 @@
-use xguard_core::db::models::enrollment::TokenError;
 use thiserror::Error;
+use xguard_core::db::models::enrollment::TokenError;
 
 #[derive(Error, Debug)]
 pub enum ProxyError {

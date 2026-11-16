@@ -2,9 +2,9 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use xguard_common::db::{Id, models::gateway::Gateway};
 use sqlx::PgPool;
 use tokio::sync::watch;
+use xguard_common::db::{Id, models::gateway::Gateway};
 
 fn collect_certs<I>(items: I) -> HashMap<Id, String>
 where

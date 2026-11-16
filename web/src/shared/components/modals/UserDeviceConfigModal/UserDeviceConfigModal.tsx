@@ -1,17 +1,17 @@
 import { m } from '../../../../paraglide/messages';
 import type { AddDeviceResponse } from '../../../api/types';
-import { Divider } from '../../../xguard-ui/components/Divider/Divider';
-import { IconKind } from '../../../xguard-ui/components/Icon';
-import { InfoBanner } from '../../../xguard-ui/components/InfoBanner/InfoBanner';
-import { Modal } from '../../../xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
   subscribeOpenModal,
 } from '../../../hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../hooks/modalControls/modalTypes';
+import { Divider } from '../../../xguard-ui/components/Divider/Divider';
+import { IconKind } from '../../../xguard-ui/components/Icon';
+import { InfoBanner } from '../../../xguard-ui/components/InfoBanner/InfoBanner';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { ModalDeviceConfigSection } from '../../ModalDeviceConfigSection/ModalDeviceConfigSection';
 import './style.scss';
 import { useEffect, useState } from 'react';

@@ -9,8 +9,6 @@ rust-version.workspace = true
 
 [dependencies]
 xguard_common.workspace = true
-# TODO: remove this dependency once gateway events are moved
-xguard_core.workspace = true
 
 chrono.workspace = true
 sqlx.workspace = true

@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { m } from '../../../../paraglide/messages';
 import { DISMISSED_UPDATE_KEY } from '../../../constants';
+import {
+  closeModal,
+  subscribeCloseModal,
+  subscribeOpenModal,
+} from '../../../hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../hooks/modalControls/modalTypes';
+import type { OpenAppUpdateModal } from '../../../hooks/modalControls/types';
 import { AppText } from '../../../xguard-ui/components/AppText/AppText';
 import { Badge } from '../../../xguard-ui/components/Badge/Badge';
 import { Button } from '../../../xguard-ui/components/Button/Button';
@@ -13,13 +20,6 @@ import { ModalFoundation } from '../../../xguard-ui/components/ModalFoundation/M
 import { RenderMarkdown } from '../../../xguard-ui/components/RenderMarkdown/RenderMarkdown';
 import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../xguard-ui/types';
 import { isPresent } from '../../../xguard-ui/utils/isPresent';
-import {
-  closeModal,
-  subscribeCloseModal,
-  subscribeOpenModal,
-} from '../../../hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../hooks/modalControls/modalTypes';
-import type { OpenAppUpdateModal } from '../../../hooks/modalControls/types';
 import { Controls } from '../../Controls/Controls';
 import updateImage from './update-image.png';
 

@@ -1,9 +1,9 @@
 import './style.scss';
 import clsx from 'clsx';
-import { TableCell } from '../../xguard-ui/components/table/TableCell/TableCell';
-import type { TableCellProps } from '../../xguard-ui/components/table/TableCell/types';
 import { openModal } from '../../hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../hooks/modalControls/modalTypes';
+import { TableCell } from '../../xguard-ui/components/table/TableCell/TableCell';
+import type { TableCellProps } from '../../xguard-ui/components/table/TableCell/types';
 
 interface Props extends TableCellProps {
   values: string[];

@@ -5,12 +5,12 @@ import {
   AuthenticatorKind,
   type SecurityKey,
 } from '../../../../../../../../../shared/api/types';
+import { openModal } from '../../../../../../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../../../../../../shared/hooks/modalControls/modalTypes';
 import { Helper } from '../../../../../../../../../shared/xguard-ui/components/Helper/Helper';
 import type { MenuProps } from '../../../../../../../../../shared/xguard-ui/components/Menu/types';
 import { Snackbar } from '../../../../../../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { isPresent } from '../../../../../../../../../shared/xguard-ui/utils/isPresent';
-import { openModal } from '../../../../../../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../../../../../../shared/hooks/modalControls/modalTypes';
 import { AuthCardRow } from '../AuthCardRow/AuthCardRow';
 
 type Props = {

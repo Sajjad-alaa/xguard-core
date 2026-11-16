@@ -1,5 +1,6 @@
-use std::collections::HashSet;
-
+use sqlx::{PgConnection, PgPool, query_scalar};
+use tokio::sync::mpsc::{UnboundedSender, error::SendError};
+use tonic::Status;
 use xguard_common::{
     csv::AsCsv,
     db::{
@@ -18,23 +19,14 @@ use xguard_core::{
         ENROLLMENT_TOKEN_TYPE, MFA_CONFIG_SESSION_TIMEOUT, MFA_CONFIG_TOKEN_TYPE, Token,
     },
     device_access::{build_device_config, join_device_to_all_networks},
-    enterprise::{
-        db::models::{enterprise_settings::EnterpriseSettings, openid_provider::OpenIdProvider},
-        firewall::try_get_location_firewall_config,
-        ldap::utils::ldap_add_user,
-        licensed_mfa_setup_methods,
-        limits::update_counts,
-    },
     events::{
         ApiEvent, ApiEventType, BidiRequestContext, BidiStreamEvent, BidiStreamEventType,
         EnrollmentEvent, LdapSyncEventType,
     },
+    features::supported_mfa_setup_methods,
     grpc::{
         GatewayCommand, InstanceInfo,
-        client_version::{
-            ClientFeature, client_registration_source, should_omit_location_for_device,
-        },
-        should_prevent_mfa_location_usage,
+        client_version::{ClientFeature, should_omit_location_for_device},
         utils::{build_device_config_response, parse_client_ip_agent, to_wire_device_config},
     },
     handlers::user::check_password_strength,
@@ -53,9 +45,6 @@ use xguard_proto::{
     },
     proxy::{CoreError, CoreErrorCode},
 };
-use sqlx::{PgConnection, PgPool, query_scalar};
-use tokio::sync::mpsc::{UnboundedSender, error::SendError};
-use tonic::Status;
 
 use super::mfa_setup::RecoveryCodesPolicy;
 
@@ -63,6 +52,8 @@ pub(crate) struct EnrollmentServer {
     pool: PgPool,
     gateway_tx: UnboundedSender<GatewayCommand>,
     bidi_event_tx: UnboundedSender<BidiStreamEvent>,
+    // Reserved for the XGuard LDAP sync rebuild.
+    #[allow(dead_code)]
     ldap_tx: UnboundedSender<LdapSyncEventType>,
     event_tx: UnboundedSender<ApiEvent>,
 }
@@ -217,44 +208,20 @@ impl EnrollmentServer {
             );
             debug!("Settings: {settings:?}");
 
-            debug!(
-                "Retrieving enterprise settings for enrollment of user {}({:?}).",
-                user.username, user.id
-            );
-            let enterprise_settings =
-                EnterpriseSettings::get(&mut *transaction)
-                    .await
-                    .map_err(|err| {
-                        error!("Failed to get enterprise settings: {err}");
-                        Status::internal("unexpected error")
-                    })?;
-            debug!("Enterprise settings: {enterprise_settings:?}");
-
             let vpn_setup_optional = settings.enrollment_vpn_step_optional;
             debug!(
                 "Retrieving instance info for user {}({:?}).",
                 user.username, user.id
             );
 
-            let openid_provider = OpenIdProvider::get_current(&self.pool)
-                .await
-                .map_err(|err| {
-                    error!("Failed to get OpenID provider: {err}");
-                    Status::internal(format!("unexpected error: {err}"))
-                })?;
             let smtp_configured = settings.smtp_configured();
-            let instance_info = InstanceInfo::build(
-                &self.pool,
-                &settings,
-                &user,
-                openid_provider,
-                enrollment.device_id,
-            )
-            .await
-            .map_err(|err| {
-                error!("Failed to create instance info: {err}");
-                Status::internal("unexpected error")
-            })?;
+            let instance_info =
+                InstanceInfo::build(&self.pool, &settings, &user, enrollment.device_id)
+                    .await
+                    .map_err(|err| {
+                        error!("Failed to create instance info: {err}");
+                        Status::internal("unexpected error")
+                    })?;
             debug!("Instance info {instance_info:?}");
 
             debug!(
@@ -278,13 +245,6 @@ impl EnrollmentServer {
             debug!("Admin info {admin_info:?}");
 
             debug!("Creating enrollment start response for user {username}({user_id:?}).");
-            let enterprise_settings =
-                EnterpriseSettings::get(&mut *transaction)
-                    .await
-                    .map_err(|err| {
-                        error!("Failed to get enterprise settings: {err}");
-                        Status::internal("unexpected error")
-                    })?;
             // Check if any MFA-enabled location has at least one flow step that
             // includes an internal MFA method (totp, email, biometric, or
             // mobileapprove). The boolean mfa_enabled cannot distinguish
@@ -305,8 +265,8 @@ impl EnrollmentServer {
             let enrollment_settings = xguard_proto::client_types::EnrollmentSettings {
                 vpn_setup_optional,
                 smtp_configured,
-                only_client_activation: enterprise_settings.only_client_activation,
-                admin_device_management: enterprise_settings.admin_device_management,
+                only_client_activation: false,
+                admin_device_management: false,
                 mfa_required: instance_has_internal_mfa,
             };
             let settings = Settings::get_current_settings();
@@ -502,14 +462,7 @@ impl EnrollmentServer {
         // disabled. Externally-managed users (LDAP/AD or OIDC with the flag enabled)
         // are allowed to skip the password; local users must supply one.
         if request.password.is_none() {
-            let oidc_disable_password_management =
-                OpenIdProvider::current_disables_password_management(&self.pool)
-                    .await
-                    .map_err(|err| {
-                        // Default to false on transient DB errors
-                        error!("Failed to check OIDC password management flag: {err}");
-                        Status::internal("unexpected error")
-                    })?;
+            let oidc_disable_password_management = false;
             let settings = Settings::get_current_settings();
             let is_admin = user.is_admin(&self.pool).await.map_err(|err| {
                 error!("Failed to check if user is admin: {err}");
@@ -542,7 +495,6 @@ impl EnrollmentServer {
             Status::internal("unexpected error")
         })?;
         debug!("Updating user details ended with success.");
-        let _ = update_counts(&mut *transaction).await;
 
         self.send_welcome_email_if_enabled(
             &enrollment,
@@ -596,14 +548,6 @@ impl EnrollmentServer {
             Status::internal("unexpected error")
         })?;
 
-        ldap_add_user(
-            &mut user,
-            request.password.as_deref(),
-            &self.pool,
-            &self.ldap_tx,
-        )
-        .await;
-
         info!("User {} activated", user.username);
 
         // Prepare event context and push the event
@@ -629,21 +573,6 @@ impl EnrollmentServer {
 
         // fetch related users
         let user = enrollment_token.fetch_user(&self.pool).await?;
-
-        // check if adding device by non-admin users is allowed
-        debug!(
-            "Fetching enterprise settings for device creation process for user {}({:?})",
-            user.username, user.id,
-        );
-        let enterprise_settings = EnterpriseSettings::get(&self.pool).await.map_err(|err| {
-            error!(
-            "Failed to fetch enterprise settings for device creation process for user {}({:?}): \
-            {err}",
-            user.username, user.id,
-        );
-            Status::internal("unexpected error")
-        })?;
-        debug!("Enterprise settings: {enterprise_settings:?}");
 
         // add device
         debug!(
@@ -856,7 +785,6 @@ impl EnrollmentServer {
                 Status::internal("unexpected error")
             })?;
             info!("New device created using a token: {device:?}.");
-            let _ = update_counts(&self.pool).await;
             debug!(
                 "Adding device {} to all existing user networks for user {}({:?}).",
                 device.wireguard_pubkey, user.username, user.id,
@@ -877,41 +805,6 @@ impl EnrollmentServer {
             );
             (device, network_info, configs)
         };
-
-        // get all locations affected by device being added
-        let mut affected_location_ids = HashSet::new();
-        for network_info_item in network_info.clone() {
-            affected_location_ids.insert(network_info_item.network_id);
-        }
-
-        // send firewall config updates to affected locations
-        // if they have ACL enabled & enterprise features are active
-        for location_id in affected_location_ids {
-            if let Some(location) = WireguardNetwork::find_by_id(&mut *transaction, location_id)
-                .await
-                .map_err(|err| {
-                    error!("Failed to fetch WireguardNetwork with ID {location_id}: {err}");
-                    Status::internal("unexpected error")
-                })?
-                && let Some(firewall_config) =
-                    try_get_location_firewall_config(&location, &mut transaction)
-                        .await
-                        .map_err(|err| {
-                            error!("Failed to get firewall config for location {location}: {err}");
-                            Status::internal("unexpected error")
-                        })?
-            {
-                debug!(
-                    "Sending firewall config update for location {location} affected by \
-                        adding new device {}, user {}({})",
-                    device.wireguard_pubkey, user.username, user.id
-                );
-                self.send_gateway_command(GatewayCommand::FirewallConfigChanged(
-                    location_id,
-                    firewall_config,
-                ));
-            }
-        }
 
         debug!(
             "Sending DeviceCreated event to gateway for device {}, user {}({:?})",
@@ -953,43 +846,8 @@ impl EnrollmentServer {
             device.wireguard_pubkey, user.username, user.id,
         );
 
-        // Don't send locations whose MFA policy is above the active license.
-        let mut licensed_configs = Vec::with_capacity(configs.len());
-        for config in configs {
-            let location = WireguardNetwork::find_by_id(&mut *transaction, config.network_id)
-                .await
-                .map_err(|err| {
-                    error!(
-                        "Failed to fetch WireguardNetwork with ID {}: {err}",
-                        config.network_id
-                    );
-                    Status::internal("unexpected error")
-                })?
-                .ok_or_else(|| {
-                    error!("WireguardNetwork with ID {} not found", config.network_id);
-                    Status::internal("unexpected error")
-                })?;
-            if should_prevent_mfa_location_usage(&mut *transaction, &location)
-                .await
-                .map_err(|err| {
-                    error!(
-                        "Failed to read the MFA policy of location {}: {err}",
-                        location.name
-                    );
-                    Status::internal("unexpected error")
-                })?
-            {
-                warn!(
-                    "Tried to use location {} whose MFA policy is above the active licence.",
-                    location.name
-                );
-                continue;
-            }
-            licensed_configs.push(config);
-        }
-
         // Don't send them service locations or posture-checked locations if they don't support it
-        let configs = licensed_configs
+        let configs = configs
             .into_iter()
             .filter(|config| {
                 config.service_location_mode == ServiceLocationMode::Disabled
@@ -1042,24 +900,12 @@ impl EnrollmentServer {
 
         info!("Device {} remote configuration done.", device.name);
 
-        let openid_provider = OpenIdProvider::get_current(&self.pool)
+        let instance_info = InstanceInfo::build(&self.pool, &settings, &user, Some(device.id))
             .await
             .map_err(|err| {
-                error!("Failed to get OpenID provider: {err}");
-                Status::internal(format!("unexpected error: {err}"))
+                error!("Failed to create instance info: {err}");
+                Status::internal("unexpected error")
             })?;
-        let instance_info = InstanceInfo::build(
-            &self.pool,
-            &settings,
-            &user,
-            openid_provider,
-            Some(device.id),
-        )
-        .await
-        .map_err(|err| {
-            error!("Failed to create instance info: {err}");
-            Status::internal("unexpected error")
-        })?;
 
         let supports_multi_step_mfa =
             ClientFeature::MultiStepMfa.is_supported_by_device(req_device_info.as_ref());
@@ -1135,11 +981,11 @@ impl EnrollmentServer {
     ) -> Result<CodeMfaSetupStartResponse, CoreError> {
         debug!("Starting MFA setup");
         let method = request.method();
-        if !licensed_mfa_setup_methods().contains(&method.into()) {
+        if !supported_mfa_setup_methods().contains(&method.into()) {
             warn!("Refusing to start {method} MFA setup; the active license does not allow it");
             return Err(CoreError::invalid_argument("Method not supported"));
         }
-        let (mut token, is_enrollment) = self
+        let (token, is_enrollment) = self
             .validate_mfa_setup_session(Some(&request.token))
             .await?;
         let mut user = token.fetch_user(&self.pool).await.map_err(Status::from)?;
@@ -1197,17 +1043,6 @@ impl EnrollmentServer {
                     fido2_creation_challenge: None,
                 })
             }
-            MfaMethod::Fido2 => {
-                let challenge = token
-                    .start_fido2_setup(&self.pool, &user)
-                    .await
-                    .map_err(Status::from)?;
-                info!("Started FIDO2 setup for {}", &user.username);
-                Ok(CodeMfaSetupStartResponse {
-                    totp_secret: None,
-                    fido2_creation_challenge: Some(challenge),
-                })
-            }
             _ => Err(CoreError::invalid_argument("Method not supported")),
         }
     }
@@ -1219,11 +1054,11 @@ impl EnrollmentServer {
         info: Option<xguard_proto::proxy::DeviceInfo>,
     ) -> Result<CodeMfaSetupFinishResponse, Status> {
         debug!("Finishing MFA setup");
-        let (mut token, is_enrollment) = self
+        let (token, is_enrollment) = self
             .validate_mfa_setup_session(Some(&request.token))
             .await?;
         let method = request.method();
-        if !licensed_mfa_setup_methods().contains(&method.into()) {
+        if !supported_mfa_setup_methods().contains(&method.into()) {
             warn!("Refusing to finish {method} MFA setup; the active license does not allow it");
             return Err(Status::invalid_argument("Method not supported"));
         }
@@ -1256,24 +1091,6 @@ impl EnrollmentServer {
                     .await
                     .map_err(|_| Status::internal("Enabling method failed.".to_owned()))?;
                 (MFAMethod::OneTimePassword, ApiEventType::MfaTotpEnabled)
-            }
-            MfaMethod::Fido2 => {
-                // The attestation is the proof. Like the REST WebAuthn finish, the key is saved
-                // on the pool rather than in the transaction.
-                let name = request.name.clone().ok_or_else(|| {
-                    Status::invalid_argument("Missing security key name".to_owned())
-                })?;
-                let attestation = request.fido2_attestation.as_deref().ok_or_else(|| {
-                    Status::invalid_argument("Missing FIDO2 attestation".to_owned())
-                })?;
-                let source = client_registration_source(info.as_ref());
-                let key = token
-                    .finish_fido2_setup(&self.pool, user.id, name, attestation, source)
-                    .await?;
-                (
-                    MFAMethod::Webauthn,
-                    ApiEventType::MfaSecurityKeyAdded { key },
-                )
             }
             _ => {
                 return Err(Status::invalid_argument("Method not supported"));
@@ -1312,8 +1129,7 @@ async fn initial_info_from_user(
     let devices = user.user_devices(pool).await?;
     let device_names = devices.into_iter().map(|dev| dev.device.name).collect();
     let is_admin = user.is_admin(pool).await?;
-    let oidc_disable_password_management =
-        OpenIdProvider::current_disables_password_management(pool).await?;
+    let oidc_disable_password_management = false;
     let settings = Settings::get_current_settings();
     let password_management_disabled =
         user.password_management_disabled(is_admin, &settings, oidc_disable_password_management);
@@ -1372,6 +1188,8 @@ pub async fn new_polling_token(pool: &PgPool, device: &Device<Id>) -> Result<Str
 
 #[cfg(test)]
 mod test {
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use tokio::sync::mpsc::unbounded_channel;
     use xguard_common::db::{
         models::{
             Settings, User,
@@ -1381,8 +1199,6 @@ mod test {
     };
     use xguard_core::db::models::enrollment::{ENROLLMENT_TOKEN_TYPE, Token};
     use xguard_proto::{client_types::EnrollmentStartRequest, proxy::DeviceInfo};
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-    use tokio::sync::mpsc::unbounded_channel;
 
     use super::EnrollmentServer;
 

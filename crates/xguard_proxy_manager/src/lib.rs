@@ -7,19 +7,6 @@ use std::{
 use std::{path::PathBuf, str::FromStr, sync::Mutex as StdMutex};
 
 use axum_extra::extract::cookie::Key;
-use xguard_common::{
-    db::{Id, models::proxy::Proxy},
-    gateway_event::GatewayCommand,
-    types::proxy::ProxyControlMessage,
-};
-use xguard_core::{
-    events::{
-        ApiEvent, BidiStreamEvent, DirectorySyncEvent, LdapSyncEventType, ProxyConnectionEvent,
-    },
-    grpc::proxy::client_mfa::RemoteAuthWaiters,
-    version::IncompatibleComponents,
-};
-use xguard_proto::proxy::{CoreResponse, HttpsCerts, PublicSettings, core_response};
 use sqlx::PgPool;
 #[cfg(test)]
 use tokio::sync::Notify;
@@ -33,6 +20,19 @@ use tokio::{
     task::JoinSet,
     time::sleep,
 };
+use xguard_common::{
+    db::{Id, models::proxy::Proxy},
+    gateway_event::GatewayCommand,
+    types::proxy::ProxyControlMessage,
+};
+use xguard_core::{
+    events::{
+        ApiEvent, BidiStreamEvent, DirectorySyncEvent, LdapSyncEventType, ProxyConnectionEvent,
+    },
+    grpc::proxy::client_mfa::RemoteAuthWaiters,
+    version::IncompatibleComponents,
+};
+use xguard_proto::proxy::{CoreResponse, HttpsCerts, PublicSettings, core_response};
 
 use crate::{certs::refresh_certs, error::ProxyError, handler::ProxyHandler};
 

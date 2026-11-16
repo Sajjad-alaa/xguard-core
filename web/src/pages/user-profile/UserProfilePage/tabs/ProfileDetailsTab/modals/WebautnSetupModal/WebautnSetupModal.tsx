@@ -1,7 +1,5 @@
 import z from 'zod';
 import { m } from '../../../../../../../paraglide/messages';
-import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import { useAppForm } from '../../../../../../../shared/form';
 import { formChangeLogic } from '../../../../../../../shared/formLogic';
 import {
@@ -11,6 +9,8 @@ import {
   subscribeOpenModal,
 } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
+import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import './style.scss';
 import { useStore } from '@tanstack/react-form';
 import { useQueryClient } from '@tanstack/react-query';

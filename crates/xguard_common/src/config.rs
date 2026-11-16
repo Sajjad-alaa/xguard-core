@@ -269,10 +269,6 @@ pub enum ManageCommand {
     AddUserToGroup(AddUserToGroupArgs),
     #[command(about = "Disable the LDAP integration.")]
     DisableLdapIntegration,
-    #[command(
-        about = "Disable directory synchronization for the configured OIDC external identity provider."
-    )]
-    DisableOidcDirectorySync,
 }
 
 #[derive(Args, Debug, Clone)]

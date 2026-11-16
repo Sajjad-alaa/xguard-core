@@ -1,9 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use axum::{
     extract::{Json, Path, Query, State},
     http::StatusCode,
 };
+use sqlx::query_as;
 use xguard_common::db::{
     Id,
     models::{
@@ -11,7 +12,6 @@ use xguard_common::db::{
         group::{Group, Permission},
     },
 };
-use sqlx::query_as;
 
 use super::{ApiResponse, ApiResult, EditGroupInfo, GroupInfo, Username};
 #[cfg(feature = "openapi")]
@@ -19,15 +19,9 @@ use crate::handlers::ApiErrorResponse;
 use crate::{
     appstate::AppState,
     auth::{AdminRole, SessionInfo},
-    enterprise::ldap::utils::{
-        ldap_add_user_to_groups, ldap_add_users_to_groups, ldap_delete_group, ldap_modify_group,
-        ldap_remove_user_from_groups, ldap_remove_users_from_groups, ldap_update_user_state,
-        ldap_update_users_state,
-    },
     error::WebError,
     events::{ApiEvent, ApiEventType, ApiRequestContext},
     handlers::pagination::{PaginatedApiResponse, PaginatedApiResult, PaginationParams},
-    hashset,
     location_management::LocationManager,
 };
 
@@ -54,8 +48,7 @@ pub(crate) struct BulkAssignToGroupsRequest {
         (status = 500, description = "Unable to assign users.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn bulk_assign_to_groups(
@@ -97,15 +90,10 @@ pub(crate) async fn bulk_assign_to_groups(
         ));
     }
 
-    let mut ldap_user_groups: HashMap<&User<Id>, HashSet<&str>> = HashMap::new();
     let mut transaction = appstate.pool.begin().await?;
     for group in &groups {
         for user in &users {
             user.add_to_group(&mut *transaction, group).await?;
-            ldap_user_groups
-                .entry(user)
-                .or_default()
-                .insert(&group.name);
         }
     }
 
@@ -113,16 +101,7 @@ pub(crate) async fn bulk_assign_to_groups(
     transaction.commit().await?;
     locmgr.send(&appstate.gateway_tx);
 
-    ldap_add_users_to_groups(ldap_user_groups, &appstate.pool, &appstate.ldap_tx).await;
-
-    let users_to_maybe_update = users.iter_mut().collect::<Vec<_>>();
-    Box::pin(ldap_update_users_state(
-        users_to_maybe_update,
-        &appstate.pool,
-        &appstate.gateway_tx,
-        &appstate.ldap_tx,
-    ))
-    .await;
+    let _users_to_maybe_update = users.iter_mut().collect::<Vec<_>>();
 
     info!("Assigned {} groups to {} users.", groups.len(), users.len());
     appstate.emit_event(ApiEvent {
@@ -153,8 +132,7 @@ pub(crate) async fn bulk_assign_to_groups(
         (status = 500, description = "Unable to list groups.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn list_groups_info(
@@ -199,8 +177,7 @@ pub(crate) async fn list_groups_info(
         (status = 500, description = "Unable to list groups.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn list_groups(
@@ -253,8 +230,7 @@ pub(crate) async fn list_groups(
         (status = 500, description = "Unable to get group.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn get_group(
@@ -304,8 +280,7 @@ pub(crate) async fn get_group(
         (status = 500, description = "Unable to create group.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn create_group(
@@ -316,7 +291,6 @@ pub(crate) async fn create_group(
 ) -> ApiResult {
     debug!("Creating group {}", group_info.name);
 
-    let mut ldap_user_groups: HashMap<&User<Id>, HashSet<&str>> = HashMap::new();
     let mut transaction = appstate.pool.begin().await?;
 
     // FIXME: conflicts must not return internal server error (500).
@@ -338,27 +312,11 @@ pub(crate) async fn create_group(
 
     for user in &members {
         user.add_to_group(&mut *transaction, &group).await?;
-        ldap_user_groups
-            .entry(user)
-            .or_default()
-            .insert(&group_info.name);
     }
 
     let locmgr = LocationManager::sync_all_networks(&mut transaction).await?;
     transaction.commit().await?;
     locmgr.send(&appstate.gateway_tx);
-
-    if !ldap_user_groups.is_empty() {
-        ldap_add_users_to_groups(ldap_user_groups, &appstate.pool, &appstate.ldap_tx).await;
-        let users_to_maybe_update = members.iter_mut().collect::<Vec<_>>();
-        Box::pin(ldap_update_users_state(
-            users_to_maybe_update,
-            &appstate.pool,
-            &appstate.gateway_tx,
-            &appstate.ldap_tx,
-        ))
-        .await;
-    }
 
     info!("Created group {}", group_info.name);
     appstate.emit_event(ApiEvent {
@@ -390,8 +348,7 @@ pub(crate) async fn create_group(
         (status = 500, description = "Unable to update group.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn modify_group(
@@ -410,8 +367,6 @@ pub(crate) async fn modify_group(
     // store group before modifications
     let before = group.clone();
 
-    let mut add_to_ldap_groups: HashMap<&User<Id>, HashSet<&str>> = HashMap::new();
-    let mut remove_from_ldap_groups: HashMap<&User<Id>, HashSet<&str>> = HashMap::new();
     let mut transaction = appstate.pool.begin().await?;
 
     // Rename only when needed.
@@ -461,19 +416,11 @@ pub(crate) async fn modify_group(
 
     for user in &members {
         user.add_to_group(&mut *transaction, &group).await?;
-        add_to_ldap_groups
-            .entry(user)
-            .or_default()
-            .insert(group.name.as_str());
     }
 
     // Remove outstanding members.
     for user in &current_members {
         user.remove_from_group(&mut *transaction, &group).await?;
-        remove_from_ldap_groups
-            .entry(user)
-            .or_default()
-            .insert(group.name.as_str());
     }
 
     let locmgr = LocationManager::sync_all_networks(&mut transaction).await?;
@@ -481,23 +428,10 @@ pub(crate) async fn modify_group(
     transaction.commit().await?;
     locmgr.send(&appstate.gateway_tx);
 
-    ldap_add_users_to_groups(add_to_ldap_groups, &appstate.pool, &appstate.ldap_tx).await;
-    ldap_remove_users_from_groups(remove_from_ldap_groups, &appstate.pool, &appstate.ldap_tx).await;
-    if before.name != group.name {
-        ldap_modify_group(&before.name, &group, &appstate.pool).await;
-    }
-
-    let affected_users = members
+    let _affected_users = members
         .iter_mut()
         .chain(current_members.iter_mut())
         .collect::<Vec<_>>();
-    ldap_update_users_state(
-        affected_users,
-        &appstate.pool,
-        &appstate.gateway_tx,
-        &appstate.ldap_tx,
-    )
-    .await;
 
     let set_users_before: HashSet<_> = users_before.into_iter().collect();
     let set_users_after: HashSet<_> = users_after.into_iter().collect();
@@ -551,8 +485,7 @@ pub(crate) async fn modify_group(
         (status = 500, description = "Unable to delete group.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn delete_group(
@@ -587,7 +520,6 @@ pub(crate) async fn delete_group(
             return Ok(ApiResponse::with_status(StatusCode::BAD_REQUEST));
         }
         group.clone().delete(&appstate.pool).await?;
-        ldap_delete_group(&group.name, &appstate.pool).await;
 
         // sync allowed devices for all locations
         let mut transaction = appstate.pool.begin().await?;
@@ -628,8 +560,7 @@ pub(crate) async fn delete_group(
         (status = 500, description = "Unable to add group member.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn add_group_member(
@@ -640,23 +571,9 @@ pub(crate) async fn add_group_member(
     Json(data): Json<Username>,
 ) -> ApiResult {
     if let Some(group) = Group::find_by_id(&appstate.pool, id).await? {
-        if let Some(mut user) = User::find_by_username(&appstate.pool, &data.username).await? {
+        if let Some(user) = User::find_by_username(&appstate.pool, &data.username).await? {
             debug!("Adding user: {} to group: {}", user.username, group.name);
             user.add_to_group(&appstate.pool, &group).await?;
-            ldap_add_user_to_groups(
-                &user,
-                hashset![group.name.as_str()],
-                &appstate.pool,
-                &appstate.ldap_tx,
-            )
-            .await;
-            ldap_update_user_state(
-                &mut user,
-                &appstate.pool,
-                &appstate.gateway_tx,
-                &appstate.ldap_tx,
-            )
-            .await;
             let mut transaction = appstate.pool.begin().await?;
             let locmgr = LocationManager::sync_all_networks(&mut transaction).await?;
             transaction.commit().await?;
@@ -698,8 +615,7 @@ pub(crate) async fn add_group_member(
         (status = 500, description = "Unable to remove group member.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub(crate) async fn remove_group_member(
@@ -715,13 +631,6 @@ pub(crate) async fn remove_group_member(
                 user.username, group.name
             );
             user.remove_from_group(&appstate.pool, &group).await?;
-            ldap_remove_user_from_groups(
-                &user,
-                hashset![group.name.as_str()],
-                &appstate.pool,
-                &appstate.ldap_tx,
-            )
-            .await;
 
             let mut transaction = appstate.pool.begin().await?;
             let locmgr = LocationManager::sync_all_networks(&mut transaction).await?;

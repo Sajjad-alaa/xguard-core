@@ -1,5 +1,10 @@
 use std::{assert_matches, net::IpAddr, str::FromStr};
 
+use ipnetwork::IpNetwork;
+use reqwest::StatusCode;
+use serde::Deserialize;
+use serde_json::{Value, json};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::db::{
     Id,
     models::{Device, WireguardNetwork},
@@ -8,11 +13,6 @@ use xguard_core::{
     grpc::GatewayCommand,
     handlers::{Auth, network_devices::AddNetworkDevice},
 };
-use ipnetwork::IpNetwork;
-use reqwest::StatusCode;
-use serde::Deserialize;
-use serde_json::{Value, json};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::common::{
     client::{TestClient, TestResponse},

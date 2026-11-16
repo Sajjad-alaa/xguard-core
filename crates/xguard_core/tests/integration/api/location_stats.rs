@@ -1,6 +1,9 @@
 use std::net::{IpAddr, Ipv4Addr};
 
 use chrono::{Duration, Utc};
+use reqwest::StatusCode;
+use serde::Deserialize;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::db::{
     Id,
     models::{
@@ -9,9 +12,6 @@ use xguard_common::db::{
     },
 };
 use xguard_core::handlers::Auth;
-use reqwest::StatusCode;
-use serde::Deserialize;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use super::common::{make_network, make_test_client, setup_pool};
 

@@ -2,6 +2,7 @@ import { Fragment, useCallback, useMemo, useState } from 'react';
 import './style.scss';
 import clsx from 'clsx';
 import { m } from '../../../paraglide/messages';
+import { isWindows } from '../../utils/isWindows';
 import { Checkbox } from '../../xguard-ui/components/Checkbox/Checkbox';
 import { Divider } from '../../xguard-ui/components/Divider/Divider';
 import { EmptyState } from '../../xguard-ui/components/EmptyState/EmptyState';
@@ -11,7 +12,6 @@ import { Toggle } from '../../xguard-ui/components/Toggle/Toggle';
 import { ThemeSpacing } from '../../xguard-ui/types';
 import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { sortByLabel } from '../../xguard-ui/utils/sortByLabel';
-import { isWindows } from '../../utils/isWindows';
 import type { SelectionKey, SelectionOption, SelectionSectionProps } from './type';
 
 //TODO: virtualize items

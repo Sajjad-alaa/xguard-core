@@ -4,10 +4,6 @@ import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
 import type { ApiError } from '../../../api/types';
-import { Button } from '../../../xguard-ui/components/Button/Button';
-import { Modal } from '../../../xguard-ui/components/Modal/Modal';
-import { RenderMarkdown } from '../../../xguard-ui/components/RenderMarkdown/RenderMarkdown';
-import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -15,6 +11,10 @@ import {
 } from '../../../hooks/modalControls/modalsSubjects';
 import type { ModalNameValue } from '../../../hooks/modalControls/modalTypes';
 import type { OpenConfirmActionModal } from '../../../hooks/modalControls/types';
+import { Button } from '../../../xguard-ui/components/Button/Button';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { RenderMarkdown } from '../../../xguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { Controls } from '../../Controls/Controls';
 
 const modalNameValue: ModalNameValue = 'confirmAction';

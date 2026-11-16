@@ -1,36 +1,25 @@
 import { useMemo, useState } from 'react';
 import { m } from '../../../paraglide/messages';
+import { useApp } from '../../hooks/useApp';
+import { useAuth } from '../../hooks/useAuth';
 import { CounterLabel } from '../../xguard-ui/components/CounterLabel/CounterLabel';
 import { Icon, IconKind } from '../../xguard-ui/components/Icon';
 import type { IconKindValue } from '../../xguard-ui/components/Icon/icon-types';
 import { IconButton } from '../../xguard-ui/components/IconButton/IconButton';
-import { useApp } from '../../hooks/useApp';
-import { useAuth } from '../../hooks/useAuth';
 import { NavLogo } from './assets/NavLogo';
 import './style.scss';
 import { useQuery } from '@tanstack/react-query';
 import { Link, type LinkProps } from '@tanstack/react-router';
-import {
-  LicenseFeature,
-  type LicenseFeatureValue,
-  type LicenseInfo,
-  LicenseTier,
-  type LicenseTierValue,
-} from '../../api/types';
+import type { LicenseFeatureValue, LicenseInfo, LicenseTierValue } from '../../api/types';
+import { getLicenseInfoQueryOptions } from '../../query';
+import { isNavItemLocked } from '../../utils/license';
+import { NavTutorialsButton } from '../../video-tutorials/components/widget/NavTutorialsButton/NavTutorialsButton';
+import { useVideoTutorialsSections } from '../../video-tutorials/resolved';
 import { Fold } from '../../xguard-ui/components/Fold/Fold';
 import { TooltipContent } from '../../xguard-ui/providers/tooltip/TooltipContent';
 import { TooltipProvider } from '../../xguard-ui/providers/tooltip/TooltipContext';
 import { TooltipTrigger } from '../../xguard-ui/providers/tooltip/TooltipTrigger';
 import { isPresent } from '../../xguard-ui/utils/isPresent';
-import {
-  getAliasesCountQueryOptions,
-  getDestinationsCountQueryOptions,
-  getLicenseInfoQueryOptions,
-  getRulesCountQueryOptions,
-} from '../../query';
-import { isNavItemLocked } from '../../utils/license';
-import { NavTutorialsButton } from '../../video-tutorials/components/widget/NavTutorialsButton/NavTutorialsButton';
-import { useVideoTutorialsSections } from '../../video-tutorials/resolved';
 
 interface NavGroupProps {
   id: string;
@@ -96,45 +85,10 @@ const navigationConfig: NavGroupProps[] = [
         link: '/enrollment',
       },
       {
-        id: 'posture_checks',
-        icon: 'connected-devices',
-        label: m.cmp_nav_item_posture_checks(),
-        link: '/acl/posture-checks',
-        licenseTier: LicenseTier.Enterprise,
-        licenseFeature: LicenseFeature.DevicePosture,
-      },
-      {
         id: 'mfa',
         icon: 'mobile-lock',
         label: m.cmp_nav_item_mfa(),
         link: '/mfa',
-      },
-    ],
-  },
-  {
-    id: 'firewall',
-    label: m.cmp_nav_group_firewall(),
-    items: [
-      {
-        id: 'rules',
-        icon: 'rules',
-        label: m.cmp_nav_item_rules(),
-        link: '/acl/rules',
-        licenseTier: LicenseTier.Business,
-      },
-      {
-        id: 'destinations',
-        icon: 'gateway',
-        label: m.cmp_nav_item_destinations(),
-        link: '/acl/destinations',
-        licenseTier: LicenseTier.Business,
-      },
-      {
-        id: 'aliases',
-        icon: 'access-settings',
-        label: m.cmp_nav_item_aliases(),
-        link: '/acl/aliases',
-        licenseTier: LicenseTier.Business,
       },
     ],
   },
@@ -203,41 +157,12 @@ export const Navigation = () => {
     enabled: isAdmin,
   });
 
-  const { data: rulesCount } = useQuery({
-    ...getRulesCountQueryOptions,
-    enabled: isAdmin,
-  });
-
-  const { data: destinationsCount } = useQuery({
-    ...getDestinationsCountQueryOptions,
-    enabled: isAdmin,
-  });
-
-  const { data: aliasesCount } = useQuery({
-    ...getAliasesCountQueryOptions,
-    enabled: isAdmin,
-  });
-
   const videoTutorialSections = useVideoTutorialsSections();
   const hasTutorialSections = videoTutorialSections.some(
     (section) => section.videos.length > 0,
   );
 
-  const navigationGroups = useMemo(() => {
-    const pendingCounts = {
-      rules: rulesCount?.pending,
-      destinations: destinationsCount?.pending,
-      aliases: aliasesCount?.pending,
-    };
-
-    return navigationConfig.map((group) => ({
-      ...group,
-      items: group.items.map((item) => ({
-        ...item,
-        pendingCount: pendingCounts[item.id as keyof typeof pendingCounts],
-      })),
-    }));
-  }, [aliasesCount, destinationsCount, rulesCount]);
+  const navigationGroups = navigationConfig;
 
   const rawVersion = useApp((s) => s.appInfo.version);
   const semverVersion = rawVersion ? rawVersion.split('+')[0] : null;

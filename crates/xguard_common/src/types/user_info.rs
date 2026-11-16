@@ -237,7 +237,7 @@ mod test {
 
     use super::*;
     use crate::{
-        config::{XGuardConfig, SERVER_CONFIG},
+        config::{SERVER_CONFIG, XGuardConfig},
         db::{
             models::{
                 MFAMethod,

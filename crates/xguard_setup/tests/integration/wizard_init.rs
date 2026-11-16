@@ -1,3 +1,4 @@
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::{
     config::XGuardConfig,
     db::{
@@ -9,7 +10,6 @@ use xguard_common::{
         setup_pool,
     },
 };
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 #[sqlx::test]
 async fn test_wizard_init_fresh_db(_: PgPoolOptions, options: PgConnectOptions) {

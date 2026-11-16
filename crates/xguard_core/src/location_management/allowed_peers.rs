@@ -1,17 +1,17 @@
+use sqlx::{PgConnection, query};
 use xguard_common::{
     db::{Id, models::WireguardNetwork},
     gateway_types::WireguardPeer,
 };
-use sqlx::{PgConnection, query};
 
-use crate::grpc::{should_prevent_mfa_location_usage, should_prevent_service_location_usage};
+use crate::grpc::should_prevent_service_location_usage;
 
 /// Get a list of all allowed peers for a given location
 ///
 /// Each device is marked as allowed or not allowed in a given network,
 /// which enables enforcing peer disconnect in MFA-protected networks.
 ///
-/// If the location is a service location, only returns peers if enterprise features are enabled.
+/// Service locations are not supported, so they never return peers.
 /// MFA-enabled locations only return peers backed by an active session with a runtime preshared key.
 pub async fn get_location_allowed_peers(
     location: &WireguardNetwork<Id>,
@@ -21,22 +21,13 @@ pub async fn get_location_allowed_peers(
 
     if should_prevent_service_location_usage(location) {
         warn!(
-            "Tried to use service location {} with disabled enterprise features. No clients will be allowed to connect.",
+            "Location {} is a service location, which XGuard does not support. No clients will be allowed to connect.",
             location.name
         );
         return Ok(Vec::new());
     }
 
-    if should_prevent_mfa_location_usage(&mut *conn, location).await? {
-        warn!(
-            "Location {} enforces an MFA policy above the active licence. No clients will be allowed to connect.",
-            location.name
-        );
-        return Ok(Vec::new());
-    }
-
-    let has_postures = location.has_postures(&mut *conn).await?;
-    if !location.mfa_enabled && !has_postures {
+    if !location.mfa_enabled {
         let rows = query!(
             "SELECT d.wireguard_pubkey pubkey, \
                     ARRAY( \
@@ -111,6 +102,7 @@ mod test {
     use std::{net::IpAddr, str::FromStr};
 
     use chrono::Utc;
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
     use xguard_common::{
         db::{
             models::{
@@ -122,7 +114,6 @@ mod test {
         gateway_types::WireguardPeer,
         secret::SecretStringWrapper,
     };
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
     use crate::location_management::allowed_peers::get_location_allowed_peers;
 

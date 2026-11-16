@@ -1488,8 +1488,7 @@ export type MfaFlowMethodValue = (typeof MfaFlowMethod)[keyof typeof MfaFlowMeth
 
 export const MfaMethodAvailabilityReason = {
   Available: 'available',
-  Licensed: 'licensed',
-  EnterpriseLicensed: 'enterprise_licensed',
+  NotSupported: 'not_supported',
   SmtpNotConfigured: 'smtp_not_configured',
   OidcProviderMissing: 'oidc_provider_missing',
 } as const;

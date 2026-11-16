@@ -8,8 +8,8 @@ import type {
   MfaMethodAvailabilityReasonValue,
   MfaMethodAvailabilityResponse,
 } from '../../api/types';
-import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { mfaFlowMethodLabels } from '../../utils/mfaFlowSteps';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { SummaryTooltip } from '../SummaryTooltip/SummaryTooltip';
 
 type Props = {

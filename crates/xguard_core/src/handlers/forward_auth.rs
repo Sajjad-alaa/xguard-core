@@ -4,8 +4,8 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::cookie::CookieJar;
-use xguard_common::db::models::{Session, SessionState, Settings, user::User};
 use reqwest::Url;
+use xguard_common::db::models::{Session, SessionState, Settings, user::User};
 
 use super::SESSION_COOKIE_NAME;
 #[cfg(feature = "openapi")]

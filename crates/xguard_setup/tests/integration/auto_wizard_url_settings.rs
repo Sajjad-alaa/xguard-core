@@ -1,3 +1,12 @@
+use ipnetwork::IpNetwork;
+use rcgen::DnType;
+use reqwest::{
+    Client, StatusCode,
+    header::{HeaderMap, USER_AGENT},
+};
+use serde_json::{Value, json};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::{sync::oneshot, time::timeout};
 use xguard_certs::{CertificateAuthority, Csr, PemLabel, der_to_pem, generate_key_pair};
 use xguard_common::{
     config::XGuardConfig,
@@ -14,15 +23,6 @@ use xguard_common::{
         setup_pool,
     },
 };
-use ipnetwork::IpNetwork;
-use rcgen::DnType;
-use reqwest::{
-    Client, StatusCode,
-    header::{HeaderMap, USER_AGENT},
-};
-use serde_json::{Value, json};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::{sync::oneshot, time::timeout};
 
 use super::common::{SHUTDOWN_TIMEOUT, make_setup_test_client};
 use crate::common::{SESSION_COOKIE_NAME, TEST_USER_AGENT, TestClient};
@@ -294,9 +294,7 @@ async fn test_external_url_settings_all_ssl_types(_: PgPoolOptions, options: PgC
 
     let resp = client
         .post("/api/v1/initial_setup/auto_wizard/external_url_settings")
-        .json(
-            &json!({ "public_proxy_url": "https://proxy.example.com", "ssl_type": "xguard_ca" }),
-        )
+        .json(&json!({ "public_proxy_url": "https://proxy.example.com", "ssl_type": "xguard_ca" }))
         .send()
         .await
         .unwrap();
@@ -371,9 +369,7 @@ async fn test_get_external_ssl_info(_: PgPoolOptions, options: PgConnectOptions)
 
     client
         .post("/api/v1/initial_setup/auto_wizard/external_url_settings")
-        .json(
-            &json!({ "public_proxy_url": "https://proxy.example.com", "ssl_type": "xguard_ca" }),
-        )
+        .json(&json!({ "public_proxy_url": "https://proxy.example.com", "ssl_type": "xguard_ca" }))
         .send()
         .await
         .unwrap();

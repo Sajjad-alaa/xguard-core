@@ -1,11 +1,11 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
+use serde_json::json;
+use sqlx::PgPool;
 use xguard_certs::{CertificateInfo, der_to_pem, parse_pem_certificate};
 use xguard_common::{
     db::models::{Certificates, Settings},
     types::proxy::ProxyControlMessage,
 };
-use serde_json::json;
-use sqlx::PgPool;
 
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
@@ -69,7 +69,7 @@ fn reload_core_web_server(appstate: &AppState) {
         (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
         (status = 500, description = "Unable to apply internal URL certificate settings.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
-    security(("cookie" = []), ("api_token" = []))
+    security(("cookie" = []))
 ))]
 pub(crate) async fn set_internal_url_settings(
     State(appstate): State<AppState>,
@@ -111,7 +111,7 @@ pub(crate) async fn set_internal_url_settings(
         (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
         (status = 500, description = "Unable to apply external URL certificate settings.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
-    security(("cookie" = []), ("api_token" = []))
+    security(("cookie" = []))
 ))]
 pub(crate) async fn set_external_url_settings(
     State(appstate): State<AppState>,
@@ -180,7 +180,7 @@ pub(crate) async fn set_external_url_settings(
         (status = 404, description = "The internal CA is not configured.", body = ApiErrorResponse, example = json!({"msg": "CA certificate not found"})),
         (status = 500, description = "Unable to get CA certificate.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
-    security(("cookie" = []), ("api_token" = []))
+    security(("cookie" = []))
 ))]
 pub(crate) async fn get_ca(
     _role: AdminRole,
@@ -236,7 +236,7 @@ pub(crate) async fn get_ca(
         (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
         (status = 500, description = "Unable to get certificates.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"}))
     ),
-    security(("cookie" = []), ("api_token" = []))
+    security(("cookie" = []))
 ))]
 pub(crate) async fn get_certs(
     _role: AdminRole,

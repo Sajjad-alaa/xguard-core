@@ -11,26 +11,6 @@ use std::{
 };
 
 use chrono::DateTime;
-use xguard_common::{
-    VERSION,
-    db::{
-        Id,
-        models::{Certificates, Settings, WireguardNetwork, gateway::Gateway},
-    },
-    gateway_event::GatewayCommand,
-    messages::peer_stats_update::PeerStatsUpdate,
-};
-use xguard_core::{
-    enterprise::firewall::try_get_location_firewall_config,
-    events::GatewayConnectionEvent,
-    handlers::mail::{send_gateway_disconnected_email, send_gateway_reconnected_email},
-    location_management::allowed_peers::get_location_allowed_peers,
-};
-use xguard_grpc_tls::{certs as tls_certs, connector::HttpsSchemeConnector};
-use xguard_proto::gateway::{
-    Configuration, CoreResponse, PeerStats, core_request, core_response, gateway_client,
-};
-use xguard_version::client::ClientVersionInterceptor;
 use hyper_rustls::HttpsConnectorBuilder;
 use reqwest::Url;
 use semver::Version;
@@ -48,6 +28,25 @@ use tonic::{
     Code, Status,
     transport::{Channel, Endpoint},
 };
+use xguard_common::{
+    VERSION,
+    db::{
+        Id,
+        models::{Certificates, Settings, WireguardNetwork, gateway::Gateway},
+    },
+    gateway_event::GatewayCommand,
+    messages::peer_stats_update::PeerStatsUpdate,
+};
+use xguard_core::{
+    events::GatewayConnectionEvent,
+    handlers::mail::{send_gateway_disconnected_email, send_gateway_reconnected_email},
+    location_management::allowed_peers::get_location_allowed_peers,
+};
+use xguard_grpc_tls::{certs as tls_certs, connector::HttpsSchemeConnector};
+use xguard_proto::gateway::{
+    Configuration, CoreResponse, PeerStats, core_request, core_response, gateway_client,
+};
+use xguard_version::client::ClientVersionInterceptor;
 
 #[cfg(test)]
 use crate::GatewayManagerTestSupport;
@@ -224,11 +223,8 @@ impl GatewayHandler {
 
         let peers = get_location_allowed_peers(&network, &mut conn).await?;
 
-        let maybe_firewall_config = try_get_location_firewall_config(&network, &mut conn).await?;
         let payload = Some(core_response::Payload::Config(Configuration::new(
-            &network,
-            peers,
-            maybe_firewall_config,
+            &network, peers,
         )));
         let id = self.message_id.fetch_add(1, Ordering::Relaxed);
         let req = CoreResponse { id, payload };

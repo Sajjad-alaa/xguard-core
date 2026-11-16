@@ -1,5 +1,8 @@
 use std::{collections::HashMap, fmt::Display};
 
+use serde::Serialize;
+use serde_json::{Value, json, value::to_value};
+use sqlx::PgConnection;
 use xguard_common::{
     VERSION,
     db::{
@@ -10,9 +13,6 @@ use xguard_common::{
         },
     },
 };
-use serde::Serialize;
-use serde_json::{Value, json, value::to_value};
-use sqlx::PgConnection;
 
 use crate::server_config;
 
@@ -105,18 +105,18 @@ pub(crate) async fn dump_config(conn: &mut PgConnection) -> Result<Value, serde_
 mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
+    use ipnetwork::IpNetwork;
+    use secrecy::SecretString;
+    use serde_json::Value;
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
     use xguard_common::{
-        config::{XGuardConfig, SERVER_CONFIG},
+        config::{SERVER_CONFIG, XGuardConfig},
         db::{
             models::{Settings, User, WireguardNetwork, wireguard::ServiceLocationMode},
             setup_pool,
         },
         secret::SecretStringWrapper,
     };
-    use ipnetwork::IpNetwork;
-    use secrecy::SecretString;
-    use serde_json::Value;
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
     use super::dump_config;
 

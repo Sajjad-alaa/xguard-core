@@ -3,6 +3,12 @@ use std::{
     net::{IpAddr, Ipv4Addr},
 };
 
+use ipnetwork::IpNetwork;
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
+use tonic::Code;
 use xguard_common::db::{
     Id,
     models::{
@@ -20,17 +26,8 @@ use xguard_proto::{
     client_types::{DeviceConfig, LocationMfaMode, MfaMethod, MfaStep},
     proxy::DeviceInfo,
 };
-use ipnetwork::IpNetwork;
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
-};
-use tonic::Code;
 
 use super::{InstanceInfo, build_device_config_response, build_wire_steps};
-use crate::enterprise::license::{
-    License, LicenseTier, SupportType, get_cached_license, set_cached_license,
-};
 
 const XGUARD_URL: &str = "http://localhost:8000";
 const PROXY_URL: &str = "http://localhost:8080";
@@ -206,24 +203,6 @@ fn device_info(version: &str) -> DeviceInfo {
     }
 }
 
-/// Builds a valid Business-tier license for tests that exercise licensed behavior.
-///
-/// Setting this mutates the process-global license cache, so callers save and restore it
-/// around their body. The restore is best-effort: a parallel test that also mutates the cache
-/// can still race.
-fn business_license() -> License {
-    License {
-        customer_id: "test".to_owned(),
-        subscription: false,
-        valid_until: None,
-        limits: None,
-        version_date_limit: None,
-        tier: LicenseTier::Business,
-        support_type: SupportType::Basic,
-        features: Vec::new(),
-    }
-}
-
 #[sqlx::test]
 async fn test_polling_returns_only_attached_locations(_: PgPoolOptions, options: PgConnectOptions) {
     let pool = setup_pool(options).await;
@@ -261,8 +240,6 @@ async fn test_multi_step_location_omitted_for_legacy_client(
 ) {
     let pool = setup_pool(options).await;
     init_settings(&pool).await;
-    let saved_license = get_cached_license().clone();
-    set_cached_license(Some(business_license()));
     let user = create_user(&pool).await;
     let device = create_device(&pool, user.id).await;
 
@@ -330,21 +307,20 @@ async fn test_multi_step_location_omitted_for_legacy_client(
         names.contains(&"internal-location"),
         "legacy-derivable location must be retained, got: {names:?}"
     );
-
-    set_cached_license(saved_license);
 }
 
 #[sqlx::test]
 #[allow(deprecated)]
-async fn test_single_step_location_sent_on_free_tier(_: PgPoolOptions, options: PgConnectOptions) {
+async fn test_multi_step_locations_sent_without_license(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
     let pool = setup_pool(options).await;
     init_settings(&pool).await;
-    let saved_license = get_cached_license().clone();
-    set_cached_license(None);
     let user = create_user(&pool).await;
     let device = create_device(&pool, user.id).await;
 
-    // A TOTP-only step fits the Free tier but has no legacy equivalent.
+    // XGuard has no license tiers: multi-step locations are sent like single-step ones.
     let single_step = create_location(
         &pool,
         "single-step-location",
@@ -373,12 +349,10 @@ async fn test_single_step_location_sent_on_free_tier(_: PgPoolOptions, options: 
         .iter()
         .map(|config| config.network_name.as_str())
         .collect();
-    assert_eq!(names, vec!["single-step-location"]);
+    assert_eq!(names, vec!["single-step-location", "multi-step-location"]);
     let config = &response.configs[0];
     assert_eq!(config.location_mfa_mode, None);
     assert_eq!(config.steps.len(), 1);
-
-    set_cached_license(saved_license);
 }
 
 #[sqlx::test]
@@ -463,8 +437,6 @@ async fn test_network_device_rejected_on_mfa_locations(
 async fn test_device_config_matrix(_: PgPoolOptions, options: PgConnectOptions) {
     let pool = setup_pool(options).await;
     init_settings(&pool).await;
-    let saved_license = get_cached_license().clone();
-    set_cached_license(Some(business_license()));
     let mut user = create_user(&pool).await;
     user.totp_enabled = true;
     user.save(&pool).await.expect("failed to configure TOTP");
@@ -532,10 +504,7 @@ async fn test_device_config_matrix(_: PgPoolOptions, options: PgConnectOptions) 
         config.location_mfa_mode,
         Some(LocationMfaMode::Disabled as i32)
     );
-    assert_eq!(
-        config.steps,
-        [] as [xguard_proto::client_types::MfaStep; 0]
-    );
+    assert_eq!(config.steps, [] as [xguard_proto::client_types::MfaStep; 0]);
 
     let config = response
         .configs
@@ -604,7 +573,8 @@ async fn test_device_config_matrix(_: PgPoolOptions, options: PgConnectOptions) 
         Some(LocationMfaMode::External as i32)
     );
     assert_eq!(config.steps.len(), 1);
-    assert_eq!(config.steps[0].methods.len(), 1);
+    // OIDC MFA is not supported by XGuard, so the OIDC-only step offers no method.
+    assert_eq!(config.steps[0].methods.len(), 0);
 
     let config = response
         .configs
@@ -641,8 +611,6 @@ async fn test_device_config_matrix(_: PgPoolOptions, options: PgConnectOptions) 
             .expect("TOTP method must be advertised");
         assert!(totp.configured, "TOTP should be configured in {name}");
     }
-
-    set_cached_license(saved_license);
 }
 
 /// An MFA-enabled location with no resolvable flow must fail closed for a capable client:
@@ -654,8 +622,6 @@ async fn test_mfa_enabled_location_without_flow_is_rejected(
 ) {
     let pool = setup_pool(options).await;
     init_settings(&pool).await;
-    let saved_license = get_cached_license().clone();
-    set_cached_license(Some(business_license()));
     let user = create_user(&pool).await;
     let device = create_device(&pool, user.id).await;
 
@@ -673,8 +639,6 @@ async fn test_mfa_enabled_location_without_flow_is_rejected(
         "unexpected message: {}",
         error.message()
     );
-
-    set_cached_license(saved_license);
 }
 
 /// The wire `steps` carry each method's `configured` flag for the user's own setup, not just
@@ -719,14 +683,10 @@ async fn test_build_wire_steps_computes_configured_flags(
 
     // Email is not set up for the user; OIDC has no provider.
     let settings = Settings::get_current_settings();
-    let instance_info = InstanceInfo::build(&pool, &settings, &user, None, Some(device.id))
+    let instance_info = InstanceInfo::build(&pool, &settings, &user, Some(device.id))
         .await
         .expect("failed to build instance info");
-    // OIDC needs a Business license to stay in the wire steps.
-    let saved_license = get_cached_license().clone();
-    set_cached_license(Some(business_license()));
     let wire = build_wire_steps(&steps, &instance_info.configured_methods);
-    set_cached_license(saved_license);
 
     assert_eq!(wire.len(), 2);
 
@@ -736,13 +696,12 @@ async fn test_build_wire_steps_computes_configured_flags(
     assert_eq!(wire[0].methods[1].method, MfaMethod::Email as i32);
     assert!(!wire[0].methods[1].configured);
 
-    assert_eq!(wire[1].methods.len(), 3);
-    assert_eq!(wire[1].methods[0].method, MfaMethod::Oidc as i32);
-    assert!(!wire[1].methods[0].configured);
-    assert_eq!(wire[1].methods[1].method, MfaMethod::Biometric as i32);
+    // OIDC is filtered out: XGuard does not support OIDC MFA.
+    assert_eq!(wire[1].methods.len(), 2);
+    assert_eq!(wire[1].methods[0].method, MfaMethod::Biometric as i32);
+    assert!(wire[1].methods[0].configured);
+    assert_eq!(wire[1].methods[1].method, MfaMethod::MobileApprove as i32);
     assert!(wire[1].methods[1].configured);
-    assert_eq!(wire[1].methods[2].method, MfaMethod::MobileApprove as i32);
-    assert!(wire[1].methods[2].configured);
 
     let instance = xguard_proto::client_types::InstanceInfo::from(instance_info);
     let configured_from_instance = instance
@@ -781,67 +740,6 @@ fn test_repeated_mfa_method_uses_same_configured_flag() {
     assert!(!wire[1].methods[1].configured);
 }
 
-/// The client must not offer a method that the MFA engine refuses at connect time.
-#[test]
-fn test_build_wire_steps_leaves_out_unlicensed_methods() {
-    let steps = vec![
-        MfaFlowStep {
-            id: 1,
-            flow_id: 1,
-            position: 0,
-            methods: HashSet::from([
-                VpnClientMfaMethod::Totp,
-                VpnClientMfaMethod::Oidc,
-                VpnClientMfaMethod::Fido2,
-            ]),
-        },
-        MfaFlowStep {
-            id: 2,
-            flow_id: 1,
-            position: 1,
-            methods: HashSet::from([VpnClientMfaMethod::Fido2]),
-        },
-    ];
-    let saved_license = get_cached_license().clone();
-
-    let cases: [(Option<License>, &[MfaMethod], &[MfaMethod]); 3] = [
-        (None, &[MfaMethod::Totp], &[]),
-        (
-            Some(business_license()),
-            &[MfaMethod::Totp, MfaMethod::Oidc],
-            &[],
-        ),
-        (
-            Some(License {
-                tier: LicenseTier::Enterprise,
-                ..business_license()
-            }),
-            &[MfaMethod::Totp, MfaMethod::Oidc, MfaMethod::Fido2],
-            &[MfaMethod::Fido2],
-        ),
-    ];
-    for (license, expected_first, expected_second) in cases {
-        set_cached_license(license);
-        let wire = build_wire_steps(&steps, &[VpnClientMfaMethod::Fido2]);
-
-        assert_eq!(wire.len(), 2);
-        for (step, expected) in wire.iter().zip([expected_first, expected_second]) {
-            assert_eq!(
-                step.methods
-                    .iter()
-                    .map(|method| method.method)
-                    .collect::<Vec<_>>(),
-                expected
-                    .iter()
-                    .map(|method| *method as i32)
-                    .collect::<Vec<_>>()
-            );
-        }
-    }
-
-    set_cached_license(saved_license);
-}
-
 #[sqlx::test]
 async fn test_instance_info_without_device_id_excludes_biometric(
     _: PgPoolOptions,
@@ -857,7 +755,7 @@ async fn test_instance_info_without_device_id_excludes_biometric(
         .expect("failed to configure biometric authentication");
 
     let settings = Settings::get_current_settings();
-    let instance = InstanceInfo::build(&pool, &settings, &user, None, None)
+    let instance = InstanceInfo::build(&pool, &settings, &user, None)
         .await
         .expect("failed to build instance info");
     assert!(
@@ -883,7 +781,7 @@ async fn test_instance_info_has_empty_mfa_user_state_when_unconfigured(
     let settings = Settings::get_current_settings();
 
     let instance: xguard_proto::client_types::InstanceInfo =
-        InstanceInfo::build(&pool, &settings, &user, None, None)
+        InstanceInfo::build(&pool, &settings, &user, None)
             .await
             .expect("failed to build instance info")
             .into();
@@ -897,66 +795,6 @@ async fn test_instance_info_has_empty_mfa_user_state_when_unconfigured(
     );
 }
 
-/// Without an Enterprise license, FIDO2 is left out of the setup methods, so the client shows
-/// it as locked. FIDO2 still authorizes an MFA configuration session on every tier.
-#[sqlx::test]
-async fn test_instance_info_offers_fido2_setup_only_with_enterprise_license(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
-    let pool = setup_pool(options).await;
-    init_settings(&pool).await;
-    let user = create_user(&pool).await;
-    let settings = Settings::get_current_settings();
-    let saved_license = get_cached_license().clone();
-
-    let cases: [(Option<License>, &[MfaMethod]); 3] = [
-        (None, &[MfaMethod::Totp, MfaMethod::Email]),
-        (
-            Some(business_license()),
-            &[MfaMethod::Totp, MfaMethod::Email],
-        ),
-        (
-            Some(License {
-                tier: LicenseTier::Enterprise,
-                ..business_license()
-            }),
-            &[MfaMethod::Totp, MfaMethod::Email, MfaMethod::Fido2],
-        ),
-    ];
-    for (license, expected_setup_methods) in cases {
-        set_cached_license(license);
-        let instance: xguard_proto::client_types::InstanceInfo =
-            InstanceInfo::build(&pool, &settings, &user, None, None)
-                .await
-                .expect("failed to build instance info")
-                .into();
-
-        let capabilities = instance
-            .mfa_capabilities
-            .expect("InstanceInfo should contain MFA capabilities");
-        assert_eq!(
-            capabilities.setup_methods,
-            expected_setup_methods
-                .iter()
-                .map(|method| *method as i32)
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            capabilities.authorize_methods,
-            [
-                MfaMethod::Totp,
-                MfaMethod::Email,
-                MfaMethod::Fido2,
-                MfaMethod::Oidc
-            ]
-            .map(|method| method as i32)
-        );
-    }
-
-    set_cached_license(saved_license);
-}
-
 #[sqlx::test]
 async fn test_instance_info_advertises_smtp_and_openid_availability(
     _: PgPoolOptions,
@@ -968,7 +806,7 @@ async fn test_instance_info_advertises_smtp_and_openid_availability(
     let settings = Settings::get_current_settings();
 
     let instance: xguard_proto::client_types::InstanceInfo =
-        InstanceInfo::build(&pool, &settings, &user, None, None)
+        InstanceInfo::build(&pool, &settings, &user, None)
             .await
             .expect("failed to build instance info")
             .into();

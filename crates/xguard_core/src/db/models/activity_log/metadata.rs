@@ -1,4 +1,3 @@
-use chrono::NaiveDateTime;
 use xguard_common::db::{
     Id,
     models::{
@@ -17,17 +16,7 @@ use xguard_common::db::{
     },
 };
 
-use crate::{
-    db::WebHook,
-    enterprise::db::models::{
-        activity_log_stream::{ActivityLogStream, ActivityLogStreamType},
-        api_tokens::ApiToken,
-        enterprise_settings::EnterpriseSettingsInfo,
-        openid_provider::{DirectorySyncTarget, DirectorySyncUserBehavior, OpenIdProvider},
-        snat::UserSnatBinding,
-    },
-    events::ClientMFAMethod,
-};
+use crate::{db::WebHook, events::ClientMFAMethod};
 
 #[derive(Serialize)]
 pub struct LoginFailedMetadata {
@@ -161,34 +150,6 @@ impl From<WebAuthn<Id>> for WebAuthnNoSecrets {
 }
 
 #[derive(Serialize)]
-pub struct ActivityLogStreamMetadata {
-    pub stream: ActivityLogStreamNoSecrets,
-}
-
-#[derive(Serialize)]
-pub struct ActivityLogStreamModifiedMetadata {
-    pub before: ActivityLogStreamNoSecrets,
-    pub after: ActivityLogStreamNoSecrets,
-}
-
-#[derive(Serialize)]
-pub struct ActivityLogStreamNoSecrets {
-    pub id: Id,
-    pub name: String,
-    pub stream_type: ActivityLogStreamType,
-}
-
-impl From<ActivityLogStream<Id>> for ActivityLogStreamNoSecrets {
-    fn from(value: ActivityLogStream<Id>) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            stream_type: value.stream_type,
-        }
-    }
-}
-
-#[derive(Serialize)]
 pub struct VpnClientMetadata {
     pub location: WireguardNetwork<Id>,
     pub device: Device<Id>,
@@ -246,39 +207,6 @@ pub struct VpnLocationModifiedMetadata {
 }
 
 #[derive(Serialize)]
-pub struct ApiTokenMetadata {
-    pub owner: UserNoSecrets,
-    pub token: ApiTokenNoSecrets,
-}
-
-#[derive(Serialize)]
-pub struct ApiTokenNoSecrets {
-    id: Id,
-    pub user_id: Id,
-    pub created_at: NaiveDateTime,
-    pub name: String,
-}
-
-impl From<ApiToken<Id>> for ApiTokenNoSecrets {
-    fn from(value: ApiToken<Id>) -> Self {
-        Self {
-            id: value.id,
-            user_id: value.user_id,
-            created_at: value.created_at,
-            name: value.name,
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ApiTokenRenamedMetadata {
-    pub owner: UserNoSecrets,
-    pub token: ApiTokenNoSecrets,
-    pub old_name: String,
-    pub new_name: String,
-}
-
-#[derive(Serialize)]
 pub struct OpenIdAppMetadata {
     pub app: OAuth2ClientNoSecrets,
 }
@@ -319,52 +247,6 @@ pub struct OpenIdAppStateChangedMetadata {
 }
 
 #[derive(Serialize)]
-pub struct OpenIdProviderMetadata {
-    pub provider: OpenIdProviderNoSecrets,
-}
-
-#[derive(Serialize)]
-pub struct OpenIdProviderNoSecrets {
-    pub id: Id,
-    pub name: String,
-    pub base_url: String,
-    pub client_id: String,
-    pub display_name: Option<String>,
-    pub google_service_account_email: Option<String>,
-    pub admin_email: Option<String>,
-    pub directory_sync_enabled: bool,
-    pub directory_sync_interval: i32,
-    pub directory_sync_user_behavior: DirectorySyncUserBehavior,
-    pub directory_sync_admin_behavior: DirectorySyncUserBehavior,
-    pub directory_sync_target: DirectorySyncTarget,
-    pub okta_dirsync_client_id: Option<String>,
-    pub directory_sync_group_match: Vec<String>,
-    pub directory_sync_user_groups: Option<Vec<String>>,
-}
-
-impl From<OpenIdProvider<Id>> for OpenIdProviderNoSecrets {
-    fn from(value: OpenIdProvider<Id>) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            base_url: value.base_url,
-            client_id: value.client_id,
-            display_name: value.display_name,
-            google_service_account_email: value.google_service_account_email,
-            admin_email: value.admin_email,
-            directory_sync_enabled: value.directory_sync_enabled,
-            directory_sync_interval: value.directory_sync_interval,
-            directory_sync_user_behavior: value.directory_sync_user_behavior,
-            directory_sync_admin_behavior: value.directory_sync_admin_behavior,
-            directory_sync_target: value.directory_sync_target,
-            okta_dirsync_client_id: value.okta_dirsync_client_id,
-            directory_sync_group_match: value.directory_sync_group_match,
-            directory_sync_user_groups: value.directory_sync_user_groups,
-        }
-    }
-}
-
-#[derive(Serialize)]
 pub struct SettingsUpdateMetadata {
     pub(crate) before: SettingsNoSecrets,
     pub(crate) after: SettingsNoSecrets,
@@ -383,12 +265,6 @@ impl SettingsUpdateMetadata {
             protected_fields,
         }
     }
-}
-
-#[derive(Serialize)]
-pub struct EnterpriseSettingsUpdateMetadata {
-    pub before: EnterpriseSettingsInfo,
-    pub after: EnterpriseSettingsInfo,
 }
 
 #[derive(Serialize)]
@@ -664,18 +540,6 @@ pub struct UserMfaDisabledMetadata {
 #[derive(Serialize)]
 pub struct ClientConfigurationTokenMetadata {
     pub user: UserNoSecrets,
-}
-#[derive(Serialize)]
-pub struct UserSnatBindingMetadata {
-    pub user: UserNoSecrets,
-    pub binding: UserSnatBinding<Id>,
-}
-
-#[derive(Serialize)]
-pub struct UserSnatBindingModifiedMetadata {
-    pub user: UserNoSecrets,
-    pub before: UserSnatBinding<Id>,
-    pub after: UserSnatBinding<Id>,
 }
 
 #[derive(Serialize)]

@@ -28,8 +28,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "../../proto/v2/common.proto",
                 "../../proto/v2/proxy.proto",
                 "../../proto/v2/gateway.proto",
-                "../../proto/enterprise/v2/firewall/firewall.proto",
-                "../../proto/enterprise/v2/posture/posture.proto",
                 "../../proto/common/client_types.proto",
             ],
             &["../../proto"],

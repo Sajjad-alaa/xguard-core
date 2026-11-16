@@ -28,8 +28,7 @@ use crate::{
         (status = 500, description = "Unable to create webhook.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn add_webhook(
@@ -70,8 +69,7 @@ pub async fn add_webhook(
         (status = 500, description = "Unable to list webhooks.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn list_webhooks(_admin: AdminRole, State(appstate): State<AppState>) -> ApiResult {
@@ -96,8 +94,7 @@ pub async fn list_webhooks(_admin: AdminRole, State(appstate): State<AppState>) 
         (status = 500, description = "Unable to get webhook.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn get_webhook(
@@ -128,8 +125,7 @@ pub async fn get_webhook(
         (status = 500, description = "Unable to update webhook.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn change_webhook(
@@ -186,8 +182,7 @@ pub async fn change_webhook(
         (status = 500, description = "Unable to delete webhook.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn delete_webhook(
@@ -236,8 +231,7 @@ pub struct ChangeStateData {
         (status = 500, description = "Unable to change webhook state.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
     ),
     security(
-        ("cookie" = []),
-        ("api_token" = [])
+        ("cookie" = [])
     )
 ))]
 pub async fn change_enabled(

@@ -1,46 +1,27 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { cloneDeep, omit } from 'lodash-es';
-import { useCallback, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
 import { ActionCard } from '../../../shared/components/ActionCard/ActionCard';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { externalLink } from '../../../shared/constants';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { Checkbox } from '../../../shared/xguard-ui/components/Checkbox/Checkbox';
-import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
-import { Radio } from '../../../shared/xguard-ui/components/Radio/Radio';
-import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
-import { getLicenseInfoQueryOptions } from '../../../shared/query';
-import { canUseBusinessFeature } from '../../../shared/utils/license';
 import { useGatewayWizardStore } from '../../GatewaySetupPage/useGatewayWizardStore';
-import businessFeatureCardImage from '../assets/business-feature-icon.png';
 import actionCardImage from '../assets/gateway-setup-action-card.png';
 import { AddLocationPageStep } from '../types';
 import { useAddLocationStore } from '../useAddLocationStore';
 
-type Choice = 'disable' | 'enabled-allowed' | 'enabled-denied';
-
 export const AddLocationFirewallStep = () => {
-  const [state, setState] = useState<Choice>('disable');
   const [showGateway, setShowGateway] = useState(true);
   const navigate = useNavigate();
-
-  const { data: licenseInfo } = useQuery(getLicenseInfoQueryOptions);
-  const canUseFeature = useMemo(() => {
-    if (licenseInfo === undefined) return undefined;
-    return canUseBusinessFeature(licenseInfo).result;
-  }, [licenseInfo]);
-  const firewallLocked = isPresent(canUseFeature) && !canUseFeature;
 
   const { mutate, isPending } = useMutation({
     mutationFn: api.location.addLocation,
     meta: {
-      invalidate: [['network'], ['enterprise_info'], ['mfa-flow']],
+      invalidate: [['network'], ['mfa-flow']],
     },
     onSuccess: ({ data }) => {
       if (showGateway) {
@@ -60,17 +41,9 @@ export const AddLocationFirewallStep = () => {
     },
   });
 
-  const saveChanges = useCallback((value: Choice) => {
-    const enabled = value !== 'disable';
-    const allowed = value === 'enabled-allowed';
-    useAddLocationStore.setState({
-      acl_enabled: enabled,
-      acl_default_allow: allowed,
-    });
-  }, []);
-
   const handleSubmit = () => {
-    saveChanges(state);
+    // XGuard has no firewall (ACL) support: locations are created with it disabled.
+    useAddLocationStore.setState({ acl_enabled: false, acl_default_allow: false });
     const storageState = cloneDeep(
       omit(useAddLocationStore.getState(), [
         'start',
@@ -84,51 +57,6 @@ export const AddLocationFirewallStep = () => {
 
   return (
     <WizardCard>
-      {firewallLocked && (
-        <>
-          <ActionCard
-            imageSrc={businessFeatureCardImage}
-            title=""
-            subtitle={m.add_location_firewall_no_license_subtitle()}
-          >
-            <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
-              <Button
-                variant="outlined"
-                text={m.license_see_other_plans()}
-                iconRight="open-in-new-window"
-              />
-            </a>
-          </ActionCard>
-          <Divider spacing={ThemeSpacing.Xl2} />
-        </>
-      )}
-      <Radio
-        active={state === 'disable'}
-        onClick={() => {
-          setState('disable');
-        }}
-        text={m.location_firewall_option_disabled()}
-        disabled={firewallLocked}
-      />
-      <SizedBox height={ThemeSpacing.Md} />
-      <Radio
-        active={state === 'enabled-allowed'}
-        onClick={() => {
-          setState('enabled-allowed');
-        }}
-        text={m.location_firewall_option_default_allow()}
-        disabled={firewallLocked}
-      />
-      <SizedBox height={ThemeSpacing.Md} />
-      <Radio
-        active={state === 'enabled-denied'}
-        onClick={() => {
-          setState('enabled-denied');
-        }}
-        text={m.location_firewall_option_default_deny()}
-        disabled={firewallLocked}
-      />
-      <Divider spacing={ThemeSpacing.Xl2} />
       <ActionCard
         imageSrc={actionCardImage}
         title={m.add_location_firewall_gateway_activation_title()}
@@ -147,9 +75,8 @@ export const AddLocationFirewallStep = () => {
           variant="outlined"
           text={m.controls_back()}
           onClick={() => {
-            saveChanges(state);
             useAddLocationStore.setState({
-              activeStep: AddLocationPageStep.PostureCheck,
+              activeStep: AddLocationPageStep.AccessControl,
             });
           }}
         />

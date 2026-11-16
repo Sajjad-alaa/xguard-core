@@ -5,10 +5,10 @@ import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import { OverviewPeriodSelect } from '../../shared/components/OverviewPeriodSelect/OverviewPeriodSelect';
 import { Page } from '../../shared/components/Page/Page';
+import { getLocationsQueryOptions } from '../../shared/query';
 import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
-import { getLocationsQueryOptions } from '../../shared/query';
 import {
   LocationOverviewCard,
   OverviewCard,

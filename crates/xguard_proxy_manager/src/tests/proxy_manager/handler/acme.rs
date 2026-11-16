@@ -1,9 +1,9 @@
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::time::timeout;
 use xguard_common::db::models::{Certificates, ProxyCertSource};
 use xguard_proto::proxy::{
     AcmeCertificate as AcmeCertPayload, CoreRequest, core_request, core_response,
 };
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::time::timeout;
 
 use super::support::complete_proxy_handshake;
 use crate::tests::common::{

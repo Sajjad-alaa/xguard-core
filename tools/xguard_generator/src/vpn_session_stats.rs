@@ -2,6 +2,9 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use anyhow::Result;
 use chrono::{Duration, NaiveDateTime, Utc};
+use rand::{Rng, rngs::ThreadRng, seq::SliceRandom};
+use sqlx::{PgConnection, PgPool, QueryBuilder, query};
+use tracing::{debug, info};
 use xguard_common::db::{
     Id,
     models::{
@@ -12,9 +15,6 @@ use xguard_common::db::{
         vpn_session_stats::VpnSessionStats,
     },
 };
-use rand::{Rng, rngs::ThreadRng, seq::SliceRandom};
-use sqlx::{PgConnection, PgPool, QueryBuilder, query};
-use tracing::{debug, info};
 
 use crate::{
     activity_log::{

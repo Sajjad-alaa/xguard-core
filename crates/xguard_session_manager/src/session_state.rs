@@ -4,6 +4,9 @@ use std::{
 };
 
 use chrono::{NaiveDateTime, TimeDelta};
+use sqlx::{PgConnection, types::chrono::Utc};
+use tokio::sync::mpsc::UnboundedSender;
+use tracing::{debug, warn};
 use xguard_common::{
     db::{
         Id,
@@ -15,9 +18,6 @@ use xguard_common::{
     },
     messages::peer_stats_update::PeerStatsUpdate,
 };
-use sqlx::{PgConnection, types::chrono::Utc};
-use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, warn};
 
 use crate::{
     error::SessionManagerError,

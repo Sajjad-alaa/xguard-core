@@ -1,6 +1,9 @@
 import './style.scss';
 import { useState } from 'react';
 import { m } from '../../../../paraglide/messages';
+import { Thumbnail } from '../../../video-tutorials/components/widget/Thumbnail/Thumbnail';
+import { VideoOverlay } from '../../../video-tutorials/components/widget/VideoOverlay/VideoOverlay';
+import type { VideoGuidePlacement } from '../../../video-tutorials/types';
 import { AppText } from '../../../xguard-ui/components/AppText/AppText';
 import { Divider } from '../../../xguard-ui/components/Divider/Divider';
 import { ExternalLink } from '../../../xguard-ui/components/ExternalLink/ExternalLink';
@@ -8,9 +11,6 @@ import { Helper } from '../../../xguard-ui/components/Helper/Helper';
 import { Icon } from '../../../xguard-ui/components/Icon/Icon';
 import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
 import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../xguard-ui/types';
-import { Thumbnail } from '../../../video-tutorials/components/widget/Thumbnail/Thumbnail';
-import { VideoOverlay } from '../../../video-tutorials/components/widget/VideoOverlay/VideoOverlay';
-import type { VideoGuidePlacement } from '../../../video-tutorials/types';
 
 type Props = {
   videoGuide: VideoGuidePlacement;

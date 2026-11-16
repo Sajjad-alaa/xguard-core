@@ -133,8 +133,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use xguard_common::db::setup_pool;
     use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use xguard_common::db::setup_pool;
 
     use super::*;
 

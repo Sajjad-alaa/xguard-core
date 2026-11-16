@@ -1,5 +1,7 @@
 use std::{collections::HashSet, net::IpAddr};
 
+use thiserror::Error;
+use tracing::{debug, error, warn};
 use xguard_common::db::{
     Id,
     models::{
@@ -7,14 +9,12 @@ use xguard_common::db::{
         vpn_client_mfa_session::VpnMfaFlowKind, vpn_client_session::VpnClientMfaMethod,
     },
 };
-use thiserror::Error;
-use tracing::{debug, error, warn};
 
 use super::{
     LoadedFinishContext, MfaEngine,
     authorize::ClientMfaServerError,
     error::{FinishCoreError, StartError},
-    filter_unlicensed_mfa_methods, is_code_method,
+    filter_supported_mfa_methods, is_code_method,
     method::{
         CommonVerifyError, InitiateError, LegacyCredential, Verdict, verify_legacy,
         verify_mobile_signature,
@@ -74,7 +74,7 @@ impl MfaEngine {
             return Err(StartError::Initiate(InitiateError::UnsupportedMethod));
         }
 
-        let step = filter_unlicensed_mfa_methods(&step);
+        let step = filter_supported_mfa_methods(&step);
         if !step.contains(&selected_method) {
             error!(
                 "Selected MFA method ({selected_method:?}) is not supported by location \

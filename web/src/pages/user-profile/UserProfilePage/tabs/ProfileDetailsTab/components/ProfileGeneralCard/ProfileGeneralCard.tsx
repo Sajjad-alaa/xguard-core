@@ -7,8 +7,6 @@ import z from 'zod';
 import { useShallow } from 'zustand/react/shallow';
 import { m } from '../../../../../../../paraglide/messages';
 import api from '../../../../../../../shared/api/api';
-import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
-import { EvenSplit } from '../../../../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
 import { useAppForm } from '../../../../../../../shared/form';
 import { useAuth } from '../../../../../../../shared/hooks/useAuth';
 import {
@@ -16,6 +14,8 @@ import {
   patternValidEmail,
   patternValidPhoneNumber,
 } from '../../../../../../../shared/patterns';
+import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
+import { EvenSplit } from '../../../../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
 import { ProfileCard } from '../../../../components/ProfileCard/ProfileCard';
 import { useUserProfile } from '../../../../hooks/useUserProfilePage';
 

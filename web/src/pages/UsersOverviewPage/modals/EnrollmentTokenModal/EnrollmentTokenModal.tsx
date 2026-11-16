@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
-import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -9,6 +7,8 @@ import {
 } from '../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import type { OpenEnrollmentTokenModal } from '../../../../shared/hooks/modalControls/types';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { EnrollmentTokenContent } from '../../components/EnrollmentTokenContent/EnrollmentTokenContent';
 
 const modalName = ModalName.SelfEnrollmentToken;

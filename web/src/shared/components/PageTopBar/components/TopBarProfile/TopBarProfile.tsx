@@ -14,14 +14,14 @@ import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { m } from '../../../../../paraglide/messages';
 import api from '../../../../api/api';
+import { useAuth } from '../../../../hooks/useAuth';
+import { getUserMeQueryOptions } from '../../../../query';
 import { Avatar } from '../../../../xguard-ui/components/Avatar/Avatar';
 import { Icon } from '../../../../xguard-ui/components/Icon';
 import { Menu } from '../../../../xguard-ui/components/Menu/Menu';
 import type { MenuItemsGroup } from '../../../../xguard-ui/components/Menu/types';
 import { Direction } from '../../../../xguard-ui/types';
 import { isPresent } from '../../../../xguard-ui/utils/isPresent';
-import { useAuth } from '../../../../hooks/useAuth';
-import { getUserMeQueryOptions } from '../../../../query';
 import { TopBarElementSkeleton } from '../../TopBarElementSkeleton';
 
 export const TopBarProfile = () => {

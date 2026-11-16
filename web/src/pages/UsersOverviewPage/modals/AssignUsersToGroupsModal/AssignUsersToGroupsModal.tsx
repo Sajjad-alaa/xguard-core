@@ -4,9 +4,6 @@ import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import { SelectionSection } from '../../../../shared/components/SelectionSection/SelectionSection';
 import type { SelectionOption } from '../../../../shared/components/SelectionSection/type';
-import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -14,6 +11,9 @@ import {
 } from '../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import type { OpenAssignUsersToGroupsModal } from '../../../../shared/hooks/modalControls/types';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 
 const modalNameValue = ModalName.AssignGroupsToUsers;
 

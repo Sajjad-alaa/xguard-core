@@ -20,31 +20,6 @@ use axum::{
 };
 use axum_extra::extract::cookie::Key;
 use axum_server::tls_rustls::RustlsConfig;
-use xguard_certs::CertificateAuthority;
-use xguard_common::{
-    VERSION,
-    auth::claims::{Claims, ClaimsType},
-    config::{
-        AddUserToGroupArgs, ChangePasswordArgs, CreateAdminArgs, CreateGroupArgs, XGuardConfig,
-        GatewayConfigArgs, InitVpnLocationArgs, SetAdminGroupArgs, server_config,
-    },
-    db::{
-        Id, init_db,
-        models::{
-            Certificates, Device, DeviceType, Settings, User, WireguardNetwork,
-            group::{Group, Permission},
-            initial_setup_wizard::{InitialSetupState, InitialSetupStep},
-            oauth2client::OAuth2Client,
-            settings::{initialize_current_settings, update_current_settings},
-            wireguard::ServiceLocationMode,
-            wizard::{ActiveWizard, Wizard},
-        },
-    },
-    types::proxy::ProxyControlMessage,
-};
-use xguard_proto::gateway::Configuration;
-use xguard_version::server::XGuardVersionLayer;
-use xguard_web_ui::{index, svg, web_asset};
 use events::{ApiEvent, DirectorySyncEvent, LdapSyncEventType};
 use handlers::{
     activity_log::{get_activity_log_event, get_activity_log_events},
@@ -92,52 +67,35 @@ use tracing::Level;
 use utoipa::OpenApi;
 #[cfg(feature = "openapi")]
 use utoipa_swagger_ui::SwaggerUi;
+use xguard_certs::CertificateAuthority;
+use xguard_common::{
+    VERSION,
+    auth::claims::{Claims, ClaimsType},
+    config::{
+        AddUserToGroupArgs, ChangePasswordArgs, CreateAdminArgs, CreateGroupArgs,
+        GatewayConfigArgs, InitVpnLocationArgs, SetAdminGroupArgs, XGuardConfig, server_config,
+    },
+    db::{
+        Id, init_db,
+        models::{
+            Certificates, Device, DeviceType, Settings, User, WireguardNetwork,
+            group::{Group, Permission},
+            initial_setup_wizard::{InitialSetupState, InitialSetupStep},
+            oauth2client::OAuth2Client,
+            settings::{initialize_current_settings, update_current_settings},
+            wireguard::ServiceLocationMode,
+            wizard::{ActiveWizard, Wizard},
+        },
+    },
+    types::proxy::ProxyControlMessage,
+};
+use xguard_proto::gateway::Configuration;
+use xguard_version::server::XGuardVersionLayer;
+use xguard_web_ui::{index, svg, web_asset};
 
 use crate::{
     appstate::AppState,
     db::AppEvent,
-    enterprise::{
-        db::models::openid_provider::OpenIdProvider,
-        firewall::try_get_location_firewall_config,
-        handlers::{
-            acl::{
-                alias::{
-                    apply_acl_aliases, bulk_delete_acl_aliases, count_acl_aliases,
-                    create_acl_alias, delete_acl_alias, get_acl_alias, list_acl_aliases,
-                    update_acl_alias,
-                },
-                apply_acl_rules, bulk_delete_acl_rules, bulk_disable_acl_rules,
-                bulk_enable_acl_rules, count_acl_rules, create_acl_rule, delete_acl_rule,
-                destination::{
-                    apply_acl_destinations, bulk_delete_acl_destinations, count_acl_destinations,
-                    create_acl_destination, delete_acl_destination, get_acl_destination,
-                    list_acl_destinations, update_acl_destination,
-                },
-                get_acl_rule, list_acl_rules, update_acl_rule,
-            },
-            activity_log_stream::{
-                create_activity_log_stream, delete_activity_log_stream, get_activity_log_stream,
-                modify_activity_log_stream,
-            },
-            api_tokens::{add_api_token, delete_api_token, fetch_api_tokens, rename_api_token},
-            check_enterprise_info,
-            device_posture::{
-                create_device_posture, delete_device_posture, duplicate_device_posture,
-                get_device_posture, get_device_posture_versions, list_device_postures,
-                set_locations_for_posture, update_device_posture,
-            },
-            enterprise_settings::{get_enterprise_settings, patch_enterprise_settings},
-            openid_login::{auth_callback, get_auth_info},
-            openid_providers::{
-                add_openid_provider, delete_openid_provider, get_current_openid_provider,
-                get_openid_provider, list_openid_providers, modify_openid_provider,
-                test_dirsync_connection,
-            },
-        },
-        snat::handlers::{
-            create_snat_binding, delete_snat_binding, list_snat_bindings, modify_snat_binding,
-        },
-    },
     grpc::{GatewayCommand, WorkerState},
     handlers::{
         app_info::get_app_info,
@@ -155,7 +113,6 @@ use crate::{
             add_group_member, create_group, delete_group, get_group, list_groups, modify_group,
             remove_group_member,
         },
-        license::license_check,
         location_stats::{
             location_connected_network_devices, location_connected_user_devices,
             location_connected_users, location_stats, locations_overview_stats,
@@ -172,8 +129,7 @@ use crate::{
         proxy::{delete_proxy, proxy_details, proxy_list, update_proxy},
         resource_display::get_locations_display,
         settings::{
-            get_settings, get_settings_essentials, ldap_dry_run, patch_settings,
-            set_default_branding, test_ldap_settings, test_submitted_ldap_settings,
+            get_settings, get_settings_essentials, patch_settings, set_default_branding,
             update_settings,
         },
         ssh_authorized_keys::get_authorized_keys,
@@ -184,10 +140,10 @@ use crate::{
         updates::outdated_components,
         user::{
             add_user, bulk_delete_users, bulk_disable_users, bulk_enable_users,
-            bulk_start_enrollment, bulk_store_enrollment_token_in_ldap, change_password,
-            change_self_password, delete_authorized_app, delete_security_key, delete_user,
-            get_user, list_users, me, modify_user, reset_password, start_enrollment,
-            start_remote_desktop_configuration, username_available,
+            bulk_start_enrollment, change_password, change_self_password, delete_authorized_app,
+            delete_security_key, delete_user, get_user, list_users, me, modify_user,
+            reset_password, start_enrollment, start_remote_desktop_configuration,
+            username_available,
         },
         webhooks::{
             add_webhook, change_enabled, change_webhook, delete_webhook, get_webhook, list_webhooks,
@@ -212,9 +168,10 @@ pub mod cert_settings;
 pub mod db;
 pub mod device_access;
 pub mod enrollment_management;
-pub mod enterprise;
+
 pub mod error;
 pub mod events;
+pub mod features;
 pub mod grpc;
 pub mod handlers;
 pub mod headers;
@@ -362,10 +319,6 @@ pub fn build_webapp(
             .route("/user/bulk-enable", post(bulk_enable_users))
             .route("/user/bulk-delete", post(bulk_delete_users))
             .route("/user/bulk-start-enrollment", post(bulk_start_enrollment))
-            .route(
-                "/user/bulk-store-enrollment-token-ldap",
-                post(bulk_store_enrollment_token_in_ldap),
-            )
             .route("/user/{username}", put(modify_user).delete(delete_user))
             // FIXME: username `change_password` is invalid
             .route("/user/change_password", put(change_self_password))
@@ -392,19 +345,6 @@ pub fn build_webapp(
             .route(
                 "/user/{username}/yubikey/{key_id}/rename",
                 post(rename_yubikey),
-            )
-            // API tokens
-            .route(
-                "/user/{username}/api_token",
-                get(fetch_api_tokens).post(add_api_token),
-            )
-            .route(
-                "/user/{username}/api_token/{token_id}",
-                delete(delete_api_token),
-            )
-            .route(
-                "/user/{username}/api_token/{token_id}/rename",
-                post(rename_api_token),
             )
             .route(
                 "/user/{username}/security_key/{id}",
@@ -441,11 +381,6 @@ pub fn build_webapp(
             .route("/settings/{id}", put(set_default_branding))
             // settings for frontend
             .route("/settings_essentials", get(get_settings_essentials))
-            // enterprise settings
-            .route(
-                "/settings_enterprise",
-                get(get_enterprise_settings).patch(patch_enterprise_settings),
-            )
             // support
             .route("/support/configuration", get(configuration))
             .route("/support/logs", get(logs))
@@ -458,12 +393,6 @@ pub fn build_webapp(
                     .delete(delete_webhook)
                     .post(change_enabled),
             )
-            // ldap
-            .route(
-                "/ldap/test",
-                get(test_ldap_settings).post(test_submitted_ldap_settings),
-            )
-            .route("/ldap/dry_run", post(ldap_dry_run))
             // activity log
             .route("/activity_log", get(get_activity_log_events))
             .route("/activity_log/{id}", get(get_activity_log_event))
@@ -494,46 +423,6 @@ pub fn build_webapp(
             ),
     );
 
-    // Enterprise features
-    let api_router = api_router.nest(
-        "/api/v1/openid",
-        Router::new()
-            .route(
-                "/provider",
-                get(list_openid_providers).post(add_openid_provider),
-            )
-            .route(
-                "/provider/{name}",
-                get(get_openid_provider)
-                    .put(modify_openid_provider)
-                    .delete(delete_openid_provider),
-            )
-            .route("/provider/current", get(get_current_openid_provider))
-            .route("/callback", post(auth_callback))
-            .route("/auth_info", get(get_auth_info)),
-    );
-
-    let api_router = api_router.nest(
-        "/api/v1",
-        Router::new()
-            .route("/enterprise_info", get(check_enterprise_info))
-            .route("/test_directory_sync", get(test_dirsync_connection)),
-    );
-
-    // activity log stream
-    let api_router = api_router.nest(
-        "/api/v1/activity_log_stream",
-        Router::new()
-            .route(
-                "/",
-                get(get_activity_log_stream).post(create_activity_log_stream),
-            )
-            .route(
-                "/{id}",
-                delete(delete_activity_log_stream).put(modify_activity_log_stream),
-            ),
-    );
-
     let api_router = api_router
         .nest(
             "/api/v1/oauth",
@@ -557,49 +446,6 @@ pub fn build_webapp(
         );
 
     let api_router = api_router.nest(
-        "/api/v1/acl",
-        Router::new()
-            .route("/rule", get(list_acl_rules).post(create_acl_rule))
-            .route("/rule/count", get(count_acl_rules))
-            .route("/rule/apply", put(apply_acl_rules))
-            .route("/rule/bulk-enable", post(bulk_enable_acl_rules))
-            .route("/rule/bulk-disable", post(bulk_disable_acl_rules))
-            .route("/rule/bulk-delete", post(bulk_delete_acl_rules))
-            .route(
-                "/rule/{id}",
-                get(get_acl_rule)
-                    .put(update_acl_rule)
-                    .delete(delete_acl_rule),
-            )
-            .route("/alias", get(list_acl_aliases).post(create_acl_alias))
-            .route("/alias/count", get(count_acl_aliases))
-            .route(
-                "/alias/{id}",
-                get(get_acl_alias)
-                    .put(update_acl_alias)
-                    .delete(delete_acl_alias),
-            )
-            .route("/alias/apply", put(apply_acl_aliases))
-            .route("/alias/bulk-delete", post(bulk_delete_acl_aliases))
-            .route(
-                "/destination",
-                get(list_acl_destinations).post(create_acl_destination),
-            )
-            .route("/destination/count", get(count_acl_destinations))
-            .route(
-                "/destination/{id}",
-                get(get_acl_destination)
-                    .put(update_acl_destination)
-                    .delete(delete_acl_destination),
-            )
-            .route("/destination/apply", put(apply_acl_destinations))
-            .route(
-                "/destination/bulk-delete",
-                post(bulk_delete_acl_destinations),
-            ),
-    );
-
-    let api_router = api_router.nest(
         "/api/v1",
         Router::new()
             .route("/mfa-flow", get(list_mfa_flows).post(create_mfa_flow))
@@ -614,30 +460,6 @@ pub fn build_webapp(
                 get(get_method_availability),
             )
             .route("/location/{id}/mfa-flows", get(get_location_mfa_flows)),
-    );
-
-    let api_router = api_router.nest(
-        "/api/v1",
-        Router::new()
-            .route("/device-posture/versions", get(get_device_posture_versions))
-            .route(
-                "/device-posture",
-                get(list_device_postures).post(create_device_posture),
-            )
-            .route(
-                "/device-posture/{id}",
-                get(get_device_posture)
-                    .put(update_device_posture)
-                    .delete(delete_device_posture),
-            )
-            .route(
-                "/device-posture/{id}/duplicate",
-                post(duplicate_device_posture),
-            )
-            .route(
-                "/device-posture/{id}/locations",
-                put(set_locations_for_posture),
-            ),
     );
 
     let api_router = api_router.nest(
@@ -727,16 +549,7 @@ pub fn build_webapp(
                 "/network/{location_id}/stats/connected_network_devices",
                 get(location_connected_network_devices),
             )
-            .route(
-                "/network/{location_id}/snat",
-                get(list_snat_bindings).post(create_snat_binding),
-            )
-            .route(
-                "/network/{location_id}/snat/{user_id}",
-                put(modify_snat_binding).delete(delete_snat_binding),
-            )
-            .route("/outdated", get(outdated_components))
-            .route("/license/check", post(license_check)),
+            .route("/outdated", get(outdated_components)),
     );
 
     let api_router = api_router.nest(
@@ -1282,15 +1095,8 @@ pub async fn gateway_config(
         .await
         .map_err(|err| anyhow!("Failed to get peers for location {location} with error: {err}"))?;
 
-    // prepare firewall config
-    let maybe_firewall_config = try_get_location_firewall_config(&location, &mut conn)
-        .await
-        .map_err(|err| {
-            anyhow!("Failed to prepare firewall config for location {location} with error: {err}")
-        })?;
-
     // generate config
-    let mut config = Configuration::new(&location, peers, maybe_firewall_config);
+    let mut config = Configuration::new(&location, peers);
 
     // overwrite private key just in case
     config.private_key = "REDACTED".into();
@@ -1460,23 +1266,6 @@ pub async fn disable_ldap_integration(pool: &PgPool) -> Result<(), anyhow::Error
     Ok(())
 }
 
-pub async fn disable_oidc_directory_sync(pool: &PgPool) -> Result<(), anyhow::Error> {
-    let mut provider = OpenIdProvider::get_current(pool)
-        .await?
-        .ok_or_else(|| anyhow!("No external identity provider is configured."))?;
-
-    if !provider.directory_sync_enabled {
-        return Err(anyhow!(
-            "OIDC directory synchronization is already disabled."
-        ));
-    }
-
-    provider.directory_sync_enabled = false;
-    provider.save(pool).await?;
-
-    Ok(())
-}
-
 pub fn is_valid_phone_number(number: &str) -> bool {
     PHONE_NUMBER_REGEX.is_match(number)
 }
@@ -1515,6 +1304,8 @@ mod test {
 
 #[cfg(test)]
 mod cli_command_tests {
+    use secrecy::SecretString;
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
     use xguard_common::{
         config::{
             AddUserToGroupArgs, ChangePasswordArgs, CreateAdminArgs, CreateGroupArgs,
@@ -1529,15 +1320,10 @@ mod cli_command_tests {
             setup_pool,
         },
     };
-    use secrecy::SecretString;
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
     use super::{
         add_user_to_group, change_user_password, create_admin_user, create_new_group,
-        disable_ldap_integration, disable_oidc_directory_sync, set_admin_group,
-    };
-    use crate::enterprise::db::models::openid_provider::{
-        DirectorySyncTarget, DirectorySyncUserBehavior, OpenIdProvider, OpenIdProviderKind,
+        disable_ldap_integration, set_admin_group,
     };
 
     #[sqlx::test]
@@ -1929,52 +1715,5 @@ mod cli_command_tests {
 
         // already disabled -> error
         assert!(disable_ldap_integration(&pool).await.is_err());
-    }
-
-    #[sqlx::test]
-    async fn test_disable_oidc_directory_sync(_: PgPoolOptions, options: PgConnectOptions) {
-        let pool = setup_pool(options).await;
-
-        // no provider configured -> error
-        assert!(disable_oidc_directory_sync(&pool).await.is_err());
-
-        OpenIdProvider::new(
-            "Test".to_owned(),
-            "https://idp.example.com".to_owned(),
-            OpenIdProviderKind::Google,
-            "client_id".to_owned(),
-            "client_secret".to_owned().into(),
-            None,
-            None,
-            None,
-            None,
-            true,
-            60,
-            DirectorySyncUserBehavior::Keep,
-            DirectorySyncUserBehavior::Keep,
-            DirectorySyncTarget::All,
-            None,
-            None,
-            Vec::new(),
-            None,
-            false,
-            false,
-            None,
-        )
-        .save(&pool)
-        .await
-        .unwrap();
-
-        disable_oidc_directory_sync(&pool).await.unwrap();
-        assert!(
-            !OpenIdProvider::get_current(&pool)
-                .await
-                .unwrap()
-                .unwrap()
-                .directory_sync_enabled
-        );
-
-        // already disabled -> error
-        assert!(disable_oidc_directory_sync(&pool).await.is_err());
     }
 }

@@ -1,16 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
-import type { BadgeProps } from '../../../shared/xguard-ui/components/Badge/types';
-import type { IconKindValue } from '../../../shared/xguard-ui/components/Icon/icon-types';
-import {
-  ThemeVariable,
-  type ThemeVariableValue,
-} from '../../../shared/xguard-ui/types';
 import {
   EXPIRING_THRESHOLD_DAYS,
   getDaysUntilExpiry,
 } from '../../../shared/utils/certificateExpiry';
+import type { BadgeProps } from '../../../shared/xguard-ui/components/Badge/types';
+import type { IconKindValue } from '../../../shared/xguard-ui/components/Icon/icon-types';
+import { ThemeVariable, type ThemeVariableValue } from '../../../shared/xguard-ui/types';
 
 type WarningSeverity = 'warning' | 'critical' | null;
 

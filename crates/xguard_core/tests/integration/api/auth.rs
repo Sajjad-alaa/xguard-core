@@ -1,6 +1,17 @@
 use std::time::{Duration, SystemTime};
 
 use chrono::DateTime;
+use reqwest::{StatusCode, header::USER_AGENT};
+use serde::Deserialize;
+use serde_json::json;
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    query,
+};
+use tokio::time::sleep;
+use totp_lite::{Sha1, totp_custom};
+use webauthn_authenticator_rs::{WebauthnAuthenticator, prelude::Url, softpasskey::SoftPasskey};
+use webauthn_rs::prelude::{CreationChallengeResponse, RequestChallengeResponse};
 use xguard_common::{
     db::models::{
         MFAInfo, MFAMethod, User, WebAuthn,
@@ -13,17 +24,6 @@ use xguard_core::{
     events::ApiEventType,
     handlers::{Auth, AuthCode, AuthResponse, AuthTotp, user::UserDetails},
 };
-use reqwest::{StatusCode, header::USER_AGENT};
-use serde::Deserialize;
-use serde_json::json;
-use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
-    query,
-};
-use tokio::time::sleep;
-use totp_lite::{Sha1, totp_custom};
-use webauthn_authenticator_rs::{WebauthnAuthenticator, prelude::Url, softpasskey::SoftPasskey};
-use webauthn_rs::prelude::{CreationChallengeResponse, RequestChallengeResponse};
 
 use super::common::{
     X_FORWARDED_FOR, fetch_user_details, make_client, make_client_with_db, make_test_client,

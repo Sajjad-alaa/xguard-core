@@ -9,6 +9,10 @@ import { useMemo } from 'react';
 import { m } from '../../../../../paraglide/messages';
 import api from '../../../../../shared/api/api';
 import type { AuthKey, AuthKeyTypeValue } from '../../../../../shared/api/types';
+import { openModal } from '../../../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../../../shared/hooks/modalControls/modalTypes';
+import { downloadText } from '../../../../../shared/utils/download';
+import { formatFileName } from '../../../../../shared/utils/formatFileName';
 import type {
   MenuItemProps,
   MenuItemsGroup,
@@ -20,10 +24,6 @@ import { TableEditCell } from '../../../../../shared/xguard-ui/components/table/
 import { useClipboard } from '../../../../../shared/xguard-ui/hooks/useClipboard';
 import { Snackbar } from '../../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { isPresent } from '../../../../../shared/xguard-ui/utils/isPresent';
-import { openModal } from '../../../../../shared/hooks/modalControls/modalsSubjects';
-import { ModalName } from '../../../../../shared/hooks/modalControls/modalTypes';
-import { downloadText } from '../../../../../shared/utils/download';
-import { formatFileName } from '../../../../../shared/utils/formatFileName';
 import { useUserProfile } from '../../hooks/useUserProfilePage';
 
 type RowData = {

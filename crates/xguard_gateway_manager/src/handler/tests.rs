@@ -6,6 +6,10 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
+use prost_types::Timestamp;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use tokio::sync::{mpsc::unbounded_channel, watch};
+use tonic::{Code, Status};
 use xguard_common::{
     db::{
         Id,
@@ -23,10 +27,6 @@ use xguard_common::{
     secret::SecretStringWrapper,
 };
 use xguard_proto::gateway::{Configuration, PeerStats, core_response};
-use prost_types::Timestamp;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use tokio::sync::{mpsc::unbounded_channel, watch};
-use tonic::{Code, Status};
 
 use super::{GatewayHandler, is_gateway_already_connected, try_protos_into_stats_message};
 use crate::updates::GatewayUpdatesHandler;
@@ -167,11 +167,6 @@ fn try_protos_into_stats_message_returns_none_for_invalid_timestamp() {
 
 #[test]
 fn gen_config_maps_network_fields() {
-    use xguard_common::gateway_types::{FirewallConfig as NativeFirewallConfig, FirewallPolicy};
-    use xguard_proto::enterprise::firewall::{
-        FirewallPolicy as ProtoFirewallPolicy, FirewallRule, SnatBinding,
-    };
-
     let config = Configuration::new(
         &build_network(),
         vec![WireguardPeer {
@@ -180,11 +175,6 @@ fn gen_config_maps_network_fields() {
             preshared_key: Some("peer-preshared-key".to_owned().into()),
             keepalive_interval: Some(25),
         }],
-        Some(NativeFirewallConfig {
-            default_policy: FirewallPolicy::Unspecified,
-            rules: Vec::new(),
-            snat_bindings: Vec::new(),
-        }),
     );
 
     assert_eq!(config.name, "test-network");
@@ -202,24 +192,13 @@ fn gen_config_maps_network_fields() {
     assert_eq!(peer.allowed_ips, ["10.10.0.2/32"]);
     assert_eq!(peer.preshared_key.as_deref(), Some("peer-preshared-key"));
     assert_eq!(peer.keepalive_interval, Some(25));
-
-    let firewall_config = config
-        .firewall_config
-        .expect("generated config should include firewall config");
-    assert_eq!(
-        firewall_config.default_policy,
-        ProtoFirewallPolicy::Unspecified as i32
-    );
-    assert_eq!(firewall_config.rules, [] as [FirewallRule; 0]);
-    assert_eq!(firewall_config.snat_bindings, [] as [SnatBinding; 0]);
 }
 
 #[test]
-fn gen_config_preserves_absent_firewall_config_and_empty_peers() {
-    let config = Configuration::new(&build_network(), Vec::new(), None);
+fn gen_config_preserves_empty_peers() {
+    let config = Configuration::new(&build_network(), Vec::new());
 
     assert_eq!(config.peers, [] as [xguard_proto::gateway::Peer; 0]);
-    assert!(config.firewall_config.is_none());
 }
 
 fn test_handler<'a>(mfa_enabled: bool) -> GatewayUpdatesHandler<'a> {

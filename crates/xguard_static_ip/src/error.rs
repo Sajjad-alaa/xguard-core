@@ -1,5 +1,5 @@
-use xguard_common::db::{Id, models::wireguard::NetworkAddressError};
 use thiserror::Error;
+use xguard_common::db::{Id, models::wireguard::NetworkAddressError};
 
 #[derive(Error, Debug)]
 pub enum StaticIpError {

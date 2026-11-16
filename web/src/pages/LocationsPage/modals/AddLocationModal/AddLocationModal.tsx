@@ -2,12 +2,6 @@ import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
 import { LocationServiceMode } from '../../../../shared/api/types';
-import { enterpriseBadgeProps } from '../../../../shared/components/badges/EnterpriseBadge';
-import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
-import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
-import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   subscribeCloseModal,
   subscribeOpenModal,
@@ -15,6 +9,11 @@ import {
 import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import type { OpenAddLocationModal } from '../../../../shared/hooks/modalControls/types';
 import { canUseServiceLocations } from '../../../../shared/utils/license';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { useAddLocationStore } from '../../../AddLocationPage/useAddLocationStore';
 
 const modalNameValue = ModalName.AddLocation;
@@ -75,7 +74,6 @@ export const AddLocationModalContent = ({
       />
       <SizedBox height={ThemeSpacing.Md} />
       <SectionSelect
-        badgeProps={!serviceLocationsEnabled ? enterpriseBadgeProps : undefined}
         image="service-location"
         content={m.modal_add_location_service_content()}
         title={m.modal_add_location_service_title()}

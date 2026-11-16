@@ -8,15 +8,15 @@ import {
   MfaMethodAvailabilityReason,
   type MfaMethodAvailabilityReasonValue,
 } from '../../api/types';
-import type { ButtonProps } from '../../xguard-ui/components/Button/types';
-import { FieldError } from '../../xguard-ui/components/FieldError/FieldError';
-import { InfoBanner } from '../../xguard-ui/components/InfoBanner/InfoBanner';
 import {
   getLicenseInfoQueryOptions,
   getMfaMethodAvailabilityQueryOptions,
 } from '../../query';
 import { canUseBusinessFeature } from '../../utils/license';
 import { mfaFlowMethodHints, mfaFlowMethodLabels } from '../../utils/mfaFlowSteps';
+import type { ButtonProps } from '../../xguard-ui/components/Button/types';
+import { FieldError } from '../../xguard-ui/components/FieldError/FieldError';
+import { InfoBanner } from '../../xguard-ui/components/InfoBanner/InfoBanner';
 import { MfaConfigurationStep } from './components/MfaConfigurationStep';
 import { MfaMethodsMenu } from './components/MfaMethodsMenu';
 import type {
@@ -27,10 +27,8 @@ import type {
 
 const getDisabledHelper = (reason: MfaMethodAvailabilityReasonValue) => {
   switch (reason) {
-    case MfaMethodAvailabilityReason.Licensed:
-      return m.mfa_flow_method_business_required();
-    case MfaMethodAvailabilityReason.EnterpriseLicensed:
-      return m.mfa_flow_method_enterprise_required();
+    case MfaMethodAvailabilityReason.NotSupported:
+      return m.mfa_flow_method_not_supported();
     case MfaMethodAvailabilityReason.SmtpNotConfigured:
       return m.mfa_flow_method_smtp_required();
     case MfaMethodAvailabilityReason.OidcProviderMissing:
@@ -77,10 +75,7 @@ export const MfaConfiguration = ({ onChange, steps, error }: MfaConfigurationPro
   ): MfaConfigurationMethodGroup[] => {
     const licensedMethods = methods.filter((method) => {
       const reason = methodAvailability?.find((item) => item.method === method)?.reason;
-      return (
-        reason === MfaMethodAvailabilityReason.Licensed ||
-        reason === MfaMethodAvailabilityReason.EnterpriseLicensed
-      );
+      return reason === MfaMethodAvailabilityReason.NotSupported;
     });
     if (licensedMethods.length === 0) return [{ items: methods }];
 

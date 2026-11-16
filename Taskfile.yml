@@ -2,7 +2,6 @@ version: "3"
 
 vars:
   IMAGE_TAG: release-2.1
-  LDAP_COMPOSE: docker compose -p xguard-ldap -f docker-compose.ldap-test.yaml
 
 tasks:
   default:
@@ -33,11 +32,6 @@ tasks:
         done
       - echo "Test databases were deleted!"
 
-  fido-mds:
-    desc: Regenerate the trusted FIDO2 authenticator list from the FIDO Metadata Service blob
-    cmds:
-      - cargo run --locked --release -p xguard_fido_mds -- crates/xguard_core/src/enterprise/fido2/trusted_authenticators.json
-      - SQLX_OFFLINE=true cargo test --locked -p xguard_core --lib fido2::attestation
 
   move-tag:
     desc: "Move tag to current commit (task move-tag -- <TAG>)"
@@ -129,24 +123,6 @@ tasks:
     cmds:
       - cargo nextest run --locked --all-features {{.CLI_ARGS}}
 
-  test-ldap:
-    desc: "Run LDAP integration tests against a throwaway OpenLDAP container, needs a running Postgres for DATABASE_URL (task test-ldap -- <ARGS>)"
-    env:
-      LDAP_URL: ldap://localhost:389
-      LDAP_BIND_USERNAME: cn=admin,dc=example,dc=org
-      LDAP_BIND_PASSWORD: pass123
-      LDAP_USER_SEARCH_BASE: ou=users,dc=example,dc=org
-      LDAP_GROUP_SEARCH_BASE: ou=groups,dc=example,dc=org
-      LDAP_USER_CLASS: inetOrgPerson
-      LDAP_GROUP_CLASS: groupOfUniqueNames
-      LDAP_USERNAME_ATTR: cn
-      LDAP_GROUPNAME_ATTR: cn
-      LDAP_MEMBER_ATTR: memberOf
-      LDAP_GROUP_MEMBER_ATTR: uniqueMember
-    cmds:
-      - defer: "{{.LDAP_COMPOSE}} down"
-      - "{{.LDAP_COMPOSE}} up -d --wait openldap"
-      - cargo nextest run --run-ignored only -E 'package(xguard_core) and test(/^ldap::/)' {{.CLI_ARGS}}
 
   e2e-test:
     desc: "Run e2e tests, requires Docker (task e2e-test [IMAGE_TAG=<tag>] -- <ARGS>)"

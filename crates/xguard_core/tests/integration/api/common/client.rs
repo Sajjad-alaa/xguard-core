@@ -2,11 +2,6 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{Router, serve};
 use bytes::Bytes;
-use xguard_common::db::Id;
-use xguard_core::{
-    events::{ApiEvent, ApiEventType},
-    handlers::Auth,
-};
 use reqwest::{
     Body, Client, StatusCode, Url,
     cookie::{Cookie, Jar},
@@ -17,6 +12,11 @@ use tokio::{
     net::TcpListener,
     sync::mpsc::{UnboundedReceiver, error::TryRecvError},
     task::JoinHandle,
+};
+use xguard_common::db::Id;
+use xguard_core::{
+    events::{ApiEvent, ApiEventType},
+    handlers::Auth,
 };
 
 pub struct TestClient {
