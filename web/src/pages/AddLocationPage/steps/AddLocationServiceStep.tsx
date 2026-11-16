@@ -6,11 +6,11 @@ import {
 } from '../../../shared/api/types';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { InteractiveBlock } from '../../../shared/defguard-ui/components/InteractiveBlock/InteractiveBlock';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { InteractiveBlock } from '../../../shared/xguard-ui/components/InteractiveBlock/InteractiveBlock';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { AddLocationPageStep } from '../types';
 import { useAddLocationStore } from '../useAddLocationStore';
 

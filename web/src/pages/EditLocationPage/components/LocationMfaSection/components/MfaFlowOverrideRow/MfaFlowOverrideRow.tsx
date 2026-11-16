@@ -7,8 +7,8 @@ import type {
   MfaFlowAssignment,
   MfaFlowStepMethods,
 } from '../../../../../../shared/api/types';
-import { Icon } from '../../../../../../shared/defguard-ui/components/Icon/Icon';
-import { isPresent } from '../../../../../../shared/defguard-ui/utils/isPresent';
+import { Icon } from '../../../../../../shared/xguard-ui/components/Icon/Icon';
+import { isPresent } from '../../../../../../shared/xguard-ui/utils/isPresent';
 import { MfaFlowAssignmentCard } from '../MfaFlowAssignmentCard/MfaFlowAssignmentCard';
 
 type Props = {

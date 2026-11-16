@@ -1,9 +1,9 @@
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import './style.scss';
 import { m } from '../../../paraglide/messages';
-import { Icon } from '../../defguard-ui/components/Icon';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../defguard-ui/types';
+import { Icon } from '../../xguard-ui/components/Icon';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../xguard-ui/types';
 import type { DestinationLabelProps } from './types';
 
 export const DestinationLabel = ({

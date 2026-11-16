@@ -9,10 +9,10 @@ import type {
 import api from '../../shared/api/api';
 import type { ActivityLogEvent, ActivityLogSortKey } from '../../shared/api/types';
 import { Page } from '../../shared/components/Page/Page';
-import type { DateRange } from '../../shared/defguard-ui/components/DateInput/types';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import type { DateRange } from '../../shared/xguard-ui/components/DateInput/types';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
 import { getLocationsQueryOptions } from '../../shared/query';
 import { ActivityLogTable } from './ActivityLogTable';

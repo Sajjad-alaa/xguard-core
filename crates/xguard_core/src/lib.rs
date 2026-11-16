@@ -1,0 +1,1980 @@
+#![allow(clippy::too_many_arguments)]
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::{
+        Arc, LazyLock, Mutex, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
+
+use anyhow::anyhow;
+#[cfg(feature = "openapi")]
+use axum::Json;
+use axum::{
+    Extension, Router,
+    extract::DefaultBodyLimit,
+    http::{Request, StatusCode},
+    middleware,
+    routing::{delete, get, post, put},
+};
+use axum_extra::extract::cookie::Key;
+use axum_server::tls_rustls::RustlsConfig;
+use xguard_certs::CertificateAuthority;
+use xguard_common::{
+    VERSION,
+    auth::claims::{Claims, ClaimsType},
+    config::{
+        AddUserToGroupArgs, ChangePasswordArgs, CreateAdminArgs, CreateGroupArgs, XGuardConfig,
+        GatewayConfigArgs, InitVpnLocationArgs, SetAdminGroupArgs, server_config,
+    },
+    db::{
+        Id, init_db,
+        models::{
+            Certificates, Device, DeviceType, Settings, User, WireguardNetwork,
+            group::{Group, Permission},
+            initial_setup_wizard::{InitialSetupState, InitialSetupStep},
+            oauth2client::OAuth2Client,
+            settings::{initialize_current_settings, update_current_settings},
+            wireguard::ServiceLocationMode,
+            wizard::{ActiveWizard, Wizard},
+        },
+    },
+    types::proxy::ProxyControlMessage,
+};
+use xguard_proto::gateway::Configuration;
+use xguard_version::server::XGuardVersionLayer;
+use xguard_web_ui::{index, svg, web_asset};
+use events::{ApiEvent, DirectorySyncEvent, LdapSyncEventType};
+use handlers::{
+    activity_log::{get_activity_log_event, get_activity_log_events},
+    auth::disable_user_mfa,
+    component_setup::{setup_proxy_tls_stream, stream_proxy_acme},
+    group::{bulk_assign_to_groups, list_groups_info},
+    mfa_flow::{
+        create_mfa_flow, delete_mfa_flow, get_location_mfa_flows, get_method_availability,
+        get_mfa_flow, list_mfa_flows, update_mfa_flow,
+    },
+    network_devices::{
+        add_network_device, check_ip_availability, find_available_ips, get_network_device,
+        list_network_devices, modify_network_device, network_device_configs,
+        start_network_device_setup, start_network_device_setup_for_device,
+    },
+    reserved::check_reserved,
+    session_info::get_session_info,
+    ssh_authorized_keys::{
+        add_authentication_key, delete_authentication_key, fetch_authentication_keys,
+        rename_authentication_key,
+    },
+    updates::check_new_version,
+    wireguard::all_gateways_status,
+    yubikey::{delete_yubikey, rename_yubikey},
+};
+use ipnetwork::IpNetwork;
+use regex::Regex;
+use secrecy::ExposeSecret;
+use semver::Version;
+use sqlx::PgPool;
+use tokio::{
+    spawn,
+    sync::{broadcast, mpsc},
+    time::sleep,
+};
+use tower_governor::{
+    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
+};
+use tower_http::{
+    timeout::TimeoutLayer,
+    trace::{DefaultOnResponse, TraceLayer},
+};
+use tracing::Level;
+#[cfg(feature = "openapi")]
+use utoipa::OpenApi;
+#[cfg(feature = "openapi")]
+use utoipa_swagger_ui::SwaggerUi;
+
+use crate::{
+    appstate::AppState,
+    db::AppEvent,
+    enterprise::{
+        db::models::openid_provider::OpenIdProvider,
+        firewall::try_get_location_firewall_config,
+        handlers::{
+            acl::{
+                alias::{
+                    apply_acl_aliases, bulk_delete_acl_aliases, count_acl_aliases,
+                    create_acl_alias, delete_acl_alias, get_acl_alias, list_acl_aliases,
+                    update_acl_alias,
+                },
+                apply_acl_rules, bulk_delete_acl_rules, bulk_disable_acl_rules,
+                bulk_enable_acl_rules, count_acl_rules, create_acl_rule, delete_acl_rule,
+                destination::{
+                    apply_acl_destinations, bulk_delete_acl_destinations, count_acl_destinations,
+                    create_acl_destination, delete_acl_destination, get_acl_destination,
+                    list_acl_destinations, update_acl_destination,
+                },
+                get_acl_rule, list_acl_rules, update_acl_rule,
+            },
+            activity_log_stream::{
+                create_activity_log_stream, delete_activity_log_stream, get_activity_log_stream,
+                modify_activity_log_stream,
+            },
+            api_tokens::{add_api_token, delete_api_token, fetch_api_tokens, rename_api_token},
+            check_enterprise_info,
+            device_posture::{
+                create_device_posture, delete_device_posture, duplicate_device_posture,
+                get_device_posture, get_device_posture_versions, list_device_postures,
+                set_locations_for_posture, update_device_posture,
+            },
+            enterprise_settings::{get_enterprise_settings, patch_enterprise_settings},
+            openid_login::{auth_callback, get_auth_info},
+            openid_providers::{
+                add_openid_provider, delete_openid_provider, get_current_openid_provider,
+                get_openid_provider, list_openid_providers, modify_openid_provider,
+                test_dirsync_connection,
+            },
+        },
+        snat::handlers::{
+            create_snat_binding, delete_snat_binding, list_snat_bindings, modify_snat_binding,
+        },
+    },
+    grpc::{GatewayCommand, WorkerState},
+    handlers::{
+        app_info::get_app_info,
+        auth::{
+            authenticate, email_mfa_code, email_mfa_disable, email_mfa_enable, email_mfa_init,
+            logout, mfa_disable, mfa_enable, recovery_code, request_email_mfa_code, totp_code,
+            totp_disable, totp_enable, totp_secret, webauthn_end, webauthn_finish, webauthn_init,
+            webauthn_start,
+        },
+        component_setup::{adopt_gateway, setup_gateway_tls_stream},
+        core_certs::{get_ca, get_certs, set_external_url_settings, set_internal_url_settings},
+        forward_auth::forward_auth,
+        gateway::{delete_gateway, gateway_details, gateway_list, update_gateway},
+        group::{
+            add_group_member, create_group, delete_group, get_group, list_groups, modify_group,
+            remove_group_member,
+        },
+        license::license_check,
+        location_stats::{
+            location_connected_network_devices, location_connected_user_devices,
+            location_connected_users, location_stats, locations_overview_stats,
+        },
+        mail::{send_support_data, test_mail},
+        openid_clients::{
+            add_openid_client, change_openid_client, change_openid_client_state,
+            delete_openid_client, get_openid_client, list_openid_clients,
+        },
+        openid_flow::{
+            authorization, discovery_keys, openid_configuration, secure_authorization, token,
+            userinfo,
+        },
+        proxy::{delete_proxy, proxy_details, proxy_list, update_proxy},
+        resource_display::get_locations_display,
+        settings::{
+            get_settings, get_settings_essentials, ldap_dry_run, patch_settings,
+            set_default_branding, test_ldap_settings, test_submitted_ldap_settings,
+            update_settings,
+        },
+        ssh_authorized_keys::get_authorized_keys,
+        static_ips::{
+            assign_static_ips, get_all_user_device_ips, get_device_ips, validate_ip_assignment,
+        },
+        support::{configuration, logs},
+        updates::outdated_components,
+        user::{
+            add_user, bulk_delete_users, bulk_disable_users, bulk_enable_users,
+            bulk_start_enrollment, bulk_store_enrollment_token_in_ldap, change_password,
+            change_self_password, delete_authorized_app, delete_security_key, delete_user,
+            get_user, list_users, me, modify_user, reset_password, start_enrollment,
+            start_remote_desktop_configuration, username_available,
+        },
+        webhooks::{
+            add_webhook, change_enabled, change_webhook, delete_webhook, get_webhook, list_webhooks,
+        },
+        wireguard::{
+            add_device, add_user_devices, count_networks, create_network, delete_device,
+            delete_network, download_config, gateway_status, get_device, import_network,
+            list_devices, list_networks, list_user_devices, modify_device, modify_network,
+            network_details, user_device_configs,
+        },
+        worker::{create_job, create_worker_token, job_status, list_workers, remove_worker},
+    },
+    location_management::{
+        allowed_peers::get_location_allowed_peers, sync_location_allowed_devices,
+    },
+    version::IncompatibleComponents,
+};
+
+pub mod appstate;
+pub mod auth;
+pub mod cert_settings;
+pub mod db;
+pub mod device_access;
+pub mod enrollment_management;
+pub mod enterprise;
+pub mod error;
+pub mod events;
+pub mod grpc;
+pub mod handlers;
+pub mod headers;
+pub mod letsencrypt;
+pub mod location_management;
+pub mod log_file;
+pub mod mail;
+pub mod mfa_engine;
+pub mod setup_logs;
+pub mod support;
+pub mod updates;
+pub mod user_management;
+pub mod utility_thread;
+pub mod version;
+pub mod wg_config;
+
+#[macro_use]
+extern crate tracing;
+
+#[macro_use]
+extern crate serde;
+
+/// Default request body size limit applied globally to every route.
+const REQUEST_BODY_LIMIT: usize = 256 * 1024; // 256 KB
+
+/// Raised body size limit for the WireGuard config import endpoint, which may
+/// carry configs with hundreds of peers.
+const NETWORK_IMPORT_BODY_LIMIT: usize = 4 * 1024 * 1024; // 4 MB
+
+/// Maximum time a single request may take before the server returns 408.
+/// Applies to all routes except long-lived SSE streams.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How often the rate limiter evicts stale per-IP entries from its in-memory store.
+const RATE_LIMITER_CLEANUP_PERIOD: Duration = Duration::from_mins(1);
+
+static PHONE_NUMBER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(\+?\d{1,3}\s?)?(\(\d{1,3}\)|\d{1,3})[-\s]?\d{1,4}[-\s]?\d{1,4}?$")
+        .expect("Failed to parse phone number regex")
+});
+
+#[cfg(feature = "openapi")]
+pub mod openapi;
+
+/// Check instance health
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/v1/health",
+    tag = "system",
+    responses(
+        (status = 200, description = "Core is running.", body = String, example = json!("alive")),
+    )
+))]
+pub async fn health_check() -> &'static str {
+    "alive"
+}
+
+pub async fn handle_404() -> (StatusCode, &'static str) {
+    (StatusCode::NOT_FOUND, "Not found")
+}
+
+/// Serves this OpenAPI specification, same as `/api-docs/openapi.json`.
+///
+/// Not listed in the specification itself, because the handler name collides with the
+/// `openapi` module holding `ApiDoc`.
+#[cfg(feature = "openapi")]
+async fn openapi() -> Json<utoipa::openapi::OpenApi> {
+    Json(openapi::ApiDoc::openapi())
+}
+
+/// The `GET /api/v1/api-docs` route, or nothing when built without the `openapi` feature.
+#[cfg(feature = "openapi")]
+fn openapi_route() -> Router<AppState> {
+    Router::new().route("/api-docs", get(openapi))
+}
+
+#[cfg(not(feature = "openapi"))]
+fn openapi_route() -> Router<AppState> {
+    Router::new()
+}
+
+pub fn build_webapp(
+    webhook_tx: mpsc::UnboundedSender<AppEvent>,
+    webhook_rx: mpsc::UnboundedReceiver<AppEvent>,
+    gateway_tx: mpsc::UnboundedSender<GatewayCommand>,
+    web_reload_tx: broadcast::Sender<()>,
+    worker_state: Arc<Mutex<WorkerState>>,
+    pool: PgPool,
+    key: Key,
+    event_tx: mpsc::UnboundedSender<ApiEvent>,
+    ldap_tx: mpsc::UnboundedSender<LdapSyncEventType>,
+    dirsync_tx: mpsc::UnboundedSender<DirectorySyncEvent>,
+    incompatible_components: Arc<RwLock<IncompatibleComponents>>,
+    proxy_control_tx: mpsc::Sender<ProxyControlMessage>,
+    tls_active: Arc<AtomicBool>,
+    server_config: &XGuardConfig,
+) -> Router {
+    let webapp: Router<AppState> = Router::new()
+        .route("/", get(index))
+        .route("/{*path}", get(index))
+        .route("/fonts/{*path}", get(web_asset))
+        .route("/assets/{*path}", get(web_asset))
+        .route("/svg/{*path}", get(svg))
+        .fallback_service(get(handle_404));
+
+    // Collect all API routes into a single router so the rate-limiter can be scoped to API routes only
+    let api_router: Router<AppState> = Router::new().nest(
+        "/api/v1",
+        Router::new()
+            .route("/health", get(health_check))
+            .route("/info", get(get_app_info))
+            .route("/session-info", get(get_session_info))
+            .route("/ssh_authorized_keys", get(get_authorized_keys))
+            .merge(openapi_route())
+            .route("/updates", get(check_new_version))
+            // /auth
+            .route("/auth", post(authenticate))
+            .route("/auth/logout", post(logout))
+            .route("/auth/mfa", put(mfa_enable).delete(mfa_disable))
+            .route("/auth/webauthn/init", post(webauthn_init))
+            .route("/auth/webauthn/finish", post(webauthn_finish))
+            .route("/auth/webauthn/start", post(webauthn_start))
+            .route("/auth/webauthn", post(webauthn_end))
+            .route("/auth/totp/init", post(totp_secret))
+            .route("/auth/totp", post(totp_enable))
+            .route("/auth/totp/verify", post(totp_code))
+            .route("/auth/email/init", post(email_mfa_init))
+            .route(
+                "/auth/email",
+                get(request_email_mfa_code).post(email_mfa_enable),
+            )
+            .route("/auth/email/verify", post(email_mfa_code))
+            .route("/auth/recovery", post(recovery_code))
+            // /user
+            .route("/reserved", get(check_reserved))
+            .route("/user", get(list_users).post(add_user))
+            .route("/user/{username}", get(get_user))
+            .route("/user/{username}/start_enrollment", post(start_enrollment))
+            .route(
+                "/user/{username}/start_desktop",
+                post(start_remote_desktop_configuration),
+            )
+            .route("/user/available", post(username_available))
+            .route("/user/bulk-disable", post(bulk_disable_users))
+            .route("/user/bulk-enable", post(bulk_enable_users))
+            .route("/user/bulk-delete", post(bulk_delete_users))
+            .route("/user/bulk-start-enrollment", post(bulk_start_enrollment))
+            .route(
+                "/user/bulk-store-enrollment-token-ldap",
+                post(bulk_store_enrollment_token_in_ldap),
+            )
+            .route("/user/{username}", put(modify_user).delete(delete_user))
+            // FIXME: username `change_password` is invalid
+            .route("/user/change_password", put(change_self_password))
+            .route("/user/{username}/password", put(change_password))
+            .route("/user/{username}/reset_password", post(reset_password))
+            // disable mfa
+            .route("/user/{username}/email", delete(email_mfa_disable))
+            .route("/user/{username}/totp", delete(totp_disable))
+            // auth keys
+            .route(
+                "/user/{username}/auth_key",
+                get(fetch_authentication_keys).post(add_authentication_key),
+            )
+            .route(
+                "/user/{username}/auth_key/{key_id}",
+                delete(delete_authentication_key),
+            )
+            .route(
+                "/user/{username}/auth_key/{key_id}/rename",
+                post(rename_authentication_key),
+            )
+            // yubi keys
+            .route("/user/{username}/yubikey/{key_id}", delete(delete_yubikey))
+            .route(
+                "/user/{username}/yubikey/{key_id}/rename",
+                post(rename_yubikey),
+            )
+            // API tokens
+            .route(
+                "/user/{username}/api_token",
+                get(fetch_api_tokens).post(add_api_token),
+            )
+            .route(
+                "/user/{username}/api_token/{token_id}",
+                delete(delete_api_token),
+            )
+            .route(
+                "/user/{username}/api_token/{token_id}/rename",
+                post(rename_api_token),
+            )
+            .route(
+                "/user/{username}/security_key/{id}",
+                delete(delete_security_key),
+            )
+            .route("/me", get(me))
+            .route(
+                "/user/{username}/oauth_app/{oauth2client_id}",
+                delete(delete_authorized_app),
+            )
+            .route("/user/{username}/mfa", delete(disable_user_mfa))
+            // forward_auth
+            .route("/forward_auth", get(forward_auth))
+            // group
+            .route("/group", get(list_groups).post(create_group))
+            .route(
+                "/group/{id}",
+                get(get_group)
+                    .put(modify_group)
+                    .delete(delete_group)
+                    .post(add_group_member),
+            )
+            .route("/group/{id}/user/{username}", delete(remove_group_member))
+            .route("/group-info", get(list_groups_info))
+            .route("/groups-assign", post(bulk_assign_to_groups))
+            // mail
+            .route("/mail/test", post(test_mail))
+            .route("/mail/support", post(send_support_data))
+            // settings
+            .route(
+                "/settings",
+                get(get_settings).put(update_settings).patch(patch_settings),
+            )
+            .route("/settings/{id}", put(set_default_branding))
+            // settings for frontend
+            .route("/settings_essentials", get(get_settings_essentials))
+            // enterprise settings
+            .route(
+                "/settings_enterprise",
+                get(get_enterprise_settings).patch(patch_enterprise_settings),
+            )
+            // support
+            .route("/support/configuration", get(configuration))
+            .route("/support/logs", get(logs))
+            // webhooks
+            .route("/webhook", post(add_webhook).get(list_webhooks))
+            .route(
+                "/webhook/{id}",
+                get(get_webhook)
+                    .put(change_webhook)
+                    .delete(delete_webhook)
+                    .post(change_enabled),
+            )
+            // ldap
+            .route(
+                "/ldap/test",
+                get(test_ldap_settings).post(test_submitted_ldap_settings),
+            )
+            .route("/ldap/dry_run", post(ldap_dry_run))
+            // activity log
+            .route("/activity_log", get(get_activity_log_events))
+            .route("/activity_log/{id}", get(get_activity_log_event))
+            // Proxy routes
+            .route("/proxy", get(proxy_list))
+            .route(
+                "/proxy/{proxy_id}",
+                get(proxy_details).put(update_proxy).delete(delete_proxy),
+            )
+            .route(
+                "/proxy/cert/external_url_settings",
+                post(set_external_url_settings),
+            )
+            // Core HTTPS cert routes
+            .route(
+                "/core/cert/internal_url_settings",
+                post(set_internal_url_settings),
+            )
+            .route("/core/cert/ca", get(get_ca))
+            .route("/core/cert/certs", get(get_certs))
+            // Gateway routes
+            .route("/gateway", get(gateway_list))
+            .route(
+                "/gateway/{gateway_id}",
+                get(gateway_details)
+                    .put(update_gateway)
+                    .delete(delete_gateway),
+            ),
+    );
+
+    // Enterprise features
+    let api_router = api_router.nest(
+        "/api/v1/openid",
+        Router::new()
+            .route(
+                "/provider",
+                get(list_openid_providers).post(add_openid_provider),
+            )
+            .route(
+                "/provider/{name}",
+                get(get_openid_provider)
+                    .put(modify_openid_provider)
+                    .delete(delete_openid_provider),
+            )
+            .route("/provider/current", get(get_current_openid_provider))
+            .route("/callback", post(auth_callback))
+            .route("/auth_info", get(get_auth_info)),
+    );
+
+    let api_router = api_router.nest(
+        "/api/v1",
+        Router::new()
+            .route("/enterprise_info", get(check_enterprise_info))
+            .route("/test_directory_sync", get(test_dirsync_connection)),
+    );
+
+    // activity log stream
+    let api_router = api_router.nest(
+        "/api/v1/activity_log_stream",
+        Router::new()
+            .route(
+                "/",
+                get(get_activity_log_stream).post(create_activity_log_stream),
+            )
+            .route(
+                "/{id}",
+                delete(delete_activity_log_stream).put(modify_activity_log_stream),
+            ),
+    );
+
+    let api_router = api_router
+        .nest(
+            "/api/v1/oauth",
+            Router::new()
+                .route("/discovery/keys", get(discovery_keys))
+                .route("/", post(add_openid_client).get(list_openid_clients))
+                .route(
+                    "/{client_id}",
+                    get(get_openid_client)
+                        .put(change_openid_client)
+                        .post(change_openid_client_state)
+                        .delete(delete_openid_client),
+                )
+                .route("/authorize", get(authorization).post(secure_authorization))
+                .route("/token", post(token))
+                .route("/userinfo", get(userinfo)),
+        )
+        .route(
+            "/.well-known/openid-configuration",
+            get(openid_configuration),
+        );
+
+    let api_router = api_router.nest(
+        "/api/v1/acl",
+        Router::new()
+            .route("/rule", get(list_acl_rules).post(create_acl_rule))
+            .route("/rule/count", get(count_acl_rules))
+            .route("/rule/apply", put(apply_acl_rules))
+            .route("/rule/bulk-enable", post(bulk_enable_acl_rules))
+            .route("/rule/bulk-disable", post(bulk_disable_acl_rules))
+            .route("/rule/bulk-delete", post(bulk_delete_acl_rules))
+            .route(
+                "/rule/{id}",
+                get(get_acl_rule)
+                    .put(update_acl_rule)
+                    .delete(delete_acl_rule),
+            )
+            .route("/alias", get(list_acl_aliases).post(create_acl_alias))
+            .route("/alias/count", get(count_acl_aliases))
+            .route(
+                "/alias/{id}",
+                get(get_acl_alias)
+                    .put(update_acl_alias)
+                    .delete(delete_acl_alias),
+            )
+            .route("/alias/apply", put(apply_acl_aliases))
+            .route("/alias/bulk-delete", post(bulk_delete_acl_aliases))
+            .route(
+                "/destination",
+                get(list_acl_destinations).post(create_acl_destination),
+            )
+            .route("/destination/count", get(count_acl_destinations))
+            .route(
+                "/destination/{id}",
+                get(get_acl_destination)
+                    .put(update_acl_destination)
+                    .delete(delete_acl_destination),
+            )
+            .route("/destination/apply", put(apply_acl_destinations))
+            .route(
+                "/destination/bulk-delete",
+                post(bulk_delete_acl_destinations),
+            ),
+    );
+
+    let api_router = api_router.nest(
+        "/api/v1",
+        Router::new()
+            .route("/mfa-flow", get(list_mfa_flows).post(create_mfa_flow))
+            .route(
+                "/mfa-flow/{id}",
+                get(get_mfa_flow)
+                    .put(update_mfa_flow)
+                    .delete(delete_mfa_flow),
+            )
+            .route(
+                "/mfa-flow/method-availability",
+                get(get_method_availability),
+            )
+            .route("/location/{id}/mfa-flows", get(get_location_mfa_flows)),
+    );
+
+    let api_router = api_router.nest(
+        "/api/v1",
+        Router::new()
+            .route("/device-posture/versions", get(get_device_posture_versions))
+            .route(
+                "/device-posture",
+                get(list_device_postures).post(create_device_posture),
+            )
+            .route(
+                "/device-posture/{id}",
+                get(get_device_posture)
+                    .put(update_device_posture)
+                    .delete(delete_device_posture),
+            )
+            .route(
+                "/device-posture/{id}/duplicate",
+                post(duplicate_device_posture),
+            )
+            .route(
+                "/device-posture/{id}/locations",
+                put(set_locations_for_posture),
+            ),
+    );
+
+    let api_router = api_router.nest(
+        "/api/v1",
+        Router::new()
+            // FIXME: Conflict; change /device/{device_id} to /device/{username}.
+            .route("/device/{device_id}", post(add_device))
+            .route(
+                "/device/{device_id}",
+                put(modify_device).get(get_device).delete(delete_device),
+            )
+            .route("/device/{device_id}/config", get(user_device_configs))
+            .route("/device", get(list_devices))
+            .route("/device/user/{username}", get(list_user_devices))
+            .route(
+                "/device/user/{username}/ip",
+                get(get_all_user_device_ips).post(assign_static_ips),
+            )
+            .route(
+                "/device/user/{username}/ip/{device_id}",
+                get(get_device_ips),
+            )
+            .route(
+                "/device/user/{username}/ip/validate",
+                post(validate_ip_assignment),
+            )
+            // Network devices, as opposed to user devices
+            .route(
+                "/device/network",
+                post(add_network_device).get(list_network_devices),
+            )
+            .route(
+                "/device/network/ip/{network_id}",
+                get(find_available_ips).post(check_ip_availability),
+            )
+            .route(
+                "/device/network/{device_id}",
+                put(modify_network_device)
+                    .get(get_network_device)
+                    .delete(delete_device),
+            )
+            .route(
+                "/device/network/{device_id}/config",
+                get(network_device_configs),
+            )
+            .route(
+                "/device/network/start_cli",
+                post(start_network_device_setup),
+            )
+            .route(
+                "/device/network/start_cli/{device_id}",
+                post(start_network_device_setup_for_device),
+            )
+            .route("/network", post(create_network).get(list_networks))
+            .route("/network/count", get(count_networks))
+            .route("/network/display", get(get_locations_display))
+            .route(
+                "/network/import",
+                post(import_network).layer(DefaultBodyLimit::max(NETWORK_IMPORT_BODY_LIMIT)),
+            )
+            .route("/network/stats", get(locations_overview_stats))
+            .route("/network/gateways", get(all_gateways_status))
+            .route(
+                "/network/{network_id}",
+                put(modify_network)
+                    .delete(delete_network)
+                    .get(network_details),
+            )
+            // Programmatic gateway adoption (REST)
+            .route("/network/{network_id}/gateways/adopt", post(adopt_gateway))
+            .route("/network/{network_id}/gateways", get(gateway_status))
+            .route("/network/{network_id}/devices", post(add_user_devices))
+            .route(
+                "/network/{network_id}/device/{device_id}/config",
+                get(download_config),
+            )
+            .route("/network/{network_id}/stats", get(location_stats))
+            .route(
+                "/network/{location_id}/stats/connected_users",
+                get(location_connected_users),
+            )
+            .route(
+                "/network/{location_id}/stats/connected_users/{user_id}/devices",
+                get(location_connected_user_devices),
+            )
+            .route(
+                "/network/{location_id}/stats/connected_network_devices",
+                get(location_connected_network_devices),
+            )
+            .route(
+                "/network/{location_id}/snat",
+                get(list_snat_bindings).post(create_snat_binding),
+            )
+            .route(
+                "/network/{location_id}/snat/{user_id}",
+                put(modify_snat_binding).delete(delete_snat_binding),
+            )
+            .route("/outdated", get(outdated_components))
+            .route("/license/check", post(license_check)),
+    );
+
+    let api_router = api_router.nest(
+        "/api/v1/worker",
+        Router::new()
+            .route("/job", post(create_job))
+            .route("/token", get(create_worker_token))
+            .route("/", get(list_workers))
+            .route("/{id}", delete(remove_worker).get(job_status))
+            .layer(Extension(worker_state)),
+    );
+
+    // Setup rate limiter
+    debug!(
+        "Configuring rate limiter, per_second: {}, burst: {}",
+        server_config.rate_limit_per_second, server_config.rate_limit_burst
+    );
+    let governor_config = GovernorConfigBuilder::default()
+        .key_extractor(SmartIpKeyExtractor)
+        .per_second(server_config.rate_limit_per_second)
+        .burst_size(server_config.rate_limit_burst)
+        .finish();
+    let governor_config = if let Some(conf) = governor_config {
+        let governor_limiter = conf.limiter().clone();
+        spawn(async move {
+            loop {
+                sleep(RATE_LIMITER_CLEANUP_PERIOD).await;
+                debug!(
+                    "Cleaning-up rate limiter storage, current size: {}",
+                    governor_limiter.len()
+                );
+                governor_limiter.retain_recent();
+            }
+        });
+        info!(
+            "Rate limiter configured: {} req/s per IP, burst {}",
+            server_config.rate_limit_per_second, server_config.rate_limit_burst
+        );
+        Some(Arc::new(conf))
+    } else {
+        info!("Rate limiting disabled (per_second or burst is 0)");
+        None
+    };
+
+    // Apply rate-limiter to API routes only, leaving static asset routes unaffected.
+    // Use Arc::clone so the same underlying limiter is shared with the SSE routes below.
+    let api_router = if let Some(ref conf) = governor_config {
+        api_router.layer(GovernorLayer::new(Arc::clone(conf)))
+    } else {
+        api_router
+    };
+
+    // Merge rate-limited API routes into the static-assets webapp.
+    let webapp = webapp.merge(api_router);
+
+    // SSE routes are long-lived connections; they must not be wrapped by the
+    // request timeout. They are merged in after TimeoutLayer is applied to the
+    // main router so that they bypass the timeout while still receiving all
+    // other middleware (security headers, tracing, body limit, etc.).
+    let sse_routes: Router<AppState> = Router::new().nest(
+        "/api/v1",
+        Router::new()
+            .route("/proxy/setup/stream", post(setup_proxy_tls_stream))
+            .route("/proxy/acme/stream", post(stream_proxy_acme))
+            .route(
+                "/network/{network_id}/gateways/setup",
+                post(setup_gateway_tls_stream),
+            ),
+    );
+    let sse_routes = if let Some(conf) = governor_config {
+        sse_routes.layer(GovernorLayer::new(conf))
+    } else {
+        sse_routes
+    };
+
+    let app_state = AppState::new(
+        pool.clone(),
+        webhook_tx,
+        webhook_rx,
+        gateway_tx,
+        web_reload_tx,
+        key,
+        event_tx,
+        ldap_tx,
+        dirsync_tx,
+        incompatible_components,
+        proxy_control_tx.clone(),
+        tls_active,
+    );
+
+    let webapp = webapp
+        // Apply timeout to the main router BEFORE merging SSE routes so
+        // that long-lived streams bypass it.
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
+        .merge(sse_routes);
+
+    let webapp = webapp
+        .with_state(app_state)
+        .layer(Extension(pool))
+        .layer(Extension(proxy_control_tx));
+
+    // swagger is merged before TraceLayer and DefaultBodyLimit so that those
+    // middleware layers cover swagger routes too.
+    #[cfg(feature = "openapi")]
+    let webapp = webapp.merge(
+        SwaggerUi::new("/api-docs").url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
+    );
+
+    webapp
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<_>| {
+                    info_span!(
+                        "http_request",
+                        method = ?request.method(),
+                        path = ?request.uri(),
+                    )
+                })
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
+        // Global request body size limit. Per-route layers (e.g. /network/import) can
+        // override this by applying a larger DefaultBodyLimit closer to the handler.
+        .layer(DefaultBodyLimit::max(REQUEST_BODY_LIMIT))
+}
+
+/// Wraps a router with the outermost security layers: the version header and the
+/// baseline security headers middleware.
+///
+/// Called by both `run_web_server` and the integration-test helper so that
+/// test clients exercise the same middleware stack as the real server.
+pub fn apply_security_layers(router: Router, tls_active: Arc<AtomicBool>) -> Router {
+    let tls_for_headers = Arc::clone(&tls_active);
+    // Version and security headers are the outermost layers so that ALL short-circuit
+    // responses (408 timeout, 413 body-too-large, 429 rate-limited) and swagger routes
+    // also carry the baseline security headers and the server version header.
+    router
+        .layer(XGuardVersionLayer::new(
+            Version::parse(VERSION).expect("VERSION is a valid semver string"),
+        ))
+        .layer(middleware::from_fn(move |req, next| {
+            headers::security_headers_middleware(Arc::clone(&tls_for_headers), req, next)
+        }))
+}
+
+/// Runs core web server exposing REST API.
+#[instrument(skip_all)]
+pub async fn run_web_server(
+    worker_state: Arc<Mutex<WorkerState>>,
+    webhook_tx: mpsc::UnboundedSender<AppEvent>,
+    webhook_rx: mpsc::UnboundedReceiver<AppEvent>,
+    gateway_tx: mpsc::UnboundedSender<GatewayCommand>,
+    web_reload_tx: broadcast::Sender<()>,
+    pool: PgPool,
+    event_tx: mpsc::UnboundedSender<ApiEvent>,
+    ldap_tx: mpsc::UnboundedSender<LdapSyncEventType>,
+    dirsync_tx: mpsc::UnboundedSender<DirectorySyncEvent>,
+    incompatible_components: Arc<RwLock<IncompatibleComponents>>,
+    proxy_control_tx: mpsc::Sender<ProxyControlMessage>,
+) -> Result<(), anyhow::Error> {
+    let settings = Settings::get_current_settings();
+    let key = Key::from(settings.secret_key_required()?.as_bytes());
+
+    let tls_active = Arc::new(AtomicBool::new(false));
+
+    let server_config = server_config();
+
+    let webapp = build_webapp(
+        webhook_tx,
+        webhook_rx,
+        gateway_tx,
+        web_reload_tx.clone(),
+        worker_state,
+        pool.clone(),
+        key,
+        event_tx,
+        ldap_tx,
+        dirsync_tx,
+        incompatible_components,
+        proxy_control_tx,
+        Arc::clone(&tls_active),
+        server_config,
+    );
+    info!("Started web services");
+
+    let webapp = apply_security_layers(webapp, Arc::clone(&tls_active));
+
+    let addr = SocketAddr::new(
+        server_config
+            .http_bind_address
+            .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+        server_config.http_port,
+    );
+
+    let mut web_reload_rx = web_reload_tx.subscribe();
+
+    loop {
+        let handle = axum_server::Handle::new();
+        let handle_clone = handle.clone();
+        let current_tls_cert_pair = Certificates::get_or_default(&pool).await.map_or(None, |c| {
+            c.core_http_cert_pair()
+                .map(|(cert, key)| (cert.to_owned(), key.to_owned()))
+        });
+        tls_active.store(current_tls_cert_pair.is_some(), Ordering::Relaxed);
+        let app = webapp
+            .clone()
+            .into_make_service_with_connect_info::<SocketAddr>();
+
+        let mut server_task = tokio::spawn(async move {
+            if let Some((cert_pem, key_pem)) = current_tls_cert_pair {
+                let tls_config =
+                    RustlsConfig::from_pem(cert_pem.into_bytes(), key_pem.into_bytes())
+                        .await
+                        .map_err(|err| anyhow!("Failed to load TLS config: {err}"))?;
+                axum_server::bind_rustls(addr, tls_config)
+                    .handle(handle_clone.clone())
+                    .serve(app)
+                    .await
+                    .map_err(|err| anyhow!("Web server error: {err}"))
+            } else {
+                axum_server::bind(addr)
+                    .handle(handle_clone)
+                    .serve(app)
+                    .await
+                    .map_err(|err| anyhow!("Web server error: {err}"))
+            }
+        });
+
+        tokio::select! {
+            result = &mut server_task => {
+                match result {
+                    Ok(result) => return result,
+                    Err(err) => return Err(anyhow!("Web server task panicked: {err}")),
+                }
+            }
+            result = web_reload_rx.recv() => {
+                match result {
+                    Ok(()) => {
+                        info!("Received core web server reload request, restarting listener");
+                        handle.graceful_shutdown(Some(Duration::from_secs(30)));
+                        let _ = server_task.await;
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        info!("Missed core web server reload signal, restarting listener");
+                        handle.graceful_shutdown(Some(Duration::from_secs(30)));
+                        let _ = server_task.await;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        return Err(anyhow!("Core web reload channel closed unexpectedly"));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Automates test objects creation to easily setup development environment.
+/// Admin password: pass123
+/// Test network keys:
+/// Public: zGMeVGm9HV9I4wSKF9AXmYnnAIhDySyqLMuKpcfIaQo=
+/// Private: MAk3d5KuB167G88HM7nGYR6ksnPMAOguAg2s5EcPp1M=
+/// Test device keys:
+/// Public: gQYL5eMeFDj0R+lpC7oZyIl0/sNVmQDC6ckP7husZjc=
+/// Private: wGS1qdJfYbWJsOUuP1IDgaJYpR+VaKZPVZvdmLjsH2Y=
+#[allow(deprecated)]
+pub async fn init_dev_env(config: &XGuardConfig) {
+    info!("Initializing dev environment");
+    let pool = init_db(
+        &config.database_host,
+        config.database_port,
+        &config.database_name,
+        &config.database_user,
+        config.database_password.expose_secret(),
+        config.database_pool_size,
+    )
+    .await;
+
+    // initialize admin user
+    User::init_admin_user(&pool, "pass123")
+        .await
+        .expect("Failed to create admin user");
+
+    let ca = CertificateAuthority::new("XGuard Dev", "xguard-dev@xguard.local", 5000)
+        .expect("Failed to create CA");
+
+    initialize_current_settings(&pool)
+        .await
+        .expect("Could not initialize current settings in the database");
+    let mut settings = Settings::get_current_settings();
+    // This should possibly be initialized somehow differently in the future since we are deprecating the enrollment URL env var.
+    settings.public_proxy_url = config
+        .enrollment_url
+        .clone()
+        .map_or(String::from("http://localhost:8080"), |url| url.to_string());
+    settings.xguard_url = config.url.clone().unwrap().to_string();
+    update_current_settings(&pool, settings)
+        .await
+        .expect("Failed to update settings");
+
+    let certs = Certificates {
+        ca_cert_der: Some(ca.cert_der().to_vec()),
+        ca_key_der: Some(ca.key_pair_der().to_vec()),
+        ca_expiry: Some(ca.expiry().expect("Failed to get CA expiry")),
+        ..Default::default()
+    };
+    certs
+        .save(&pool)
+        .await
+        .expect("Failed to save certificates");
+
+    // Mark wizard as completed for dev environment
+    let wizard = Wizard {
+        active_wizard: ActiveWizard::None,
+        completed: true,
+        last_version_migrated_to: None,
+        ldap_migration_completed: false,
+    };
+    // Ensure wizard is initialized, then overwrite with completed state
+    let _ = Wizard::init(&pool, false, config).await;
+    wizard
+        .save(&pool)
+        .await
+        .expect("Failed to save wizard state for dev env");
+    InitialSetupState {
+        step: InitialSetupStep::Finished,
+    }
+    .save(&pool)
+    .await
+    .expect("Failed to save initial setup state for dev env");
+
+    let mut transaction = pool
+        .begin()
+        .await
+        .expect("Failed to initialize transaction");
+
+    let network = if let Some(networks) =
+        WireguardNetwork::find_by_name(&mut *transaction, "TestNet")
+            .await
+            .expect("Failed to search for test network")
+    {
+        info!("Test network exists already, skipping creation...");
+        networks.into_iter().next().unwrap()
+    } else {
+        info!("Creating test network");
+        let mut network = WireguardNetwork::new(
+            "TestNet".to_owned(),
+            50051,
+            "0.0.0.0".to_owned(),
+            None,
+            vec![IpNetwork::new(IpAddr::V4(Ipv4Addr::new(10, 1, 1, 0)), 24).unwrap()],
+            true,
+            false,
+            false,
+            false,
+            false, // mfa_enabled
+            ServiceLocationMode::Disabled,
+        )
+        .set_address([IpNetwork::new(IpAddr::V4(Ipv4Addr::new(10, 1, 1, 1)), 24).unwrap()])
+        .unwrap();
+        "zGMeVGm9HV9I4wSKF9AXmYnnAIhDySyqLMuKpcfIaQo=".clone_into(&mut network.pubkey);
+        "MAk3d5KuB167G88HM7nGYR6ksnPMAOguAg2s5EcPp1M=".clone_into(&mut network.prvkey);
+        network
+            .save(&mut *transaction)
+            .await
+            .expect("Could not save network")
+    };
+    let used_ips = network
+        .all_used_ip_addresses(&mut transaction)
+        .await
+        .expect("Failed to query used IPs from database");
+    if Device::find_by_pubkey(
+        &mut *transaction,
+        "gQYL5eMeFDj0R+lpC7oZyIl0/sNVmQDC6ckP7husZjc=",
+    )
+    .await
+    .expect("Failed to search for test device")
+    .is_some()
+    {
+        info!("Test device exists already, skipping creation...");
+    } else {
+        info!("Creating test device");
+        let device = Device::new(
+            "TestDevice".to_owned(),
+            "gQYL5eMeFDj0R+lpC7oZyIl0/sNVmQDC6ckP7husZjc=".to_owned(),
+            1,
+            DeviceType::User,
+            None,
+            true,
+        )
+        .save(&mut *transaction)
+        .await
+        .expect("Could not save device");
+        device
+            .assign_next_network_ip(&mut transaction, &network, &used_ips, None, None)
+            .await
+            .expect("Could not assign IP to device");
+    }
+
+    for app_id in 1..=3 {
+        OAuth2Client::new(
+            vec![format!("https://app-{app_id}.com")],
+            vec!["openid".into(), "profile".into(), "email".into()],
+            format!("app-{app_id}"),
+        )
+        .save(&mut *transaction)
+        .await
+        .expect("Could not save oauth2client");
+    }
+    transaction
+        .commit()
+        .await
+        .expect("Failed to commit transaction");
+
+    info!("Dev environment initialized - TestNet, TestDevice, AuthorizedApps added");
+}
+
+/// Create a new VPN location.
+/// Meant to be used to automate setting up a new xguard instance.
+/// If the network ID has been specified, it will be assumed that the user wants to update the existing network or create a new one with a predefined ID.
+/// This is mainly used for deployment purposes where the network ID must be known beforehand.
+///
+/// If there is no ID specified, the function will only create the network if no other network exists.
+/// In other words, multiple networks can be created, but only if the ID is predefined for each network.
+pub async fn init_vpn_location(
+    pool: &PgPool,
+    args: &InitVpnLocationArgs,
+) -> Result<String, anyhow::Error> {
+    // The ID is predefined
+    let network = if let Some(location_id) = args.id {
+        let mut transaction = pool.begin().await?;
+        // If the network already exists, update it, assuming that's the user's intent.
+        let network = if let Some(mut network) =
+            WireguardNetwork::find_by_id(&mut *transaction, location_id).await?
+        {
+            network.name.clone_from(&args.name);
+            let mut network = network.set_address([args.address])?;
+            network.port = args.port;
+            network.endpoint.clone_from(&args.endpoint);
+            network.dns.clone_from(&args.dns);
+            network.allowed_ips.clone_from(&args.allowed_ips);
+            network.save(&mut *transaction).await?;
+            let mut events = Vec::new();
+            sync_location_allowed_devices(&network, &mut transaction, None, &mut events).await?;
+            network
+        }
+        // Otherwise create it with the predefined ID
+        else {
+            let mut network = WireguardNetwork::new(
+                args.name.clone(),
+                args.port,
+                args.endpoint.clone(),
+                args.dns.clone(),
+                args.allowed_ips.clone(),
+                true,
+                false,
+                false,
+                false,
+                false, // mfa_enabled
+                ServiceLocationMode::Disabled,
+            )
+            .set_address([args.address])?;
+            network.mtu = args.mtu as i32;
+            network.fwmark = i64::from(args.fwmark);
+            let network = network.save(&mut *transaction).await?;
+            if network.id != location_id {
+                return Err(anyhow!(
+                    "Failed to initialize VPN location. The ID of the newly created network ({}) does not match \
+                    the predefined ID ({location_id}). The predefined ID must be the next available ID.",
+                    network.id
+                ));
+            }
+            network.add_all_allowed_devices(&mut transaction).await?;
+            network
+        };
+        transaction.commit().await?;
+        network
+    }
+    // No predefined ID, add the network if no other networks are present
+    else {
+        // check if a VPN location exists already
+        let networks = WireguardNetwork::all(pool).await?;
+        if !networks.is_empty() {
+            return Err(anyhow!(
+                "Failed to initialize first VPN location. Location already exists."
+            ));
+        }
+
+        // create a new network
+        let mut location = WireguardNetwork::new(
+            args.name.clone(),
+            args.port,
+            args.endpoint.clone(),
+            args.dns.clone(),
+            args.allowed_ips.clone(),
+            true,
+            false,
+            false,
+            false,
+            false, // mfa_enabled
+            ServiceLocationMode::Disabled,
+        )
+        .set_address([args.address])?;
+        location.mtu = args.mtu as i32;
+        location.fwmark = i64::from(args.fwmark);
+        location.save(pool).await?
+    };
+
+    // generate gateway token
+    let token = Claims::new(
+        ClaimsType::Gateway,
+        format!("XGUARD-NETWORK-{}", network.id),
+        network.id.to_string(),
+        u32::MAX.into(),
+    )
+    .to_jwt()?;
+
+    Ok(token)
+}
+
+pub async fn gateway_config(
+    pool: &PgPool,
+    args: &GatewayConfigArgs,
+) -> Result<Configuration, anyhow::Error> {
+    let location_id = args.location_id;
+
+    let mut conn = pool.acquire().await?;
+
+    // fetch specified location
+    let location = match WireguardNetwork::find_by_id(&mut *conn, location_id).await {
+        Ok(Some(network)) => network,
+        Ok(None) => return Err(anyhow!("Location {location_id} not found")),
+        Err(err) => {
+            return Err(anyhow!(
+                "Failed to retrieve location {location_id} with error: {err}"
+            ));
+        }
+    };
+
+    // get peers
+    let peers = get_location_allowed_peers(&location, &mut conn)
+        .await
+        .map_err(|err| anyhow!("Failed to get peers for location {location} with error: {err}"))?;
+
+    // prepare firewall config
+    let maybe_firewall_config = try_get_location_firewall_config(&location, &mut conn)
+        .await
+        .map_err(|err| {
+            anyhow!("Failed to prepare firewall config for location {location} with error: {err}")
+        })?;
+
+    // generate config
+    let mut config = Configuration::new(&location, peers, maybe_firewall_config);
+
+    // overwrite private key just in case
+    config.private_key = "REDACTED".into();
+
+    Ok(config)
+}
+
+pub async fn create_admin_user(pool: &PgPool, args: &CreateAdminArgs) -> Result<(), anyhow::Error> {
+    let admin_group = match &args.group {
+        None => Group::find_by_permission(pool, Permission::IsAdmin)
+            .await?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                anyhow!(
+                    "No admin group found. Create a group using create-group command and mark it as an admin group using the set-admin-group command."
+                )
+            })?,
+        Some(selector) => {
+            let group = resolve_group(pool, selector.group_name.as_deref(), selector.group_id).await?;
+            if !group.is_admin {
+                return Err(anyhow!(
+                    "Group '{}' is not a XGuard admin group.",
+                    group.name
+                ));
+            }
+            group
+        }
+    };
+
+    if User::find_by_username(pool, &args.username)
+        .await?
+        .is_some()
+    {
+        return Err(anyhow!(
+            "A user with username '{}' already exists.",
+            args.username
+        ));
+    }
+
+    let user = User::new(
+        args.username.clone(),
+        Some(args.password.expose_secret()),
+        "change-me".to_owned(),
+        "change-me".to_owned(),
+        format!("{}@change-me", args.username),
+        None,
+    )
+    .save(pool)
+    .await?;
+
+    user.add_to_group(pool, &admin_group).await?;
+
+    Ok(())
+}
+
+pub async fn change_user_password(
+    pool: &PgPool,
+    args: &ChangePasswordArgs,
+) -> Result<(), anyhow::Error> {
+    let mut user = User::find_by_username(pool, &args.username)
+        .await?
+        .ok_or_else(|| anyhow!("User '{}' not found.", args.username))?;
+    user.set_password(args.password.expose_secret());
+    user.save(pool).await?;
+    user.logout_all_sessions(pool).await?;
+
+    Ok(())
+}
+
+async fn group_not_found_error(pool: &PgPool, name: &str) -> Result<anyhow::Error, anyhow::Error> {
+    let available_groups = Group::all(pool)
+        .await?
+        .into_iter()
+        .map(|group| group.name)
+        .collect::<Vec<_>>()
+        .join(", ");
+    Ok(anyhow!(
+        "Group '{name}' does not exist. Available groups: {available_groups}"
+    ))
+}
+
+async fn resolve_group(
+    pool: &PgPool,
+    name: Option<&str>,
+    group_id: Option<Id>,
+) -> Result<Group<Id>, anyhow::Error> {
+    if let Some(name) = name {
+        match Group::find_by_name(pool, name).await? {
+            Some(group) => Ok(group),
+            None => Err(group_not_found_error(pool, name).await?),
+        }
+    } else if let Some(id) = group_id {
+        Group::find_by_id(pool, id)
+            .await?
+            .ok_or_else(|| anyhow!("Group with ID {id} does not exist."))
+    } else {
+        Err(anyhow!(
+            "You must provide either --group-name or --group-id."
+        ))
+    }
+}
+
+pub async fn set_admin_group(
+    pool: &PgPool,
+    args: &SetAdminGroupArgs,
+) -> Result<String, anyhow::Error> {
+    let group = resolve_group(pool, args.group.group_name.as_deref(), args.group.group_id).await?;
+
+    if group.is_admin {
+        return Err(anyhow!(
+            "Group '{}' is already a XGuard admin group.",
+            group.name
+        ));
+    }
+
+    group
+        .set_permission(pool, Permission::IsAdmin, true)
+        .await?;
+
+    Ok(group.name)
+}
+
+pub async fn create_new_group(pool: &PgPool, args: &CreateGroupArgs) -> Result<(), anyhow::Error> {
+    if Group::find_by_name(pool, &args.name).await?.is_some() {
+        return Err(anyhow!("A group named '{}' already exists.", args.name));
+    }
+
+    Group::new(args.name.clone()).save(pool).await?;
+
+    Ok(())
+}
+
+pub async fn add_user_to_group(
+    pool: &PgPool,
+    args: &AddUserToGroupArgs,
+) -> Result<String, anyhow::Error> {
+    let user = User::find_by_username(pool, &args.username)
+        .await?
+        .ok_or_else(|| anyhow!("User '{}' not found.", args.username))?;
+
+    let group = resolve_group(pool, args.group.group_name.as_deref(), args.group.group_id).await?;
+
+    if user.member_of(pool).await?.iter().any(|g| g.id == group.id) {
+        return Err(anyhow!(
+            "User '{}' is already a member of group '{}'.",
+            args.username,
+            group.name
+        ));
+    }
+
+    user.add_to_group(pool, &group).await?;
+
+    Ok(group.name)
+}
+
+pub async fn disable_ldap_integration(pool: &PgPool) -> Result<(), anyhow::Error> {
+    let mut settings = Settings::get_current_settings();
+
+    if !settings.ldap_enabled {
+        return Err(anyhow!("LDAP integration is already disabled."));
+    }
+
+    settings.ldap_enabled = false;
+    update_current_settings(pool, settings).await?;
+
+    Ok(())
+}
+
+pub async fn disable_oidc_directory_sync(pool: &PgPool) -> Result<(), anyhow::Error> {
+    let mut provider = OpenIdProvider::get_current(pool)
+        .await?
+        .ok_or_else(|| anyhow!("No external identity provider is configured."))?;
+
+    if !provider.directory_sync_enabled {
+        return Err(anyhow!(
+            "OIDC directory synchronization is already disabled."
+        ));
+    }
+
+    provider.directory_sync_enabled = false;
+    provider.save(pool).await?;
+
+    Ok(())
+}
+
+pub fn is_valid_phone_number(number: &str) -> bool {
+    PHONE_NUMBER_REGEX.is_match(number)
+}
+
+#[cfg(test)]
+mod test {
+    use super::is_valid_phone_number;
+
+    #[test]
+    fn test_is_valid_phone_number_dg25_10() {
+        let valid_numbers = &[
+            "+48 (91) 123-456",
+            "123 456 7890",
+            "+1 (202) 555-0173",
+            "91-1234-5678",
+            "(22) 567 890",
+        ];
+        for number in valid_numbers {
+            assert!(is_valid_phone_number(number));
+        }
+
+        let invalid_numbers = &[
+            "4*4",
+            "+48  123456789",
+            "123-456-789-0000",
+            "(+48) 123 456",
+            "202.555.0173",
+            "(12345) 6789",
+            "+48 (91) 123-456 000 111",
+        ];
+        for number in invalid_numbers {
+            assert!(!is_valid_phone_number(number));
+        }
+    }
+}
+
+#[cfg(test)]
+mod cli_command_tests {
+    use xguard_common::{
+        config::{
+            AddUserToGroupArgs, ChangePasswordArgs, CreateAdminArgs, CreateGroupArgs,
+            GroupSelector, SetAdminGroupArgs,
+        },
+        db::{
+            models::{
+                Settings, User,
+                group::{Group, Permission},
+                settings::{initialize_current_settings, set_settings},
+            },
+            setup_pool,
+        },
+    };
+    use secrecy::SecretString;
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+
+    use super::{
+        add_user_to_group, change_user_password, create_admin_user, create_new_group,
+        disable_ldap_integration, disable_oidc_directory_sync, set_admin_group,
+    };
+    use crate::enterprise::db::models::openid_provider::{
+        DirectorySyncTarget, DirectorySyncUserBehavior, OpenIdProvider, OpenIdProviderKind,
+    };
+
+    #[sqlx::test]
+    async fn test_create_admin_user(_: PgPoolOptions, options: PgConnectOptions) {
+        let pool = setup_pool(options).await;
+
+        let args = CreateAdminArgs {
+            username: "cliadmin".to_owned(),
+            password: SecretString::from("pass123".to_owned()),
+            group: None,
+        };
+        create_admin_user(&pool, &args).await.unwrap();
+
+        let user = User::find_by_username(&pool, "cliadmin")
+            .await
+            .unwrap()
+            .expect("admin user should exist");
+        assert!(user.verify_password("pass123").is_ok());
+        assert!(user.is_admin(&pool).await.unwrap());
+
+        // creating the same username again fails
+        assert!(create_admin_user(&pool, &args).await.is_err());
+    }
+
+    #[sqlx::test]
+    async fn test_create_admin_user_without_admin_group_fails(
+        _: PgPoolOptions,
+        options: PgConnectOptions,
+    ) {
+        let pool = setup_pool(options).await;
+        for group in Group::find_by_permission(&pool, Permission::IsAdmin)
+            .await
+            .unwrap()
+        {
+            group
+                .set_permission(&pool, Permission::IsAdmin, false)
+                .await
+                .unwrap();
+        }
+
+        let args = CreateAdminArgs {
+            username: "cliadmin".to_owned(),
+            password: SecretString::from("pass123".to_owned()),
+            group: None,
+        };
+        assert!(create_admin_user(&pool, &args).await.is_err());
+    }
+
+    #[sqlx::test]
+    async fn test_create_admin_user_with_specific_group(
+        _: PgPoolOptions,
+        options: PgConnectOptions,
+    ) {
+        let pool = setup_pool(options).await;
+        let mut admin_group = Group::new("admins");
+        admin_group.is_admin = true;
+        let admin_group = admin_group.save(&pool).await.unwrap();
+
+        // by name
+        create_admin_user(
+            &pool,
+            &CreateAdminArgs {
+                username: "byname".to_owned(),
+                password: SecretString::from("pass123".to_owned()),
+                group: Some(GroupSelector {
+                    group_name: Some("admins".to_owned()),
+                    group_id: None,
+                }),
+            },
+        )
+        .await
+        .unwrap();
+        let user = User::find_by_username(&pool, "byname")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            user.member_of(&pool)
+                .await
+                .unwrap()
+                .iter()
+                .any(|group| group.id == admin_group.id)
+        );
+
+        // by id
+        create_admin_user(
+            &pool,
+            &CreateAdminArgs {
+                username: "byid".to_owned(),
+                password: SecretString::from("pass123".to_owned()),
+                group: Some(GroupSelector {
+                    group_name: None,
+                    group_id: Some(admin_group.id),
+                }),
+            },
+        )
+        .await
+        .unwrap();
+        let user = User::find_by_username(&pool, "byid")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            user.member_of(&pool)
+                .await
+                .unwrap()
+                .iter()
+                .any(|group| group.id == admin_group.id)
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_create_admin_user_with_non_admin_group_fails(
+        _: PgPoolOptions,
+        options: PgConnectOptions,
+    ) {
+        let pool = setup_pool(options).await;
+        Group::new("plain").save(&pool).await.unwrap();
+
+        let result = create_admin_user(
+            &pool,
+            &CreateAdminArgs {
+                username: "cliadmin".to_owned(),
+                password: SecretString::from("pass123".to_owned()),
+                group: Some(GroupSelector {
+                    group_name: Some("plain".to_owned()),
+                    group_id: None,
+                }),
+            },
+        )
+        .await;
+
+        assert!(result.is_err());
+        // the user must not have been created when the group is rejected
+        assert!(
+            User::find_by_username(&pool, "cliadmin")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_create_admin_user_with_nonexistent_group_fails(
+        _: PgPoolOptions,
+        options: PgConnectOptions,
+    ) {
+        let pool = setup_pool(options).await;
+
+        assert!(
+            create_admin_user(
+                &pool,
+                &CreateAdminArgs {
+                    username: "cliadmin".to_owned(),
+                    password: SecretString::from("pass123".to_owned()),
+                    group: Some(GroupSelector {
+                        group_name: Some("ghost".to_owned()),
+                        group_id: None,
+                    }),
+                },
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_change_user_password(_: PgPoolOptions, options: PgConnectOptions) {
+        let pool = setup_pool(options).await;
+        User::new(
+            "bob",
+            Some("old-pass"),
+            "Bar",
+            "Bob",
+            "bob@example.com",
+            None,
+        )
+        .save(&pool)
+        .await
+        .unwrap();
+
+        change_user_password(
+            &pool,
+            &ChangePasswordArgs {
+                username: "bob".to_owned(),
+                password: SecretString::from("new-pass".to_owned()),
+            },
+        )
+        .await
+        .unwrap();
+
+        let user = User::find_by_username(&pool, "bob").await.unwrap().unwrap();
+        assert!(user.verify_password("new-pass").is_ok());
+        assert!(user.verify_password("old-pass").is_err());
+
+        // unknown user fails
+        assert!(
+            change_user_password(
+                &pool,
+                &ChangePasswordArgs {
+                    username: "nobody".to_owned(),
+                    password: SecretString::from("whatever".to_owned()),
+                },
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_create_new_group(_: PgPoolOptions, options: PgConnectOptions) {
+        let pool = setup_pool(options).await;
+        let args = CreateGroupArgs {
+            name: "developers".to_owned(),
+        };
+        create_new_group(&pool, &args).await.unwrap();
+        assert!(
+            Group::find_by_name(&pool, "developers")
+                .await
+                .unwrap()
+                .is_some()
+        );
+
+        // creating a group with an existing name fails
+        assert!(create_new_group(&pool, &args).await.is_err());
+    }
+
+    #[sqlx::test]
+    async fn test_set_admin_group(_: PgPoolOptions, options: PgConnectOptions) {
+        let pool = setup_pool(options).await;
+        Group::new("ops").save(&pool).await.unwrap();
+
+        // mark by name
+        let name = set_admin_group(
+            &pool,
+            &SetAdminGroupArgs {
+                group: GroupSelector {
+                    group_name: Some("ops".to_owned()),
+                    group_id: None,
+                },
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(name, "ops");
+        assert!(
+            Group::find_by_name(&pool, "ops")
+                .await
+                .unwrap()
+                .unwrap()
+                .is_admin
+        );
+
+        // marking an already-admin group fails
+        assert!(
+            set_admin_group(
+                &pool,
+                &SetAdminGroupArgs {
+                    group: GroupSelector {
+                        group_name: Some("ops".to_owned()),
+                        group_id: None,
+                    },
+                }
+            )
+            .await
+            .is_err()
+        );
+
+        // mark by id
+        let other = Group::new("ops2").save(&pool).await.unwrap();
+        set_admin_group(
+            &pool,
+            &SetAdminGroupArgs {
+                group: GroupSelector {
+                    group_name: None,
+                    group_id: Some(other.id),
+                },
+            },
+        )
+        .await
+        .unwrap();
+        assert!(
+            Group::find_by_name(&pool, "ops2")
+                .await
+                .unwrap()
+                .unwrap()
+                .is_admin
+        );
+
+        // nonexistent group fails
+        assert!(
+            set_admin_group(
+                &pool,
+                &SetAdminGroupArgs {
+                    group: GroupSelector {
+                        group_name: Some("ghost".to_owned()),
+                        group_id: None,
+                    },
+                }
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_add_user_to_group(_: PgPoolOptions, options: PgConnectOptions) {
+        let pool = setup_pool(options).await;
+        User::new(
+            "carol",
+            Some("pass"),
+            "Bar",
+            "Carol",
+            "carol@example.com",
+            None,
+        )
+        .save(&pool)
+        .await
+        .unwrap();
+        let group = Group::new("team").save(&pool).await.unwrap();
+
+        // add by name
+        let name = add_user_to_group(
+            &pool,
+            &AddUserToGroupArgs {
+                username: "carol".to_owned(),
+                group: GroupSelector {
+                    group_name: Some("team".to_owned()),
+                    group_id: None,
+                },
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(name, "team");
+        assert_eq!(
+            group.member_usernames(&pool).await.unwrap(),
+            ["carol".to_owned()]
+        );
+
+        // adding the same user again (by id) fails
+        assert!(
+            add_user_to_group(
+                &pool,
+                &AddUserToGroupArgs {
+                    username: "carol".to_owned(),
+                    group: GroupSelector {
+                        group_name: None,
+                        group_id: Some(group.id),
+                    },
+                },
+            )
+            .await
+            .is_err()
+        );
+
+        // unknown user fails
+        assert!(
+            add_user_to_group(
+                &pool,
+                &AddUserToGroupArgs {
+                    username: "ghost".to_owned(),
+                    group: GroupSelector {
+                        group_name: Some("team".to_owned()),
+                        group_id: None,
+                    },
+                },
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[sqlx::test]
+    async fn test_disable_ldap_integration(_: PgPoolOptions, options: PgConnectOptions) {
+        let pool = setup_pool(options).await;
+        initialize_current_settings(&pool).await.unwrap();
+
+        // seed enabled LDAP integration (save bypasses validation; refresh the in-memory cache
+        // the command reads from)
+        let mut settings = Settings::get_current_settings();
+        settings.xguard_url = "https://xguard.example.com".to_owned();
+        settings.ldap_enabled = true;
+        settings.save(&pool).await.unwrap();
+        set_settings(Some(settings));
+
+        disable_ldap_integration(&pool).await.unwrap();
+        assert!(!Settings::get(&pool).await.unwrap().unwrap().ldap_enabled);
+
+        // already disabled -> error
+        assert!(disable_ldap_integration(&pool).await.is_err());
+    }
+
+    #[sqlx::test]
+    async fn test_disable_oidc_directory_sync(_: PgPoolOptions, options: PgConnectOptions) {
+        let pool = setup_pool(options).await;
+
+        // no provider configured -> error
+        assert!(disable_oidc_directory_sync(&pool).await.is_err());
+
+        OpenIdProvider::new(
+            "Test".to_owned(),
+            "https://idp.example.com".to_owned(),
+            OpenIdProviderKind::Google,
+            "client_id".to_owned(),
+            "client_secret".to_owned().into(),
+            None,
+            None,
+            None,
+            None,
+            true,
+            60,
+            DirectorySyncUserBehavior::Keep,
+            DirectorySyncUserBehavior::Keep,
+            DirectorySyncTarget::All,
+            None,
+            None,
+            Vec::new(),
+            None,
+            false,
+            false,
+            None,
+        )
+        .save(&pool)
+        .await
+        .unwrap();
+
+        disable_oidc_directory_sync(&pool).await.unwrap();
+        assert!(
+            !OpenIdProvider::get_current(&pool)
+                .await
+                .unwrap()
+                .unwrap()
+                .directory_sync_enabled
+        );
+
+        // already disabled -> error
+        assert!(disable_oidc_directory_sync(&pool).await.is_err());
+    }
+}

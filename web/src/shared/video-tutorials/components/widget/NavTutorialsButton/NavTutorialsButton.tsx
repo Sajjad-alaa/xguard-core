@@ -1,5 +1,5 @@
 import { m } from '../../../../../paraglide/messages';
-import { Icon } from '../../../../defguard-ui/components/Icon/Icon';
+import { Icon } from '../../../../xguard-ui/components/Icon/Icon';
 import { useVideoTutorialsModal } from '../../../store';
 
 export const NavTutorialsButton = () => {

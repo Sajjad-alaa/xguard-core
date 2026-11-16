@@ -1,12 +1,12 @@
 import './style.scss';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { m } from '../../../paraglide/messages';
-import { Icon, IconKind } from '../../defguard-ui/components/Icon';
-import { useClipboard } from '../../defguard-ui/hooks/useClipboard';
-import { Snackbar } from '../../defguard-ui/providers/snackbar/snackbar';
-import { TooltipContent } from '../../defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../defguard-ui/providers/tooltip/TooltipTrigger';
+import { Icon, IconKind } from '../../xguard-ui/components/Icon';
+import { useClipboard } from '../../xguard-ui/hooks/useClipboard';
+import { Snackbar } from '../../xguard-ui/providers/snackbar/snackbar';
+import { TooltipContent } from '../../xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../xguard-ui/providers/tooltip/TooltipTrigger';
 
 interface Props {
   value: string;

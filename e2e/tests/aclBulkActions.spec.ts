@@ -40,8 +40,8 @@ const bulkAction = async (page: Page, area: string, action: string): Promise<voi
 test.describe('ACL bulk actions', () => {
   test.beforeEach(() => {
     test.skip(
-      !process.env.DEFGUARD_LICENSE_KEY,
-      'ACL is a business feature; without DEFGUARD_LICENSE_KEY, every action opens the ' +
+      !process.env.XGUARD_LICENSE_KEY,
+      'ACL is a business feature; without XGUARD_LICENSE_KEY, every action opens the ' +
         'upgrade modal',
     );
     dockerRestart();

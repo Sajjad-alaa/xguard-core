@@ -6,9 +6,9 @@ import { Controls } from '../../shared/components/Controls/Controls';
 import type { WizardPageStep } from '../../shared/components/wizard/types';
 import { WizardCoverImage } from '../../shared/components/wizard/WizardCoverImage/WizardCoverImage';
 import { WizardPage } from '../../shared/components/wizard/WizardPage/WizardPage';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../shared/defguard-ui/components/Divider/Divider';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../shared/xguard-ui/components/Divider/Divider';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { SetupConfirmationStep } from './steps/SetupConfirmationStep';
 import { SetupEdgeAdoptionStep } from './steps/SetupEdgeAdoptionStep';
 import { SetupEdgeComponentStep } from './steps/SetupEdgeComponentStep';
@@ -93,7 +93,7 @@ export const EdgeSetupPage = () => {
         title: m.edge_setup_welcome_title(),
         subtitle: m.edge_setup_welcome_subtitle(),
         content: <WelcomePageContent />,
-        docsLink: 'https://docs.defguard.net/edge-component/deployment',
+        docsLink: 'https://docs.xguard.local/edge-component/deployment',
         docsText: m.edge_setup_welcome_docs_text(),
         media: <WizardCoverImage variant="edge" />,
         onClose: () => {

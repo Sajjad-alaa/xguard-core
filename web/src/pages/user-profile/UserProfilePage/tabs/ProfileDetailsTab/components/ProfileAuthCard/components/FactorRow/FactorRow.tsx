@@ -1,9 +1,9 @@
 import clsx from 'clsx';
 import { m } from '../../../../../../../../../paraglide/messages';
-import { Badge } from '../../../../../../../../../shared/defguard-ui/components/Badge/Badge';
-import type { IconKindValue } from '../../../../../../../../../shared/defguard-ui/components/Icon/icon-types';
-import type { MenuItemsGroup } from '../../../../../../../../../shared/defguard-ui/components/Menu/types';
-import { isPresent } from '../../../../../../../../../shared/defguard-ui/utils/isPresent';
+import { Badge } from '../../../../../../../../../shared/xguard-ui/components/Badge/Badge';
+import type { IconKindValue } from '../../../../../../../../../shared/xguard-ui/components/Icon/icon-types';
+import type { MenuItemsGroup } from '../../../../../../../../../shared/xguard-ui/components/Menu/types';
+import { isPresent } from '../../../../../../../../../shared/xguard-ui/utils/isPresent';
 import { AuthCardRow } from '../AuthCardRow/AuthCardRow';
 
 type Props = {

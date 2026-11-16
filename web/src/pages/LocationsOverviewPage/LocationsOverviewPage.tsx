@@ -5,9 +5,9 @@ import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import { OverviewPeriodSelect } from '../../shared/components/OverviewPeriodSelect/OverviewPeriodSelect';
 import { Page } from '../../shared/components/Page/Page';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import { getLocationsQueryOptions } from '../../shared/query';
 import {
   LocationOverviewCard,

@@ -1,0 +1,337 @@
+use std::fmt;
+
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+};
+use axum_extra::extract::Query;
+use chrono::{DateTime, NaiveDateTime, Utc};
+use xguard_common::db::Id;
+use ipnetwork::IpNetwork;
+use sqlx::{FromRow, Postgres, QueryBuilder, Type};
+
+use super::pagination::{PaginatedApiResponse, PaginatedApiResult, PaginationParams};
+#[cfg(feature = "openapi")]
+use crate::handlers::ApiErrorResponse;
+use crate::{
+    appstate::AppState,
+    auth::SessionInfo,
+    db::models::activity_log::ActivityLogModule,
+    handlers::{ApiResponse, ApiResult},
+};
+
+#[derive(Debug, Deserialize, Default)]
+pub struct FilterParams {
+    pub from: Option<DateTime<Utc>>,
+    pub until: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub username: Vec<String>,
+    #[serde(default)]
+    pub location: Vec<String>,
+    #[serde(default)]
+    pub event: Vec<String>,
+    #[serde(default)]
+    pub module: Vec<ActivityLogModule>,
+    pub search: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub struct SortParams {
+    #[serde(default)]
+    pub sort_by: SortKey,
+    #[serde(default)]
+    pub sort_order: SortOrder,
+}
+
+#[derive(Debug, Deserialize, Type, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SortKey {
+    #[default]
+    Timestamp,
+    Username,
+    Location,
+    Ip,
+    Event,
+    Module,
+    Device,
+}
+
+impl fmt::Display for SortKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Timestamp => "timestamp",
+            Self::Username => "username",
+            Self::Location => "location",
+            Self::Ip => "ip",
+            Self::Event => "event",
+            Self::Module => "module::text",
+            Self::Device => "device",
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    Asc,
+    #[default]
+    Desc,
+}
+
+impl fmt::Display for SortOrder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Asc => "ASC",
+            Self::Desc => "DESC",
+        })
+    }
+}
+
+/// Activity log event as returned by the API.
+#[derive(Serialize, FromRow)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiActivityLogEvent {
+    pub id: Id,
+    pub timestamp: NaiveDateTime,
+    pub user_id: Option<Id>,
+    pub username: String,
+    pub location: Option<String>,
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
+    pub ip: Option<IpNetwork>,
+    pub event: String,
+    pub module: ActivityLogModule,
+    pub device: String,
+    pub description: Option<String>,
+}
+
+/// Activity log event with its full metadata, as returned by the API.
+#[derive(Serialize, FromRow)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiActivityLogEventDetails {
+    #[serde(flatten)]
+    #[sqlx(flatten)]
+    pub event: ApiActivityLogEvent,
+    /// Event specific payload, its shape depends on the event type.
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<Object>))]
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Get a single activity log event
+///
+/// Returns one event together with its metadata, which holds the event specific payload,
+/// e.g. the `before` and `after` state of a settings update.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/v1/activity_log/{id}",
+    tag = "activity log",
+    params(
+        ("id" = i64, Path, description = "ID of the activity log event."),
+    ),
+    responses(
+        (status = 200, description = "Activity log event details.", body = ApiActivityLogEventDetails),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 404, description = "Activity log event not found."),
+        (status = 500, description = "Unable to fetch activity log event.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn get_activity_log_event(
+    session_info: SessionInfo,
+    State(appstate): State<AppState>,
+    Path(id): Path<Id>,
+) -> ApiResult {
+    debug!("Fetching activity log event {id}");
+    let mut query_builder = QueryBuilder::new(
+        "SELECT id, timestamp, user_id, username, location, ip, event, module, device, description, metadata \
+        FROM activity_log_event WHERE id = ",
+    );
+    query_builder.push_bind(id);
+    apply_user_scope(&mut query_builder, &session_info);
+
+    let event = query_builder
+        .build_query_as::<ApiActivityLogEventDetails>()
+        .fetch_optional(&appstate.pool)
+        .await?;
+
+    match event {
+        Some(event) => Ok(ApiResponse::json(event, StatusCode::OK)),
+        None => Ok(ApiResponse::with_status(StatusCode::NOT_FOUND)),
+    }
+}
+
+/// List activity log events
+///
+/// Supports filtering by time range, module, event type and username, plus a free-text search
+/// over event descriptions.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/v1/activity_log",
+    tag = "activity log",
+    params(
+        ("page" = Option<u32>, Query, description = "Page number. Defaults to 1."),
+        ("per_page" = Option<u32>, Query, description = "Number of items per page, from 1 to 100. Defaults to 50."),
+        ("from" = Option<String>, Query, description = "Start of the reported period as an RFC 3339 timestamp."),
+        ("until" = Option<String>, Query, description = "End of the reported period as an RFC 3339 timestamp."),
+        ("username" = Option<String>, Query, description = "Filter by username. Admins only."),
+        ("event" = Option<String>, Query, description = "Filter by event type."),
+        ("module" = Option<String>, Query, description = "Filter by module."),
+        ("search" = Option<String>, Query, description = "Free-text search across username, location, module, event type, device, and description."),
+        ("sort_by" = Option<String>, Query, description = "Sort key: `timestamp`, `username`, `location`, `ip`, `event`, `module`, or `device`. Defaults to `timestamp`."),
+        ("sort_order" = Option<String>, Query, description = "Sort direction: `asc` or `desc`. Defaults to `desc`."),
+    ),
+    responses(
+        (status = 200, description = "Paginated list of activity log events.", body = PaginatedApiResponse<ApiActivityLogEvent>),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to list activity log events.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn get_activity_log_events(
+    session_info: SessionInfo,
+    State(appstate): State<AppState>,
+    pagination: Query<PaginationParams>,
+    filters: Query<FilterParams>,
+    sorting: Query<SortParams>,
+) -> PaginatedApiResult<ApiActivityLogEvent> {
+    let pagination = pagination.0;
+    debug!("Fetching activity log with filters {filters:?} and pagination {pagination}");
+    // start with base SELECT query
+    // dummy WHERE filter is use to enable composable filtering
+    let mut query_builder = QueryBuilder::<Postgres>::new(
+        "SELECT id, timestamp, user_id, username, location, ip, event, module, device, description \
+        FROM activity_log_event WHERE 1=1 ",
+    );
+
+    apply_user_scope(&mut query_builder, &session_info);
+
+    // add optional filters
+    apply_filters(&mut query_builder, &filters);
+
+    // apply ordering
+    apply_sorting(&mut query_builder, &sorting);
+
+    // add limit and offset to fetch a specific page
+    query_builder
+        .push(" LIMIT ")
+        .push_bind(i64::from(pagination.per_page()));
+    query_builder
+        .push(" OFFSET ")
+        .push_bind(i64::from(pagination.offset()));
+
+    // fetch filtered events
+    let events = query_builder
+        .build_query_as::<ApiActivityLogEvent>()
+        .fetch_all(&appstate.pool)
+        .await?;
+
+    // execute count query
+    // fetch total number of filtered events
+    let mut count_query_builder =
+        QueryBuilder::new("SELECT COUNT(*) FROM activity_log_event WHERE 1=1 ");
+    apply_user_scope(&mut count_query_builder, &session_info);
+    apply_filters(&mut count_query_builder, &filters);
+    let total_items = count_query_builder
+        .build_query_scalar::<i64>()
+        .fetch_one(&appstate.pool)
+        .await?;
+
+    Ok(PaginatedApiResponse::new(
+        events,
+        pagination,
+        total_items as u32,
+    ))
+}
+
+/// Restricts the query to the session user's own events unless they are an admin.
+fn apply_user_scope(query_builder: &mut QueryBuilder<Postgres>, session_info: &SessionInfo) {
+    if !session_info.is_admin {
+        query_builder
+            .push(" AND username = ")
+            .push_bind(session_info.user.username.clone())
+            .push(" ");
+    }
+}
+
+/// Adds optional filtering statements to SQL query based on request query params.
+fn apply_filters(query_builder: &mut QueryBuilder<Postgres>, filters: &FilterParams) {
+    debug!("Applying query filters: {filters:?}");
+
+    // time filters
+    if let Some(from) = filters.from {
+        query_builder
+            .push(" AND timestamp >= ")
+            .push_bind(from.naive_utc());
+    }
+    if let Some(until) = filters.until {
+        query_builder
+            .push(" AND timestamp <= ")
+            .push_bind(until.naive_utc());
+    }
+
+    // user filter
+    if !filters.username.is_empty() {
+        query_builder
+            .push(" AND username = ANY(")
+            .push_bind(filters.username.clone())
+            .push(") ");
+    }
+
+    // location filter
+    if !filters.location.is_empty() {
+        query_builder
+            .push(" AND location = ANY(")
+            .push_bind(filters.location.clone())
+            .push(") ");
+    }
+
+    // event filter
+    if !filters.event.is_empty() {
+        query_builder
+            .push(" AND event = ANY(")
+            .push_bind(filters.event.clone())
+            .push(") ");
+    }
+
+    // module filter
+    if !filters.module.is_empty() {
+        query_builder
+            .push(" AND module = ANY(")
+            .push_bind(filters.module.clone())
+            .push(") ");
+    }
+
+    // search by provided term
+    // following columns are supported:
+    // - username
+    // - location
+    // - module
+    // - event
+    // - device
+    // - description
+    if let Some(search_term) = &filters.search {
+        query_builder
+            .push(" AND CONCAT(username, ' ', location, ' ', module, ' ', event, ' ', device, ' ', description, ' ') ILIKE ")
+            .push_bind(format!("%{search_term}%"))
+            .push(" ");
+    }
+}
+
+/// Adds ORDER BY clause to SQL query based on request query params
+fn apply_sorting(query_builder: &mut QueryBuilder<Postgres>, sorting: &SortParams) {
+    debug!("Applying query sorting: {sorting:?}");
+
+    query_builder
+        .push(" ORDER BY ")
+        .push(sorting.sort_by.to_string())
+        .push(" ")
+        .push(sorting.sort_order.to_string())
+        .push(", id ")
+        .push(sorting.sort_order.to_string());
+}

@@ -7,11 +7,11 @@ import {
   ActivityLogStreamType,
   type CreateActivityLogStreamRequest,
 } from '../../../../../shared/api/types';
-import { Modal } from '../../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { SectionSelect } from '../../../../../shared/defguard-ui/components/SectionSelect/SectionSelect';
-import { SizedBox } from '../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../shared/defguard-ui/types';
+import { Modal } from '../../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SectionSelect } from '../../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
+import { SizedBox } from '../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../../shared/form';
 import { formChangeLogic } from '../../../../../shared/formLogic';
 import {

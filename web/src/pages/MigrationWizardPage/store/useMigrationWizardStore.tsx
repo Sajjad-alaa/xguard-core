@@ -24,7 +24,7 @@ import {
 
 interface StoreValues extends MigrationWizardApiState {
   // general config
-  defguard_url: string;
+  xguard_url: string;
   public_proxy_url: string;
   default_admin_group_name: string;
   authentication_period_days: number;
@@ -62,7 +62,7 @@ const defaults: StoreValues = {
   current_step: MigrationWizardStep.General,
   location_state: null,
   proxy_url: null,
-  defguard_url: '',
+  xguard_url: '',
   public_proxy_url: '',
   default_admin_group_name: 'admin',
   authentication_period_days: 30,

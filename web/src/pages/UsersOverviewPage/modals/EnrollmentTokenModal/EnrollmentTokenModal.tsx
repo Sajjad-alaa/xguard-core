@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,

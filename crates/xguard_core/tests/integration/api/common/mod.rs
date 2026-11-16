@@ -1,0 +1,439 @@
+pub(crate) mod client;
+
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::{Arc, Mutex, atomic::AtomicBool},
+};
+
+use axum_extra::extract::cookie::Key;
+use xguard_certs::{
+    CertificateAuthority, Csr, DnType, ExtendedKeyUsagePurpose, PemLabel, der_to_pem,
+    generate_key_pair,
+};
+pub use xguard_common::db::setup_pool;
+use xguard_common::{
+    config::XGuardConfig,
+    db::{
+        Id,
+        models::{
+            Certificates, Device, Settings, User, WireguardNetwork,
+            settings::initialize_current_settings,
+        },
+    },
+    secret::SecretStringWrapper,
+    types::proxy::ProxyControlMessage,
+};
+use xguard_core::{
+    apply_security_layers, build_webapp,
+    db::AppEvent,
+    enterprise::license::{License, LicenseTier, SupportType, set_cached_license},
+    events::ApiEvent,
+    grpc::{GatewayCommand, WorkerState},
+    handlers::{Auth, user::UserDetails},
+};
+use reqwest::{StatusCode, header::HeaderName};
+use serde_json::{Value, json};
+use sqlx::PgPool;
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, mpsc},
+};
+
+use self::client::TestClient;
+use crate::{
+    api::common::client::TestResponse,
+    common::{init_config, initialize_users},
+};
+
+#[allow(clippy::declare_interior_mutable_const)]
+pub const X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host");
+#[allow(clippy::declare_interior_mutable_const)]
+pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
+#[allow(clippy::declare_interior_mutable_const)]
+pub const X_FORWARDED_URI: HeaderName = HeaderName::from_static("x-forwarded-uri");
+
+pub(crate) struct ClientState {
+    pub pool: PgPool,
+    pub worker_state: Arc<Mutex<WorkerState>>,
+    pub gateway_rx: mpsc::UnboundedReceiver<GatewayCommand>,
+    pub proxy_control_rx: mpsc::Receiver<ProxyControlMessage>,
+    pub test_user: User<Id>,
+    #[allow(dead_code)]
+    pub config: XGuardConfig,
+}
+
+impl ClientState {
+    pub fn new(
+        pool: PgPool,
+        worker_state: Arc<Mutex<WorkerState>>,
+        gateway_rx: mpsc::UnboundedReceiver<GatewayCommand>,
+        proxy_control_rx: mpsc::Receiver<ProxyControlMessage>,
+        test_user: User<Id>,
+        config: XGuardConfig,
+    ) -> Self {
+        Self {
+            pool,
+            worker_state,
+            gateway_rx,
+            proxy_control_rx,
+            test_user,
+            config,
+        }
+    }
+}
+
+pub(crate) async fn make_base_client(
+    pool: PgPool,
+    config: XGuardConfig,
+    listener: TcpListener,
+) -> (TestClient, ClientState) {
+    let (api_event_tx, api_event_rx) = mpsc::unbounded_channel::<ApiEvent>();
+    let (tx, rx) = mpsc::unbounded_channel::<AppEvent>();
+    let worker_state = Arc::new(Mutex::new(WorkerState::new(tx.clone())));
+    let (gateway_tx, gateway_rx) = mpsc::unbounded_channel::<GatewayCommand>();
+
+    let license = License::new(
+        "test_customer".to_owned(),
+        false,
+        // Permanent license
+        None,
+        None,
+        None,
+        LicenseTier::Business,
+        SupportType::Basic,
+        Vec::new(),
+    );
+
+    set_cached_license(Some(license));
+
+    let (proxy_control_tx, proxy_control_rx) = mpsc::channel(8);
+
+    let client_state = ClientState::new(
+        pool.clone(),
+        worker_state.clone(),
+        gateway_rx,
+        proxy_control_rx,
+        User::find_by_username(&pool, "hpotter")
+            .await
+            .unwrap()
+            .unwrap(),
+        config.clone(),
+    );
+
+    // Uncomment this to enable tracing in tests.
+    // It only works for running a single test, so leave it commented out for running all tests.
+    // use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+    // tracing_subscriber::registry()
+    //     .with(
+    //         tracing_subscriber::EnvFilter::try_from_default_env()
+    //             .unwrap_or_else(|_| "xguard=debug,tower_http=debug,axum::rejection=trace".into()),
+    //     )
+    //     .with(tracing_subscriber::fmt::layer())
+    //     .init();
+
+    let key = Key::from(
+        Settings::get_current_settings()
+            .secret_key_required()
+            .unwrap()
+            .as_bytes(),
+    );
+    let (web_reload_tx, _web_reload_rx) = broadcast::channel::<()>(8);
+    let (ldap_tx, _ldap_rx) = mpsc::unbounded_channel();
+    let (dirsync_tx, _dirsync_rx) = mpsc::unbounded_channel();
+
+    let tls_active = Arc::new(AtomicBool::new(false));
+    let webapp = build_webapp(
+        tx,
+        rx,
+        gateway_tx,
+        web_reload_tx,
+        worker_state,
+        pool,
+        key,
+        api_event_tx,
+        ldap_tx,
+        dirsync_tx,
+        Arc::default(),
+        proxy_control_tx,
+        Arc::clone(&tls_active),
+        &config,
+    );
+    let webapp = apply_security_layers(webapp, tls_active);
+
+    (
+        TestClient::new(webapp, listener, api_event_rx),
+        client_state,
+    )
+}
+
+pub(crate) async fn make_test_client(pool: PgPool) -> (TestClient, ClientState) {
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
+    let listener = TcpListener::bind(addr)
+        .await
+        .expect("Could not bind ephemeral socket");
+    let port = listener.local_addr().unwrap().port();
+    let config = init_config(Some(&format!("http://localhost:{port}")), &pool).await;
+    initialize_users(&pool).await;
+    initialize_current_settings(&pool)
+        .await
+        .expect("Could not initialize settings");
+    make_base_client(pool, config, listener).await
+}
+
+pub(crate) async fn fetch_user_details(client: &TestClient, username: &str) -> UserDetails {
+    let response = client.get(format!("/api/v1/user/{username}")).send().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    response.json().await
+}
+
+/// Exceeds enterprise free version limits by creating more than 1 network
+pub(crate) async fn exceed_enterprise_limits(client: &TestClient) {
+    let auth = Auth::new("admin", "pass123");
+    client.post("/api/v1/auth").json(&auth).send().await;
+
+    make_network(client, "network1").await;
+    make_network(client, "network2").await;
+}
+
+pub(crate) async fn create_mfa_flow(client: &TestClient, title: &str, steps: Value) -> Id {
+    let response = client
+        .post("/api/v1/mfa-flow")
+        .json(&json!({"title": title, "steps": steps}))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    response.json::<Value>().await["id"].as_i64().unwrap()
+}
+
+pub(crate) async fn admin_group_id(client: &TestClient) -> Id {
+    let response = client.get("/api/v1/group-info").send().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    response
+        .json::<Value>()
+        .await
+        .as_array()
+        .and_then(|groups| groups.first())
+        .and_then(|group| group["id"].as_i64())
+        .expect("admin group exists")
+}
+
+/// Save a complete MFA assignment list through the location update endpoint.
+pub(crate) async fn update_location_mfa_flows(
+    client: &TestClient,
+    location_id: Id,
+    assignments: Value,
+) -> TestResponse {
+    update_location_assignments(client, location_id, "mfa_flows", assignments).await
+}
+
+/// Save a complete posture-check assignment list through the location update endpoint.
+pub(crate) async fn update_location_posture_checks(
+    client: &TestClient,
+    location_id: Id,
+    posture_checks: Value,
+) -> TestResponse {
+    update_location_assignments(client, location_id, "posture_checks", posture_checks).await
+}
+
+async fn update_location_assignments(
+    client: &TestClient,
+    location_id: Id,
+    field: &str,
+    assignments: Value,
+) -> TestResponse {
+    let response = client
+        .get(format!("/api/v1/network/{location_id}"))
+        .send()
+        .await;
+    if response.status() != StatusCode::OK {
+        return response;
+    }
+    let mut location: Value = response.json().await;
+    let data = location
+        .as_object_mut()
+        .expect("location must be an object");
+    data.remove("id");
+    data.remove("gateways");
+    data.remove("has_devices");
+    for array_field in ["address", "allowed_ips"] {
+        let value = data
+            .get_mut(array_field)
+            .and_then(Value::as_array_mut)
+            .expect("location field must be an array");
+        let joined = value
+            .iter()
+            .map(|item| item.as_str().expect("location field item must be a string"))
+            .collect::<Vec<_>>()
+            .join(",");
+        *data.get_mut(array_field).expect("field must exist") = Value::String(joined);
+    }
+    let response = client
+        .get(format!("/api/v1/location/{location_id}/mfa-flows"))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let flows: Vec<Value> = response.json().await;
+    let mfa_flows = flows
+        .into_iter()
+        .map(|flow| {
+            json!({
+                "flow_id": flow["id"],
+                "is_default": flow["is_default"],
+                "group_ids": flow["groups"]
+                    .as_array()
+                    .expect("flow groups must be an array")
+                    .iter()
+                    .map(|group| group["id"].clone())
+                    .collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    data.insert("mfa_flows".into(), Value::Array(mfa_flows));
+    data.insert(field.into(), assignments);
+
+    client
+        .put(format!("/api/v1/network/{location_id}"))
+        .json(&location)
+        .send()
+        .await
+}
+
+/// Create a test network with a given name.
+pub(crate) async fn make_network(client: &TestClient, name: &str) -> TestResponse {
+    let response = client
+        .post("/api/v1/network")
+        .json(&json!({
+            "name": name,
+            "address": "10.1.1.1/24",
+            "port": 55555,
+            "endpoint": "192.168.4.14",
+            "allowed_ips": "10.1.1.0/24",
+            "dns": "1.1.1.1",
+            "mtu": 1420,
+            "fwmark": 0,
+            "allowed_groups": ["admin"],
+            "allow_all_groups": false,
+            "keepalive_interval": 25,
+            "peer_disconnect_threshold": 300,
+            "acl_enabled": false,
+            "acl_default_allow": false,
+            "allowed_ips_from_acl": false,
+            "mfa_enabled": false,
+            "service_location_mode": "disabled",
+            "posture_checks": [],
+            "mfa_flows": []
+        }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    response
+}
+
+pub(crate) async fn make_client(pool: PgPool) -> TestClient {
+    let (client, _) = make_test_client(pool).await;
+    client
+}
+
+pub(crate) async fn make_client_with_db(pool: PgPool) -> (TestClient, PgPool) {
+    let (client, client_state) = make_test_client(pool).await;
+    (client, client_state.pool)
+}
+
+pub(crate) async fn authenticate_admin(client: &mut TestClient) {
+    client.login_user("admin", "pass123").await;
+}
+
+// Helper to fetch current user state from DB by username
+pub(crate) async fn get_db_user(pool: &PgPool, username: &str) -> User<Id> {
+    User::find_by_username(pool, username)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+// Helper to fetch current location state from DB by ID
+pub(crate) async fn get_db_location(pool: &PgPool, location_id: Id) -> WireguardNetwork<Id> {
+    WireguardNetwork::find_by_id(pool, location_id)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+// Helper to fetch current user device state from DB by device ID
+pub(crate) async fn get_db_device(pool: &PgPool, device_id: Id) -> Device<Id> {
+    Device::find_by_id(pool, device_id).await.unwrap().unwrap()
+}
+
+pub(crate) fn generate_test_cert_pem(common_name: &str) -> (String, String) {
+    let ca = CertificateAuthority::new("Test CA", "test@example.com", 365).unwrap();
+    let key_pair = generate_key_pair().unwrap();
+    let san = vec![common_name.to_owned()];
+    let dn = vec![(DnType::CommonName, common_name)];
+    let csr = Csr::new(&key_pair, &san, dn).unwrap();
+    let cert = ca.sign_server_cert(&csr).unwrap();
+    let cert_pem = der_to_pem(cert.der(), PemLabel::Certificate).unwrap();
+    let key_pem = der_to_pem(key_pair.serialize_der().as_slice(), PemLabel::PrivateKey).unwrap();
+    (cert_pem, key_pem)
+}
+
+pub(crate) fn generate_expired_test_cert_pem(common_name: &str) -> (String, String) {
+    let ca = CertificateAuthority::new("Test CA", "test@example.com", 365).unwrap();
+    let key_pair = generate_key_pair().unwrap();
+    let san = vec![common_name.to_owned()];
+    let dn = vec![(DnType::CommonName, common_name)];
+    let csr = Csr::new(&key_pair, &san, dn).unwrap();
+    let cert = ca
+        .sign_csr_with_validity(&csr, 0, &[ExtendedKeyUsagePurpose::ServerAuth])
+        .unwrap();
+    let cert_pem = der_to_pem(cert.der(), PemLabel::Certificate).unwrap();
+    let key_pem = der_to_pem(key_pair.serialize_der().as_slice(), PemLabel::PrivateKey).unwrap();
+    (cert_pem, key_pem)
+}
+
+/// Seed the database with a self-signed CA so that gateway/proxy adoption tests can proceed.
+pub(crate) async fn setup_ca(pool: &PgPool) {
+    let ca = CertificateAuthority::new("Test CA", "test@example.com", 365)
+        .expect("failed to create test CA");
+    let mut certs = Certificates::get_or_default(pool)
+        .await
+        .expect("failed to load certificates");
+    certs.ca_cert_der = Some(ca.cert_der().to_vec());
+    certs.ca_key_der = Some(ca.key_pair_der().to_vec());
+    certs.save(pool).await.expect("failed to save CA certs");
+}
+
+/// Override the global license cache with an Enterprise-tier license.
+pub(crate) fn set_enterprise_license() {
+    set_cached_license(Some(License::new(
+        "test_customer".to_owned(),
+        false,
+        None,
+        None,
+        None,
+        LicenseTier::Enterprise,
+        SupportType::Basic,
+        Vec::new(),
+    )));
+}
+
+/// Set minimal SMTP fields on a [`Settings`] so that `smtp_configured()` returns `true`.
+pub(crate) fn configure_smtp(settings: &mut Settings) {
+    settings.smtp.server = Some("smtp.example.com".into());
+    settings.smtp.port = Some(587);
+    settings.smtp.sender = Some("noreply@example.com".into());
+}
+
+/// Set minimal LDAP fields on a [`Settings`] so that `ldap_configured()` returns `true`.
+pub(crate) fn configure_ldap(settings: &mut Settings) {
+    settings.ldap_url = Some("ldap://localhost".into());
+    settings.ldap_bind_username = Some("cn=admin,dc=example,dc=com".into());
+    settings.ldap_bind_password = Some(SecretStringWrapper::from("secret"));
+    settings.ldap_username_attr = Some("uid".into());
+    settings.ldap_user_search_base = Some("ou=users,dc=example,dc=com".into());
+    settings.ldap_user_obj_class = Some("inetOrgPerson".into());
+    settings.ldap_member_attr = Some("memberUid".into());
+    settings.ldap_groupname_attr = Some("cn".into());
+    settings.ldap_group_obj_class = Some("posixGroup".into());
+    settings.ldap_group_member_attr = Some("memberUid".into());
+    settings.ldap_group_search_base = Some("ou=groups,dc=example,dc=com".into());
+}

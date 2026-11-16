@@ -7,19 +7,19 @@ import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import type { StartEnrollmentResponse, User } from '../../../../shared/api/types';
 import { Controls } from '../../../../shared/components/Controls/Controls';
-import { AppText } from '../../../../shared/defguard-ui/components/AppText/AppText';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Fold } from '../../../../shared/defguard-ui/components/Fold/Fold';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { SectionSelect } from '../../../../shared/defguard-ui/components/SectionSelect/SectionSelect';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../../shared/defguard-ui/providers/snackbar/snackbar';
+import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Fold } from '../../../../shared/xguard-ui/components/Fold/Fold';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import {
   TextStyle,
   ThemeSpacing,
   ThemeVariable,
-} from '../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+} from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import {

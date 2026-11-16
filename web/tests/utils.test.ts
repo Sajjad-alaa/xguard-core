@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Device, DeviceNetworkInfo } from '../src/shared/api/types';
 import { joinCsv, splitCsv } from '../src/shared/utils/csv';
-import { isValidDefguardUrl } from '../src/shared/utils/defguardUrl';
+import { isValidXGuardUrl } from '../src/shared/utils/xguardUrl';
 import { formatFileName } from '../src/shared/utils/formatFileName';
 import { formatIpForDisplay } from '../src/shared/utils/formatIpForDisplay';
 import { smallestNetworkCapacity } from '../src/shared/utils/network';
@@ -278,35 +278,35 @@ describe('isUserOnline', () => {
   });
 });
 
-describe('isValidDefguardUrl', () => {
+describe('isValidXGuardUrl', () => {
   it('should accept valid https domain URLs', () => {
-    expect(isValidDefguardUrl('https://defguard.example.com')).toBe(true);
-    expect(isValidDefguardUrl('https://app.company.org')).toBe(true);
-    expect(isValidDefguardUrl('https://vpn.internal.corp')).toBe(true);
+    expect(isValidXGuardUrl('https://xguard.example.com')).toBe(true);
+    expect(isValidXGuardUrl('https://app.company.org')).toBe(true);
+    expect(isValidXGuardUrl('https://vpn.internal.corp')).toBe(true);
   });
 
   it('should accept valid http domain URLs', () => {
-    expect(isValidDefguardUrl('http://defguard.example.com')).toBe(true);
+    expect(isValidXGuardUrl('http://xguard.example.com')).toBe(true);
   });
 
   it('should accept URL with port', () => {
-    expect(isValidDefguardUrl('https://defguard.example.com:8080')).toBe(true);
+    expect(isValidXGuardUrl('https://xguard.example.com:8080')).toBe(true);
   });
 
   it('should accept URL with path', () => {
-    expect(isValidDefguardUrl('https://defguard.example.com/enrollment')).toBe(true);
+    expect(isValidXGuardUrl('https://xguard.example.com/enrollment')).toBe(true);
   });
 
   it('should reject URLs with IP address as hostname', () => {
-    expect(isValidDefguardUrl('https://192.168.1.1')).toBe(false);
-    expect(isValidDefguardUrl('https://10.0.0.1:8080')).toBe(false);
-    expect(isValidDefguardUrl('http://127.0.0.1')).toBe(false);
+    expect(isValidXGuardUrl('https://192.168.1.1')).toBe(false);
+    expect(isValidXGuardUrl('https://10.0.0.1:8080')).toBe(false);
+    expect(isValidXGuardUrl('http://127.0.0.1')).toBe(false);
   });
 
   it('should reject invalid URLs', () => {
-    expect(isValidDefguardUrl('not-a-url')).toBe(false);
-    expect(isValidDefguardUrl('')).toBe(false);
-    expect(isValidDefguardUrl('ftp://')).toBe(false);
+    expect(isValidXGuardUrl('not-a-url')).toBe(false);
+    expect(isValidXGuardUrl('')).toBe(false);
+    expect(isValidXGuardUrl('ftp://')).toBe(false);
   });
 });
 

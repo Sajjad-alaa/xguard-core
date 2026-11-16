@@ -2,8 +2,8 @@ import type { PropsWithChildren } from 'react';
 import {
   Icon,
   type IconKindValue,
-} from '../../../../../../shared/defguard-ui/components/Icon';
-import { isPresent } from '../../../../../../shared/defguard-ui/utils/isPresent';
+} from '../../../../../../shared/xguard-ui/components/Icon';
+import { isPresent } from '../../../../../../shared/xguard-ui/utils/isPresent';
 
 interface Props extends PropsWithChildren {
   icon?: IconKindValue;

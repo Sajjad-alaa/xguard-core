@@ -1,13 +1,13 @@
 {
   "nodes": {
-    "defguard-ui": {
+    "xguard-ui": {
       "flake": false,
       "locked": {
-        "path": "web/src/shared/defguard-ui",
+        "path": "web/src/shared/xguard-ui",
         "type": "path"
       },
       "original": {
-        "path": "web/src/shared/defguard-ui",
+        "path": "web/src/shared/xguard-ui",
         "type": "path"
       },
       "parent": []
@@ -60,7 +60,7 @@
     },
     "root": {
       "inputs": {
-        "defguard-ui": "defguard-ui",
+        "xguard-ui": "xguard-ui",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
         "proto": "proto",

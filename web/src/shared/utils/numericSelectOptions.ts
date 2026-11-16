@@ -1,4 +1,4 @@
-import type { SelectOption } from '../defguard-ui/components/Select/types';
+import type { SelectOption } from '../xguard-ui/components/Select/types';
 
 export type NumericSelectOption = SelectOption<number>;
 

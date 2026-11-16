@@ -7,15 +7,15 @@ import {
   UserMfaMethod,
   type UserMfaMethodValue,
 } from '../../../../../../../shared/api/types';
-import { Badge } from '../../../../../../../shared/defguard-ui/components/Badge/Badge';
-import { Divider } from '../../../../../../../shared/defguard-ui/components/Divider/Divider';
-import { IconButtonMenu } from '../../../../../../../shared/defguard-ui/components/IconButtonMenu/IconButtonMenu';
+import { Badge } from '../../../../../../../shared/xguard-ui/components/Badge/Badge';
+import { Divider } from '../../../../../../../shared/xguard-ui/components/Divider/Divider';
+import { IconButtonMenu } from '../../../../../../../shared/xguard-ui/components/IconButtonMenu/IconButtonMenu';
 import type {
   MenuItemProps,
   MenuItemsGroup,
-} from '../../../../../../../shared/defguard-ui/components/Menu/types';
-import { Snackbar } from '../../../../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { isPresent } from '../../../../../../../shared/defguard-ui/utils/isPresent';
+} from '../../../../../../../shared/xguard-ui/components/Menu/types';
+import { Snackbar } from '../../../../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
 import { openModal } from '../../../../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
 import { useApp } from '../../../../../../../shared/hooks/useApp';

@@ -6,7 +6,7 @@ import {
   MfaMethodAvailabilityReason,
   type MfaMethodAvailabilityReasonValue,
 } from '../api/types';
-import type { IconKindValue } from '../defguard-ui/components/Icon/icon-types';
+import type { IconKindValue } from '../xguard-ui/components/Icon/icon-types';
 
 export const mfaFlowMethodLabels: Record<MfaFlowMethodValue, string> = {
   [MfaFlowMethod.MobileApprove]: m.mfa_flow_method_mobile_client(),

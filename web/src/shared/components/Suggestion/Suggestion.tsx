@@ -1,9 +1,9 @@
 import type { HTMLProps, ReactNode } from 'react';
 import './style.scss';
 import clsx from 'clsx';
-import { AppText } from '../../defguard-ui/components/AppText/AppText';
-import { Icon } from '../../defguard-ui/components/Icon';
-import { TextStyle, ThemeVariable } from '../../defguard-ui/types';
+import { AppText } from '../../xguard-ui/components/AppText/AppText';
+import { Icon } from '../../xguard-ui/components/Icon';
+import { TextStyle, ThemeVariable } from '../../xguard-ui/types';
 
 type Props = Omit<HTMLProps<HTMLDivElement>, 'content' | 'title'> & {
   title: string;

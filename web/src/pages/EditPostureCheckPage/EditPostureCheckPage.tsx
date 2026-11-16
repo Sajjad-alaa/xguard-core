@@ -21,17 +21,17 @@ import { EditPageFormSection } from '../../shared/components/EditPageFormSection
 import { LayoutGrid } from '../../shared/components/LayoutGrid/LayoutGrid';
 import { Page } from '../../shared/components/Page/Page';
 import {
-  PostureCheckDefguardSection,
+  PostureCheckXGuardSection,
   type PostureCheckEditorLocationOption,
   PostureCheckGeneralSection,
   PostureCheckLocationsSection,
   PostureCheckOperatingSystemsSection,
 } from '../../shared/components/postureChecksEditor/PostureCheckEditorSections';
-import { IconKind } from '../../shared/defguard-ui/components/Icon';
-import { InfoBanner } from '../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
+import { IconKind } from '../../shared/xguard-ui/components/Icon';
+import { InfoBanner } from '../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import {
@@ -182,8 +182,8 @@ const EditPostureCheckForm = ({
           updateValues={updateValues}
         />
       </EditPageFormSection>
-      <EditPageFormSection label={m.posture_checks_edit_defguard()}>
-        <PostureCheckDefguardSection
+      <EditPageFormSection label={m.posture_checks_edit_xguard()}>
+        <PostureCheckXGuardSection
           values={values}
           versionValues={versionValues}
           updateValues={updateValues}

@@ -1,6 +1,6 @@
 import './style.scss';
 import { LoginPage } from '../../../shared/components/LoginPage/LoginPage';
-import { LoaderSpinner } from '../../../shared/defguard-ui/components/LoaderSpinner/LoaderSpinner';
+import { LoaderSpinner } from '../../../shared/xguard-ui/components/LoaderSpinner/LoaderSpinner';
 
 export const LoginLoadingPage = () => {
   return (

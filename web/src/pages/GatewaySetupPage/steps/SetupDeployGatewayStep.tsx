@@ -4,22 +4,22 @@ import { Card } from '../../../shared/components/Card/Card';
 import { CodeSnippet } from '../../../shared/components/CodeSnippet/CodeSnippet';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { AppText } from '../../../shared/defguard-ui/components/AppText/AppText';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Checkbox } from '../../../shared/defguard-ui/components/Checkbox/Checkbox';
-import { Icon, IconKind } from '../../../shared/defguard-ui/components/Icon';
-import { RenderMarkdown } from '../../../shared/defguard-ui/components/RenderMarkdown/RenderMarkdown';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Tabs } from '../../../shared/defguard-ui/components/Tabs/Tabs';
-import type { TabsItem } from '../../../shared/defguard-ui/components/Tabs/types';
-import { TooltipContent } from '../../../shared/defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../../shared/defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../../shared/defguard-ui/providers/tooltip/TooltipTrigger';
+import { AppText } from '../../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Checkbox } from '../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { Icon, IconKind } from '../../../shared/xguard-ui/components/Icon';
+import { RenderMarkdown } from '../../../shared/xguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Tabs } from '../../../shared/xguard-ui/components/Tabs/Tabs';
+import type { TabsItem } from '../../../shared/xguard-ui/components/Tabs/types';
+import { TooltipContent } from '../../../shared/xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../../shared/xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../../shared/xguard-ui/providers/tooltip/TooltipTrigger';
 import {
   TextStyle,
   ThemeSpacing,
   ThemeVariable,
-} from '../../../shared/defguard-ui/types';
+} from '../../../shared/xguard-ui/types';
 import amazonImage from '../assets/amazon.png';
 import kubernetesImage from '../assets/kub.png';
 import opnsenseImage from '../assets/opnsense.png';
@@ -141,7 +141,7 @@ const DockerComposeTab = () => {
       <CodeSnippet
         value={`services:
   gateway:
-    image: ghcr.io/defguard/gateway:latest
+    image: ghcr.io/sajjad-alaa/xguard-gateway:latest
     restart: unless-stopped
     network_mode: host
     cap_add:
@@ -153,7 +153,7 @@ const DockerComposeTab = () => {
     #security_opt:
     #  - apparmor:unconfined
     volumes:
-      - ./.volumes/certs/gateway:/etc/defguard/certs`}
+      - ./.volumes/certs/gateway:/etc/xguard/certs`}
       />
       <SizedBox height={ThemeSpacing.Xl2} />
       <AppText font={TextStyle.TBodySm400}>
@@ -173,7 +173,7 @@ const DockerTab = () => {
         subtitle={m.gateway_setup_step_deploy_tabs_docker_subtitle()}
       />
       <CodeSnippet
-        value={`docker run -v ./.volumes/certs/gateway:/etc/defguard/certs --restart unless-stopped --security-opt apparmor:unconfined --network host --cap-add NET_ADMIN ghcr.io/defguard/gateway:latest`}
+        value={`docker run -v ./.volumes/certs/gateway:/etc/xguard/certs --restart unless-stopped --security-opt apparmor:unconfined --network host --cap-add NET_ADMIN ghcr.io/sajjad-alaa/xguard-gateway:latest`}
       />
     </>
   );
@@ -189,17 +189,17 @@ const PackageTab = () => {
       <CodeSnippet
         value={`sudo apt update
 sudo apt install -y ca-certificates curl
-#Add official Defguard public GPG key
+#Add official XGuard public GPG key
 sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://apt.defguard.net/defguard.asc -o /etc/apt/keyrings/defguard.asc
-sudo chmod a+r /etc/apt/keyrings/defguard.asc
+sudo curl -fsSL https://apt.xguard.local/xguard.asc -o /etc/apt/keyrings/xguard.asc
+sudo chmod a+r /etc/apt/keyrings/xguard.asc
 
 #Add APT repository
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/defguard.asc] https://apt.defguard.net/ trixie release-2.0 " | \
-   sudo tee /etc/apt/sources.list.d/defguard.list > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/xguard.asc] https://apt.xguard.local/ trixie release-2.0 " | \
+   sudo tee /etc/apt/sources.list.d/xguard.list > /dev/null
 
 sudo apt update
-sudo apt install defguard-gateway`}
+sudo apt install xguard-gateway`}
       />
     </>
   );
@@ -211,14 +211,14 @@ const VirtualImageTab = () => {
       <TabContentHeader
         title={m.gateway_setup_step_deploy_tabs_virtual_title()}
         subtitle={m.gateway_setup_step_deploy_tabs_virtual_subtitle({
-          url: `https://defguard-downloads.s3.eu-central-1.amazonaws.com/ova/defguard-latest.ova`,
-          filename: `defguard-data.yaml`,
+          url: `https://xguard-downloads.s3.eu-central-1.amazonaws.com/ova/xguard-latest.ova`,
+          filename: `xguard-data.yaml`,
         })}
       />
       <CodeSnippet
         value={`#cloud-config
 write_files:
-  - path: /opt/stacks/defguard/active-profiles
+  - path: /opt/stacks/xguard/active-profiles
     permissions: '0644'
     content: |
       gateway
@@ -265,27 +265,27 @@ const OthersTab = () => {
       <div id="other-deployment-methods">
         <OtherDeploymentMethod
           name={`Kubernetes`}
-          link={`https://docs.defguard.net/deployment-strategies/kubernetes#deployment`}
+          link={`https://docs.xguard.local/deployment-strategies/kubernetes#deployment`}
           image={kubernetesImage}
         />
         <OtherDeploymentMethod
           name={`Amazon Machine Image`}
-          link={`https://docs.defguard.net/deployment-strategies/amis-and-aws-cloudformation`}
+          link={`https://docs.xguard.local/deployment-strategies/amis-and-aws-cloudformation`}
           image={amazonImage}
         />
         <OtherDeploymentMethod
           name={`Terraform`}
-          link={`https://docs.defguard.net/deployment-strategies/terraform`}
+          link={`https://docs.xguard.local/deployment-strategies/terraform`}
           image={teraImage}
         />
         <OtherDeploymentMethod
           name={`VyOS`}
-          link={`https://docs.defguard.net/deployment-strategies/running-gateway-on-vyos`}
+          link={`https://docs.xguard.local/deployment-strategies/running-gateway-on-vyos`}
           image={vyosImage}
         />
         <OtherDeploymentMethod
           name={`OPNSense`}
-          link={`https://docs.defguard.net/deployment-strategies/running-gateway-on-opnsense-firewall`}
+          link={`https://docs.xguard.local/deployment-strategies/running-gateway-on-opnsense-firewall`}
           image={opnsenseImage}
         />
       </div>

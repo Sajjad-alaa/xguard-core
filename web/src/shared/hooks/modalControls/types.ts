@@ -17,7 +17,7 @@ import type {
   WebErrorCode,
   Webhook,
 } from '../../api/types';
-import type { ButtonProps } from '../../defguard-ui/components/Button/types';
+import type { ButtonProps } from '../../xguard-ui/components/Button/types';
 
 export interface OpenConfirmActionModal {
   title: string;

@@ -33,7 +33,7 @@ describe('posture check drawer info', () => {
         ],
       }),
       expect.objectContaining({
-        name: 'Defguard',
+        name: 'XGuard',
         rows: [
           { label: 'Desktop', value: 'Any version' },
           { label: 'Mobile app', value: 'Any version' },

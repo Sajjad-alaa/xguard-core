@@ -39,7 +39,7 @@ test.describe('Network devices', () => {
     await context.close();
   });
 
-  test('Create and setup Defguard CLI network device', async ({
+  test('Create and setup XGuard CLI network device', async ({
     page,
     browser,
     request,

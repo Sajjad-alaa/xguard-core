@@ -5,8 +5,8 @@ import api from '../../../shared/api/api';
 import { ActionCard } from '../../../shared/components/ActionCard/ActionCard';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { downloadFile } from '../../../shared/utils/download';
 import caIcon from '../../SetupPage/assets/ca.png';
 import { useMigrationWizardStore } from '../store/useMigrationWizardStore';
@@ -24,7 +24,7 @@ export const MigrationWizardCASummaryStep = () => {
     const blob = new Blob([caPem], {
       type: 'application/x-pem-file;charset=utf-8',
     });
-    downloadFile(blob, 'defguard-ca', 'pem');
+    downloadFile(blob, 'xguard-ca', 'pem');
   }, [caData?.ca_cert_pem]);
 
   return (

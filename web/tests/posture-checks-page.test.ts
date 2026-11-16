@@ -85,10 +85,10 @@ describe('posture checks page helpers', () => {
       iosFilters: [17],
       android: 'Android 15+, Device integrity',
       androidFilters: [15, PostureCheckRequirement.DeviceIntegrity],
-      defguardDesktop: 'Desktop 1.6+',
-      defguardDesktopFilters: ['1.6'],
-      defguardMobile: 'Defguard 1.7.0+',
-      defguardMobileFilters: ['1.7.0'],
+      xguardDesktop: 'Desktop 1.6+',
+      xguardDesktopFilters: ['1.6'],
+      xguardMobile: 'XGuard 1.7.0+',
+      xguardMobileFilters: ['1.7.0'],
     });
   });
 
@@ -127,10 +127,10 @@ describe('posture checks page helpers', () => {
       iosFilters: [],
       android: '-',
       androidFilters: [],
-      defguardDesktop: 'Any version',
-      defguardDesktopFilters: [],
-      defguardMobile: 'Any version',
-      defguardMobileFilters: [],
+      xguardDesktop: 'Any version',
+      xguardDesktopFilters: [],
+      xguardMobile: 'Any version',
+      xguardMobileFilters: [],
     });
   });
 
@@ -156,10 +156,10 @@ describe('posture checks page helpers', () => {
         iosFilters: [17],
         android: 'Android 15+, Device integrity',
         androidFilters: [15, PostureCheckRequirement.DeviceIntegrity],
-        defguardDesktop: 'Desktop 1.6+',
-        defguardDesktopFilters: ['1.6'],
-        defguardMobile: 'Defguard 1.7.0+',
-        defguardMobileFilters: ['1.7.0'],
+        xguardDesktop: 'Desktop 1.6+',
+        xguardDesktopFilters: ['1.6'],
+        xguardMobile: 'XGuard 1.7.0+',
+        xguardMobileFilters: ['1.7.0'],
       },
       {
         id: 100,
@@ -175,10 +175,10 @@ describe('posture checks page helpers', () => {
         iosFilters: [],
         android: '-',
         androidFilters: [],
-        defguardDesktop: '-',
-        defguardDesktopFilters: [],
-        defguardMobile: '-',
-        defguardMobileFilters: [],
+        xguardDesktop: '-',
+        xguardDesktopFilters: [],
+        xguardMobile: '-',
+        xguardMobileFilters: [],
       },
     ];
 
@@ -207,8 +207,8 @@ describe('posture checks page helpers', () => {
       linux: [6, 7],
       ios: [18],
       android: [15],
-      defguardDesktop: ['1.6'],
-      defguardMobile: ['1.7.0'],
+      xguardDesktop: ['1.6'],
+      xguardMobile: ['1.7.0'],
     });
   });
 
@@ -226,10 +226,10 @@ describe('posture checks page helpers', () => {
       PostureCheckRequirement.SecurityUpdates,
     ]);
     expect(
-      postureCheckColumnFilterOptions.defguard_desktop.map((option) => option.id),
+      postureCheckColumnFilterOptions.xguard_desktop.map((option) => option.id),
     ).toEqual(['1.6', '2.0']);
     expect(
-      postureCheckColumnFilterOptions.defguard_mobile.map((option) => option.id),
+      postureCheckColumnFilterOptions.xguard_mobile.map((option) => option.id),
     ).toEqual(['1.7.0']);
   });
 

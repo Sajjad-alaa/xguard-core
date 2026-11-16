@@ -1,5 +1,5 @@
 CREATE TYPE activity_log_module AS ENUM (
-    'defguard',
+    'xguard',
     'client',
     'vpn',
     'enrollment'

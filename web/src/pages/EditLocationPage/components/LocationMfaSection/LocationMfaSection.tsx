@@ -11,13 +11,13 @@ import type {
 import { enterpriseBadgeProps } from '../../../../shared/components/badges/EnterpriseBadge';
 import type { SelectionOption } from '../../../../shared/components/SelectionSection/type';
 import { externalLink } from '../../../../shared/constants';
-import { Badge } from '../../../../shared/defguard-ui/components/Badge/Badge';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { IconKind } from '../../../../shared/defguard-ui/components/Icon';
-import { Icon } from '../../../../shared/defguard-ui/components/Icon/Icon';
-import { ThemeSpacing, ThemeVariable } from '../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Badge } from '../../../../shared/xguard-ui/components/Badge/Badge';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { IconKind } from '../../../../shared/xguard-ui/components/Icon';
+import { Icon } from '../../../../shared/xguard-ui/components/Icon/Icon';
+import { ThemeSpacing, ThemeVariable } from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { mfaFlowUnavailableText } from '../../../../shared/utils/mfaFlowSteps';
 import postureCheckShield from '../../assets/posture_check_shield.png';
 import {
@@ -131,7 +131,7 @@ export const LocationMfaSection = ({
           {m.location_mfa_empty_state_before_link()}{' '}
           <Link to="/mfa/add-flow">{m.location_mfa_empty_state_create_link()}</Link>{' '}
           {m.location_mfa_empty_state_between_links()}{' '}
-          <a href={externalLink.defguard.docs} target="_blank" rel="noreferrer">
+          <a href={externalLink.xguard.docs} target="_blank" rel="noreferrer">
             {m.location_mfa_empty_state_docs_link()}
           </a>{' '}
           {m.location_mfa_empty_state_after_link()}

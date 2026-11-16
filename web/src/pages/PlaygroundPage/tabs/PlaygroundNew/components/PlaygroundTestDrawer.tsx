@@ -3,8 +3,8 @@ import { useState } from 'react';
 import { m } from '../../../../../paraglide/messages';
 import { Card } from '../../../../../shared/components/Card/Card';
 import { Controls } from '../../../../../shared/components/Controls/Controls';
-import { Button } from '../../../../../shared/defguard-ui/components/Button/Button';
-import { DrawerModal } from '../../../../../shared/defguard-ui/components/DrawerModal/DrawerModal';
+import { Button } from '../../../../../shared/xguard-ui/components/Button/Button';
+import { DrawerModal } from '../../../../../shared/xguard-ui/components/DrawerModal/DrawerModal';
 
 const testRange = Array.from(range(10)).map((idx) => (
   <p key={idx}>{m.test_placeholder_extreme()}</p>

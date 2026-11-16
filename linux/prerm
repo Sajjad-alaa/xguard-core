@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-SERVICE_NAME='defguard'
+SERVICE_NAME='xguard'
 
 if [ -x /usr/bin/systemctl ]; then
 	/usr/bin/systemctl --no-block --quiet stop ${SERVICE_NAME} || true

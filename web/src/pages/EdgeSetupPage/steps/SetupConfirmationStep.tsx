@@ -4,9 +4,9 @@ import { ActionCard } from '../../../shared/components/ActionCard/ActionCard';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
 import { WizardSuccessHeader } from '../../../shared/components/wizard/WizardSuccessHeader/WizardSuccessHeader';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import addMoreImage from '../assets/add_more.svg';
 import { useEdgeWizardStore } from '../useEdgeWizardStore';
 

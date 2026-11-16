@@ -1,7 +1,7 @@
 import { m } from '../../../../paraglide/messages';
 import type { SmtpEncryptionValue } from '../../../../shared/api/types';
 import { SmtpEncryption } from '../../../../shared/api/types';
-import type { SelectOption } from '../../../../shared/defguard-ui/components/Select/types';
+import type { SelectOption } from '../../../../shared/xguard-ui/components/Select/types';
 
 const encryptionValueToLabel = (value: SmtpEncryptionValue): string => {
   switch (value) {

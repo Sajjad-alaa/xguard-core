@@ -71,9 +71,9 @@ export const runMigrationWizard = async (page: Page) => {
   await page.getByRole('button', { name: 'Continue' }).click();
 
   // Internal URL settings
-  await page.getByTestId('field-defguard_url').waitFor({ state: 'visible' });
+  await page.getByTestId('field-xguard_url').waitFor({ state: 'visible' });
   await page
-    .getByTestId('field-defguard_url')
+    .getByTestId('field-xguard_url')
     .fill(testsConfig.CORE_BASE_URL.replace('/api/v1', ''));
   const internalUrlResp = page.waitForResponse(
     (r) =>
@@ -104,9 +104,9 @@ export const runMigrationWizard = async (page: Page) => {
 
   // Confirmation
   await page
-    .getByRole('button', { name: 'Go to Defguard' })
+    .getByRole('button', { name: 'Go to XGuard' })
     .waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Go to Defguard' }).click();
+  await page.getByRole('button', { name: 'Go to XGuard' }).click();
 
   await page.waitForURL('**/vpn-overview', { timeout: testsConfig.TEST_TIMEOUT * 1000 });
 };

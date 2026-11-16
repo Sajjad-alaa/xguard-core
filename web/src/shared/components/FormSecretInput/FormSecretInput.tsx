@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Input } from '../../defguard-ui/components/Input/Input';
-import type { FormInputProps } from '../../defguard-ui/components/Input/types';
-import { useFormFieldError } from '../../defguard-ui/hooks/useFormFieldError';
+import { Input } from '../../xguard-ui/components/Input/Input';
+import type { FormInputProps } from '../../xguard-ui/components/Input/types';
+import { useFormFieldError } from '../../xguard-ui/hooks/useFormFieldError';
 import { useFieldContext } from '../../form-context';
 
 type Props = Pick<FormInputProps, 'label' | 'helper' | 'required'> & {

@@ -10,14 +10,14 @@ import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCa
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
 import { Suggestion } from '../../../shared/components/Suggestion/Suggestion';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { Fold } from '../../../shared/defguard-ui/components/Fold/Fold';
-import { Icon } from '../../../shared/defguard-ui/components/Icon';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing, ThemeVariable } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { Fold } from '../../../shared/xguard-ui/components/Fold/Fold';
+import { Icon } from '../../../shared/xguard-ui/components/Icon';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { getSettingsQueryOptions } from '../../../shared/query';
@@ -30,8 +30,8 @@ const messageTemplatesHelpVariables = [
   ['{{ admin_last_name }}', m.settings_enrollment_template_help_admin_last_name()],
   ['{{ admin_phone }}', m.settings_enrollment_template_help_admin_phone()],
   ['{{ admin_email }}', m.settings_enrollment_template_help_admin_email()],
-  ['{{ defguard_url }}', m.settings_enrollment_template_help_defguard_url()],
-  ['{{ defguard_version }}', m.settings_enrollment_template_help_defguard_version()],
+  ['{{ xguard_url }}', m.settings_enrollment_template_help_xguard_url()],
+  ['{{ xguard_version }}', m.settings_enrollment_template_help_xguard_version()],
 ] as const;
 
 const messageTemplatesHelpMarkdown = [

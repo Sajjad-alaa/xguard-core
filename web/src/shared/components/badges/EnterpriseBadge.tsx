@@ -1,7 +1,7 @@
 import { m } from '../../../paraglide/messages';
-import { Badge } from '../../defguard-ui/components/Badge/Badge';
-import type { BadgeProps } from '../../defguard-ui/components/Badge/types';
-import { IconKind } from '../../defguard-ui/components/Icon';
+import { Badge } from '../../xguard-ui/components/Badge/Badge';
+import type { BadgeProps } from '../../xguard-ui/components/Badge/types';
+import { IconKind } from '../../xguard-ui/components/Icon';
 
 export const enterpriseBadgeProps: BadgeProps = {
   variant: 'warning',

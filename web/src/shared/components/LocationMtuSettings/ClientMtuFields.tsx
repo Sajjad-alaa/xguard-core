@@ -1,9 +1,9 @@
 import type z from 'zod';
 import { m } from '../../../paraglide/messages';
 import { MAX_MTU, MIN_MTU } from '../../constants';
-import { AppText } from '../../defguard-ui/components/AppText/AppText';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { TextStyle, ThemeSpacing, ThemeVariable } from '../../defguard-ui/types';
+import { AppText } from '../../xguard-ui/components/AppText/AppText';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../xguard-ui/types';
 import { withFieldGroup } from '../../form';
 
 type ClientMtuValues = {

@@ -24,7 +24,7 @@ describe('add posture check wizard store', () => {
     useAddPostureCheckWizardStore.getState().syncVersionValues(versionValues);
   });
 
-  it('stores defguard client-version settings and restores their defaults on reset', () => {
+  it('stores xguard client-version settings and restores their defaults on reset', () => {
     expect(
       useAddPostureCheckWizardStore.getState().minimumDesktopClientVersion,
     ).toBeNull();

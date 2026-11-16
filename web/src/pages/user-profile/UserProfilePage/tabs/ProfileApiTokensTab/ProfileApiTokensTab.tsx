@@ -1,10 +1,10 @@
 import { m } from '../../../../../paraglide/messages';
 import { LayoutGrid } from '../../../../../shared/components/LayoutGrid/LayoutGrid';
-import { Button } from '../../../../../shared/defguard-ui/components/Button/Button';
-import { EmptyStateFlexible } from '../../../../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
-import { SizedBox } from '../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../../../shared/defguard-ui/types';
+import { Button } from '../../../../../shared/xguard-ui/components/Button/Button';
+import { EmptyStateFlexible } from '../../../../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import { SizedBox } from '../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../../../shared/xguard-ui/types';
 import { openModal } from '../../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../../shared/hooks/modalControls/modalTypes';
 import { ProfileTabHeader } from '../../components/ProfileTabHeader/ProfileTabHeader';

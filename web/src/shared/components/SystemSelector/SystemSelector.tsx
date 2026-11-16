@@ -1,7 +1,7 @@
 import './style.scss';
 import clsx from 'clsx';
-import { Icon } from '../../defguard-ui/components/Icon';
-import { ThemeVariable } from '../../defguard-ui/types';
+import { Icon } from '../../xguard-ui/components/Icon';
+import { ThemeVariable } from '../../xguard-ui/types';
 import { policyOsVariantToIcon, policyOsVariantToText } from '../../utils/policyPostures';
 import type { SystemSelectorProps } from './types';
 

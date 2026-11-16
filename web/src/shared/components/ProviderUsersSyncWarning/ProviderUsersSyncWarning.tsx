@@ -1,6 +1,6 @@
 import { m } from '../../../paraglide/messages';
 import type { OpenIdProviderKindValue } from '../../api/types';
-import { InfoBanner } from '../../defguard-ui/components/InfoBanner/InfoBanner';
+import { InfoBanner } from '../../xguard-ui/components/InfoBanner/InfoBanner';
 
 interface Props {
   provider: OpenIdProviderKindValue;

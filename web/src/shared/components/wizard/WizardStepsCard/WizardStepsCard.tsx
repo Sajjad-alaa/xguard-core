@@ -2,7 +2,7 @@ import { Fragment } from 'react/jsx-runtime';
 import type { WizardPageStep } from '../types';
 import './style.scss';
 import clsx from 'clsx';
-import { Icon } from '../../../defguard-ui/components/Icon';
+import { Icon } from '../../../xguard-ui/components/Icon';
 
 interface Props {
   activeStep: WizardPageStep;

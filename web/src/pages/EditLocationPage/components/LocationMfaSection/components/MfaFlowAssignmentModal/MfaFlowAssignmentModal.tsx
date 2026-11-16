@@ -10,11 +10,11 @@ import {
 } from '../../../../../../shared/components/MfaFlowSelectionItem/MfaFlowSelectionItem';
 import { SelectionSection } from '../../../../../../shared/components/SelectionSection/SelectionSection';
 import type { SelectionOption } from '../../../../../../shared/components/SelectionSection/type';
-import { Button } from '../../../../../../shared/defguard-ui/components/Button/Button';
-import { Checkbox } from '../../../../../../shared/defguard-ui/components/Checkbox/Checkbox';
-import { FieldError } from '../../../../../../shared/defguard-ui/components/FieldError/FieldError';
-import { Modal } from '../../../../../../shared/defguard-ui/components/Modal/Modal';
-import { isPresent } from '../../../../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../../../../shared/xguard-ui/components/Button/Button';
+import { Checkbox } from '../../../../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { FieldError } from '../../../../../../shared/xguard-ui/components/FieldError/FieldError';
+import { Modal } from '../../../../../../shared/xguard-ui/components/Modal/Modal';
+import { isPresent } from '../../../../../../shared/xguard-ui/utils/isPresent';
 
 export type MfaFlowAssignmentTarget = {
   flowId?: number;

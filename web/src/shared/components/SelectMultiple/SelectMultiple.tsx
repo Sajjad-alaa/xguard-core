@@ -1,13 +1,13 @@
 import { useCallback, useMemo } from 'react';
 import './style.scss';
-import { Chip } from '../../defguard-ui/components/Chip/Chip';
-import { FieldError } from '../../defguard-ui/components/FieldError/FieldError';
-import { Fold } from '../../defguard-ui/components/Fold/Fold';
-import { Icon } from '../../defguard-ui/components/Icon';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { Toggle } from '../../defguard-ui/components/Toggle/Toggle';
-import { ThemeSpacing, ThemeVariable } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Chip } from '../../xguard-ui/components/Chip/Chip';
+import { FieldError } from '../../xguard-ui/components/FieldError/FieldError';
+import { Fold } from '../../xguard-ui/components/Fold/Fold';
+import { Icon } from '../../xguard-ui/components/Icon';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { Toggle } from '../../xguard-ui/components/Toggle/Toggle';
+import { ThemeSpacing, ThemeVariable } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { useSelectionModal } from '../modals/SelectionModal/useSelectionModal';
 import type {
   SelectionKey,

@@ -42,8 +42,8 @@ const coreUrl = (path: string) => testsConfig.CORE_BASE_URL + path;
 
 test.use({ trace: 'off' });
 
-const businessLicenseKey = process.env.DEFGUARD_BUSINESS_LICENSE_KEY?.trim();
-const enterpriseLicenseKey = process.env.DEFGUARD_LICENSE_KEY?.trim();
+const businessLicenseKey = process.env.XGUARD_BUSINESS_LICENSE_KEY?.trim();
+const enterpriseLicenseKey = process.env.XGUARD_LICENSE_KEY?.trim();
 const seedLicenseKey = enterpriseLicenseKey || businessLicenseKey;
 const seedLicenseTier = enterpriseLicenseKey ? 'Enterprise' : 'Business';
 
@@ -250,7 +250,7 @@ test.describe('MFA flows', () => {
   });
 
   test.describe('Enterprise tier boundaries', () => {
-    test.skip(!enterpriseLicenseKey, 'Requires DEFGUARD_LICENSE_KEY.');
+    test.skip(!enterpriseLicenseKey, 'Requires XGUARD_LICENSE_KEY.');
 
     test('Apply a group override on Edge and fall back to the default flow', async ({
       page,
@@ -482,7 +482,7 @@ test.describe('MFA flows', () => {
   });
 
   test.describe('Business tier boundaries', () => {
-    test.skip(!businessLicenseKey, 'Requires DEFGUARD_BUSINESS_LICENSE_KEY.');
+    test.skip(!businessLicenseKey, 'Requires XGUARD_BUSINESS_LICENSE_KEY.');
 
     test('Business allows multi-step flows and their default assignment', async ({
       page,

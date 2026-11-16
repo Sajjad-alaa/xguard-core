@@ -11,10 +11,10 @@ import {
   useInteractions,
 } from '@floating-ui/react';
 import { useState } from 'react';
-import type { ButtonProps } from '../../../defguard-ui/components/Button/types';
-import { ButtonMenu } from '../../../defguard-ui/components/ButtonMenu/MenuButton';
-import { Menu } from '../../../defguard-ui/components/Menu/Menu';
-import type { MenuItemsGroup } from '../../../defguard-ui/components/Menu/types';
+import type { ButtonProps } from '../../../xguard-ui/components/Button/types';
+import { ButtonMenu } from '../../../xguard-ui/components/ButtonMenu/MenuButton';
+import { Menu } from '../../../xguard-ui/components/Menu/Menu';
+import type { MenuItemsGroup } from '../../../xguard-ui/components/Menu/types';
 
 type ButtonVariantProps = Omit<ButtonProps, 'ref'> & {
   kind: 'button';

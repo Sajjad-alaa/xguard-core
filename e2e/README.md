@@ -1,4 +1,4 @@
-# Defguard end-to-end tests powered by Playwright
+# XGuard end-to-end tests powered by Playwright
 
 ## Prerequisites
 
@@ -20,13 +20,13 @@ Set `EDGE_IMAGE_TAG` or `GATEWAY_IMAGE_TAG` the same way when those components n
 Build the local Core image from the repository root. A bare build in a worktree uses `+unknown`; when Git metadata is readable, vergen uses the current commit SHA:
 
 ```bash
-docker build -t ghcr.io/defguard/defguard:local .
+docker build -t ghcr.io/sajjad-alaa/xguard-core:local .
 ```
 
 To pass the current commit explicitly, use:
 
 ```bash
-docker build --build-arg VERGEN_GIT_SHA=$(git rev-parse HEAD) -t ghcr.io/defguard/defguard:local .
+docker build --build-arg VERGEN_GIT_SHA=$(git rev-parse HEAD) -t ghcr.io/sajjad-alaa/xguard-core:local .
 ```
 
 If port 5432 is already in use on the host, publish the test database on another port by setting `E2E_DB_PORT`:
@@ -35,7 +35,7 @@ If port 5432 is already in use on the host, publish the test database on another
 export E2E_DB_PORT=15432
 ```
 
-Set `DEFGUARD_LICENSE_KEY` to an Enterprise key to seed the snapshot for Enterprise-tier tests. `DEFGUARD_BUSINESS_LICENSE_KEY` is optional; it enables the Business-tier MFA tests, which skip when the key is not provided.
+Set `XGUARD_LICENSE_KEY` to an Enterprise key to seed the snapshot for Enterprise-tier tests. `XGUARD_BUSINESS_LICENSE_KEY` is optional; it enables the Business-tier MFA tests, which skip when the key is not provided.
 
 Pull Docker images. If using the locally built Core image, omit `core`:
 

@@ -7,10 +7,10 @@ import type {
   MfaMethodAvailabilityReasonValue,
   MfaMethodAvailabilityResponse,
 } from '../../api/types';
-import { IconKind } from '../../defguard-ui/components/Icon';
-import { Icon } from '../../defguard-ui/components/Icon/Icon';
-import { RadioIndicator } from '../../defguard-ui/components/RadioIndicator/RadioIndicator';
-import { ThemeVariable } from '../../defguard-ui/types';
+import { IconKind } from '../../xguard-ui/components/Icon';
+import { Icon } from '../../xguard-ui/components/Icon/Icon';
+import { RadioIndicator } from '../../xguard-ui/components/RadioIndicator/RadioIndicator';
+import { ThemeVariable } from '../../xguard-ui/types';
 import {
   hasMfaFlowAvailabilityIssues,
   MfaFlowStepsTooltip,

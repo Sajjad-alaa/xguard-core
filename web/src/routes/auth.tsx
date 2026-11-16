@@ -4,7 +4,7 @@ import { useCallback, useEffect } from 'react';
 import z from 'zod';
 import api from '../shared/api/api';
 import { ActiveWizard, type User, UserMfaMethod } from '../shared/api/types';
-import { isPresent } from '../shared/defguard-ui/utils/isPresent';
+import { isPresent } from '../shared/xguard-ui/utils/isPresent';
 import { useAuth } from '../shared/hooks/useAuth';
 import { getLicenseInfoQueryOptions, getSessionInfoQueryOptions } from '../shared/query';
 

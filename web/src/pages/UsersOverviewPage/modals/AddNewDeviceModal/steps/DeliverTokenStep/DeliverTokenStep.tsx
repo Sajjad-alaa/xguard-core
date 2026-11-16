@@ -1,10 +1,10 @@
 import { m } from '../../../../../../paraglide/messages';
 import type { StartEnrollmentResponse } from '../../../../../../shared/api/types';
 import { Controls } from '../../../../../../shared/components/Controls/Controls';
-import { Button } from '../../../../../../shared/defguard-ui/components/Button/Button';
-import { CopyField } from '../../../../../../shared/defguard-ui/components/CopyField/CopyField';
-import { SizedBox } from '../../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../../shared/defguard-ui/types';
+import { Button } from '../../../../../../shared/xguard-ui/components/Button/Button';
+import { CopyField } from '../../../../../../shared/xguard-ui/components/CopyField/CopyField';
+import { SizedBox } from '../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../../shared/xguard-ui/types';
 import { closeModal } from '../../../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../../../shared/hooks/modalControls/modalTypes';
 import './style.scss';

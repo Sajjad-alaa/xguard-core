@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
 import type { SmtpAuthCardVariant } from '../components/SmtpAuthMethodCard/SmtpAuthMethodCard';
 import { BasicAuthForm } from './BasicAuthForm';
 import { CustomAuthForm } from './CustomAuthForm';

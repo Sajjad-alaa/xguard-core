@@ -5,9 +5,9 @@ import {
   OpenIdClientScope,
   type OpenIdClientScopeValue,
 } from '../../../../shared/api/types';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -22,11 +22,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import { DescriptionBlock } from '../../../../shared/components/DescriptionBlock/DescriptionBlock';
-import { Checkbox } from '../../../../shared/defguard-ui/components/Checkbox/Checkbox';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { Icon } from '../../../../shared/defguard-ui/components/Icon';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Checkbox } from '../../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Icon } from '../../../../shared/xguard-ui/components/Icon';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 

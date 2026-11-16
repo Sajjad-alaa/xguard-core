@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { m } from '../../../../../../../paraglide/messages';
-import { Modal } from '../../../../../../../shared/defguard-ui/components/Modal/Modal';
+import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
 import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
 import './style.scss';
 import { useStore } from '@tanstack/react-form';
@@ -9,16 +9,16 @@ import type { AxiosError } from 'axios';
 import type z from 'zod';
 import api from '../../../../../../../shared/api/api';
 import type { ApiError } from '../../../../../../../shared/api/types';
-import { Badge } from '../../../../../../../shared/defguard-ui/components/Badge/Badge';
-import { CopyField } from '../../../../../../../shared/defguard-ui/components/CopyField/CopyField';
-import { Divider } from '../../../../../../../shared/defguard-ui/components/Divider/Divider';
-import { ModalControls } from '../../../../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { QrCard } from '../../../../../../../shared/defguard-ui/components/QrCard/QrCard';
-import { SizedBox } from '../../../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../../../../shared/defguard-ui/utils/isPresent';
-import { createZodIssue } from '../../../../../../../shared/defguard-ui/utils/zod';
+import { Badge } from '../../../../../../../shared/xguard-ui/components/Badge/Badge';
+import { CopyField } from '../../../../../../../shared/xguard-ui/components/CopyField/CopyField';
+import { Divider } from '../../../../../../../shared/xguard-ui/components/Divider/Divider';
+import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { QrCard } from '../../../../../../../shared/xguard-ui/components/QrCard/QrCard';
+import { SizedBox } from '../../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
+import { createZodIssue } from '../../../../../../../shared/xguard-ui/utils/zod';
 import { useAppForm } from '../../../../../../../shared/form';
 import { formChangeLogic } from '../../../../../../../shared/formLogic';
 import {
@@ -93,7 +93,7 @@ const ModalContent = () => {
 
   const qrData = useMemo(() => {
     if (totpInitResponse) {
-      return `otpauth://totp/Defguard?secret=${totpInitResponse.data.secret}`;
+      return `otpauth://totp/XGuard?secret=${totpInitResponse.data.secret}`;
     }
     return null;
   }, [totpInitResponse]);

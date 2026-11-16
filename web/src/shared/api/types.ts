@@ -124,15 +124,15 @@ export interface SetGeneralConfigRequest {
 }
 
 export interface MigrationGeneralConfigRequest {
-  defguard_url: string;
+  xguard_url: string;
   default_mfa_code_lifetime: number;
   public_proxy_url: string;
 }
 
-export type InternalSslType = 'none' | 'defguard_ca' | 'own_cert';
+export type InternalSslType = 'none' | 'xguard_ca' | 'own_cert';
 
 export interface SetAutoAdoptionInternalUrlSettingsRequest {
-  defguard_url: string;
+  xguard_url: string;
   ssl_type: InternalSslType;
   cert_pem?: string;
   key_pem?: string;
@@ -176,7 +176,7 @@ export interface SetAutoAdoptionExternalUrlSettingsRequest {
   key_pem?: string;
 }
 
-export type ExternalSslType = 'none' | 'lets_encrypt' | 'defguard_ca' | 'own_cert';
+export type ExternalSslType = 'none' | 'lets_encrypt' | 'xguard_ca' | 'own_cert';
 
 export interface SetAutoAdoptionExternalUrlSettingsResponse {
   cert_info: CertInfo | null;
@@ -1283,7 +1283,7 @@ export interface LdapDryRunUser {
 }
 
 export interface LdapDryRunResult {
-  defguard: LdapDryRunUser[];
+  xguard: LdapDryRunUser[];
   ldap: LdapDryRunUser[];
 }
 
@@ -1312,7 +1312,7 @@ export interface SettingsTimeoutsAndMaintenance {
 }
 
 export interface SettingsGeneral {
-  defguard_url: string;
+  xguard_url: string;
   default_admin_group_name: string;
   authentication_period_days: number;
   mfa_code_timeout_seconds: number;
@@ -1777,9 +1777,9 @@ export interface DevicePostureListFilters extends PaginationParams {
   linux?: string[];
   ios?: string[];
   android?: string[];
-  defguard_desktop?: string[];
-  defguard_mobile?: string[];
-  defguard?: string[];
+  xguard_desktop?: string[];
+  xguard_mobile?: string[];
+  xguard?: string[];
 }
 
 export interface PaginationMeta {

@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: {
-        '@scssutils': path.resolve(import.meta.dirname, './src/shared/defguard-ui/scss/global'),
+        '@scssutils': path.resolve(import.meta.dirname, './src/shared/xguard-ui/scss/global'),
       },
     },
     css: {

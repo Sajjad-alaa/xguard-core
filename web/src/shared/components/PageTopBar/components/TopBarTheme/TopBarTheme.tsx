@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { IconKind } from '../../../../defguard-ui/components/Icon';
-import { IconButtonMenu } from '../../../../defguard-ui/components/IconButtonMenu/IconButtonMenu';
-import type { MenuItemsGroup } from '../../../../defguard-ui/components/Menu/types';
+import { IconKind } from '../../../../xguard-ui/components/Icon';
+import { IconButtonMenu } from '../../../../xguard-ui/components/IconButtonMenu/IconButtonMenu';
+import type { MenuItemsGroup } from '../../../../xguard-ui/components/Menu/types';
 import { useTheme } from '../../../../hooks/theme/useTheme';
 
 export const TopBarTheme = () => {

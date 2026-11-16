@@ -1,10 +1,10 @@
 import { Fragment } from 'react/jsx-runtime';
 import { m } from '../../../../paraglide/messages';
 import { externalLink } from '../../../constants';
-import { Button } from '../../../defguard-ui/components/Button/Button';
-import { IconKind } from '../../../defguard-ui/components/Icon';
-import { SizedBox } from '../../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../defguard-ui/types';
+import { Button } from '../../../xguard-ui/components/Button/Button';
+import { IconKind } from '../../../xguard-ui/components/Icon';
+import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../xguard-ui/types';
 import { closeModal } from '../../../hooks/modalControls/modalsSubjects';
 import type { ModalNameValue } from '../../../hooks/modalControls/modalTypes';
 import { Controls } from '../../Controls/Controls';
@@ -30,7 +30,7 @@ export const LicenseModalControls = ({ modalName, linkText }: Props) => {
           <a
             target="_blank"
             rel="noopener noreferrer"
-            href={externalLink.defguard.pricing}
+            href={externalLink.xguard.pricing}
           >
             <Button
               text={linkText ?? m.license_see_other_plans()}

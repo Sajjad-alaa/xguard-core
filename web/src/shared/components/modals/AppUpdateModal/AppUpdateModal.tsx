@@ -4,15 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { m } from '../../../../paraglide/messages';
 import { DISMISSED_UPDATE_KEY } from '../../../constants';
-import { AppText } from '../../../defguard-ui/components/AppText/AppText';
-import { Badge } from '../../../defguard-ui/components/Badge/Badge';
-import { Button } from '../../../defguard-ui/components/Button/Button';
-import { Divider } from '../../../defguard-ui/components/Divider/Divider';
-import { Icon } from '../../../defguard-ui/components/Icon';
-import { ModalFoundation } from '../../../defguard-ui/components/ModalFoundation/ModalFoundation';
-import { RenderMarkdown } from '../../../defguard-ui/components/RenderMarkdown/RenderMarkdown';
-import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../defguard-ui/types';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { AppText } from '../../../xguard-ui/components/AppText/AppText';
+import { Badge } from '../../../xguard-ui/components/Badge/Badge';
+import { Button } from '../../../xguard-ui/components/Button/Button';
+import { Divider } from '../../../xguard-ui/components/Divider/Divider';
+import { Icon } from '../../../xguard-ui/components/Icon';
+import { ModalFoundation } from '../../../xguard-ui/components/ModalFoundation/ModalFoundation';
+import { RenderMarkdown } from '../../../xguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../xguard-ui/types';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,

@@ -10,8 +10,8 @@ import type { VideoTutorialsMappings } from './types';
  * mapping from. Resolved by Vite at build time.
  *
  * The shared updateServiceClient resolves this against its baseURL
- * (VITE_UPDATE_BASE_URL ?? 'https://pkgs.defguard.net/api'), so the
- * production URL is https://pkgs.defguard.net/api/content/video-tutorials.
+ * (VITE_UPDATE_BASE_URL ?? 'https://pkgs.xguard.local/api'), so the
+ * production URL is https://pkgs.xguard.local/api/content/video-tutorials.
  *
  * Override VITE_VIDEO_TUTORIALS_URL to use a different path on the same server,
  * or VITE_UPDATE_BASE_URL to redirect all update-service calls to a local

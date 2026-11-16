@@ -3,10 +3,10 @@ import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Toggle } from '../../../../shared/defguard-ui/components/Toggle/Toggle';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Toggle } from '../../../../shared/xguard-ui/components/Toggle/Toggle';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { AutoAdoptionSetupStep } from '../types';
 import { useAutoAdoptionSetupWizardStore } from '../useAutoAdoptionSetupWizardStore';
 

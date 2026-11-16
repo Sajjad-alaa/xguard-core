@@ -4,10 +4,10 @@ import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
 import type { ApiError } from '../../../api/types';
-import { Button } from '../../../defguard-ui/components/Button/Button';
-import { Modal } from '../../../defguard-ui/components/Modal/Modal';
-import { RenderMarkdown } from '../../../defguard-ui/components/RenderMarkdown/RenderMarkdown';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { Button } from '../../../xguard-ui/components/Button/Button';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { RenderMarkdown } from '../../../xguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,

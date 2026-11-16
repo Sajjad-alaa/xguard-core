@@ -1,5 +1,5 @@
-import { Select } from '../../defguard-ui/components/Select/Select';
-import type { SelectOption } from '../../defguard-ui/components/Select/types';
+import { Select } from '../../xguard-ui/components/Select/Select';
+import type { SelectOption } from '../../xguard-ui/components/Select/types';
 
 const periods = [1, 2, 4, 6, 8, 12, 16, 24];
 

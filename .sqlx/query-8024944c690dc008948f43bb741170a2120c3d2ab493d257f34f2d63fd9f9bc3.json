@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"user\" (username, password_hash, last_name, first_name, email, ldap_rdn) VALUES ('admin', $1, 'Administrator', 'XGuard', 'admin@xguard', 'admin') ON CONFLICT DO NOTHING RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "\"user\"",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8024944c690dc008948f43bb741170a2120c3d2ab493d257f34f2d63fd9f9bc3"
+}

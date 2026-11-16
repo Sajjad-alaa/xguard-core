@@ -17,8 +17,8 @@
       url = "path:proto";
       flake = false;
     };
-    defguard-ui = {
-      url = "path:web/src/shared/defguard-ui";
+    xguard-ui = {
+      url = "path:web/src/shared/xguard-ui";
       flake = false;
     };
   };

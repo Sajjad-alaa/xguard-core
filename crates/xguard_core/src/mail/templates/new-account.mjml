@@ -1,0 +1,59 @@
+{% import "macros.mjml" as macros %}
+{% extends "base.mjml" %}
+{% block content %}
+
+{{ macros::email_header() }}
+
+<mj-wrapper border-radius="12px" border="1px solid #DFE3E9" padding="24px">
+  <mj-section>
+    <mj-group direction="ltr" vertical-align="top" width="100%">
+      <mj-column width="17.5%">
+        <mj-image src="cid:new_account_1" width="105px" height="101px" />
+      </mj-column>
+      <mj-column width="5.33%">
+      </mj-column>
+      <mj-column width="77.17%">
+        <mj-text mj-class="t-body-primary-600 s-md" css-class="fg-default-c">
+          Desktop client
+        </mj-text>
+        <mj-text mj-class="t-body-sm-400 s-sm" css-class="fg-default-c">
+          {{ download }}
+        </mj-text>
+        {{ macros::action_link(text="https://xguard.local/download/", href="https://xguard.local/download/", mj_class="s-3xl") }}
+        <mj-text mj-class="t-body-sm-500 s-lg" css-class="fg-neutral-c">
+          {{ after_install }}
+        </mj-text>
+        <mj-table css-class="dg-table" mj-class="s-lg">
+          <tr>
+            <td>
+              {{ label_url }}
+            </td>
+            <td>
+              {{ url }}
+            </td>
+          </tr>
+          <tr>
+            <td>
+              {{ label_token }}
+            </td>
+            <td>
+              {{ token }}
+            </td>
+          </tr>
+        </mj-table>
+        <mj-text mj-class="t-body-xs-400 s-lg" css-class="fg-critical-c">
+          {{ token_info }}
+        </mj-text>
+        <mj-button href="{{ link_url }}" align="left" mj-class="dg-button">
+          {{ label_enroll }}
+        </mj-button>
+      </mj-column>
+    </mj-group>
+  </mj-section>
+</mj-wrapper>
+<mj-section mj-class="s-3xl">
+</mj-section>
+
+{{ macros::footer_divider() }}
+
+{% endblock content %}

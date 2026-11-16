@@ -1,0 +1,1402 @@
+use std::{
+    mem::discriminant,
+    sync::atomic::{AtomicU16, AtomicU64, Ordering},
+    time::SystemTime,
+};
+
+use base64::{Engine, prelude::BASE64_STANDARD};
+use xguard_common::{
+    db::{
+        Id, NoId,
+        models::{
+            Device, DeviceType, User, WireguardNetwork,
+            biometric_auth::BiometricAuth,
+            mfa_flow::{LocationMfaFlowAssignment, MfaFlow},
+            polling_token::PollingToken,
+            settings::{Settings, update_current_settings},
+            user::{TOTP_CODE_DIGITS, TOTP_CODE_VALIDITY_PERIOD},
+            vpn_client_session::{VpnClientMfaMethod, VpnClientSession},
+            webauthn::AuthenticatorKind,
+            wireguard::ServiceLocationMode,
+        },
+    },
+    secret::SecretStringWrapper,
+    testing::smtp::configure_working_smtp,
+};
+use xguard_core::{
+    db::models::enrollment::{ENROLLMENT_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TYPE, Token},
+    device_access::join_device_to_all_networks,
+    enterprise::{
+        db::models::{
+            acl::{AclRule, AclRuleNetwork, RuleState},
+            openid_provider::{
+                DirectorySyncTarget, DirectorySyncUserBehavior, OpenIdProvider, OpenIdProviderKind,
+            },
+        },
+        license::{License, LicenseTier, SupportType, set_cached_license},
+    },
+    events::{BidiStreamEvent, BidiStreamEventType, DesktopClientMfaEvent},
+};
+use xguard_proto::{
+    client_types::{
+        ActivateUserRequest, ClientMfaFinishRequest, ClientMfaStartRequest,
+        CodeMfaSetupFinishRequest, CodeMfaSetupStartRequest, DeviceConfigResponse,
+        EnrollmentStartRequest, MfaConfigAuthorizeRequest, MfaConfigEndRequest,
+        MfaConfigFido2ChallengeRequest, MfaConfigSendCodeRequest, MfaConfigStartRequest, MfaMethod,
+    },
+    proxy::{
+        ClientMfaTokenValidationRequest, CoreErrorCode, CoreRequest, CoreResponse, DeviceInfo,
+        PasswordResetInitializeRequest, PasswordResetRequest, PasswordResetStartRequest,
+        core_request, core_response,
+    },
+};
+use ed25519_dalek::{Signer, SigningKey};
+use getrandom::{SysRng, rand_core::UnwrapErr};
+use ipnetwork::IpNetwork;
+use sqlx::PgPool;
+use tokio::{sync::mpsc::UnboundedReceiver, time::timeout};
+use tonic::Code;
+use totp_lite::{Sha1, totp_custom};
+
+use crate::tests::common::{HandlerTestContext, MockOidcProvider, RECEIVE_TIMEOUT};
+
+/// A strong password satisfying all `check_password_strength` requirements:
+/// ≥8 chars, digit, upper, lower, special character.
+pub(crate) const STRONG_PASSWORD: &str = "Test1234!";
+
+pub(crate) fn assert_initial_info_received(response: &CoreResponse) {
+    assert!(
+        matches!(
+            response.payload,
+            Some(core_response::Payload::InitialInfo(_))
+        ),
+        "expected InitialInfo as first response from handler, got: {:?}",
+        response.payload.as_ref().map(discriminant)
+    );
+}
+
+/// Consume the `InitialInfo` and `PublicSettings` messages that the handler
+/// sends immediately after establishing the bidi stream.  Most lifecycle tests
+/// call this before injecting any business messages.
+pub(crate) async fn complete_proxy_handshake(context: &mut HandlerTestContext) {
+    let response = context.mock_proxy_mut().recv_outbound().await;
+    assert_initial_info_received(&response);
+    // PublicSettings follows InitialInfo on connect.
+    context.mock_proxy_mut().recv_public_settings().await;
+}
+
+/// Assert that a `CoreResponse` carries a `DeviceConfig` payload and return a
+/// reference to it.
+pub(crate) fn assert_device_config_response(response: &CoreResponse) -> &DeviceConfigResponse {
+    match &response.payload {
+        Some(core_response::Payload::DeviceConfig(cfg)) => cfg,
+        other => panic!(
+            "expected DeviceConfig response, got: {:?}",
+            other.as_ref().map(discriminant)
+        ),
+    }
+}
+
+/// Assert that a `CoreResponse` carries a `CoreError` payload and return the
+/// tonic status code.
+pub(crate) fn assert_error_response(response: &CoreResponse) -> Code {
+    assert_error_response_details(response).0
+}
+
+/// Assert that a `CoreResponse` carries a `CoreError` payload and return the
+/// tonic status code and message. Use when the status code alone cannot tell two
+/// rejections apart.
+pub(crate) fn assert_error_response_details(response: &CoreResponse) -> (Code, &str) {
+    let (code, message, _) = assert_error_response_full(response);
+    (code, message)
+}
+
+/// Assert that a `CoreResponse` carries a `CoreError` payload and return the
+/// tonic status code, message, and machine-readable error code.
+pub(crate) fn assert_error_response_full(response: &CoreResponse) -> (Code, &str, CoreErrorCode) {
+    match &response.payload {
+        Some(core_response::Payload::CoreError(err)) => (
+            Code::from_i32(err.status_code),
+            err.message.as_str(),
+            err.code(),
+        ),
+        other => panic!(
+            "expected CoreError response, got: {:?}",
+            other.as_ref().map(discriminant)
+        ),
+    }
+}
+
+/// Install a Business-tier license into the global cache for the duration of a
+/// test.
+pub(crate) fn set_test_license_business() {
+    let license = License {
+        customer_id: "test-customer-id".into(),
+        subscription: false,
+        valid_until: None,
+        limits: None,
+        version_date_limit: None,
+        tier: LicenseTier::Business,
+        support_type: SupportType::Basic,
+        features: Vec::new(),
+    };
+    set_cached_license(Some(license));
+}
+
+/// Install an Enterprise-tier license into the global cache for the duration
+/// of a test.
+pub(crate) fn set_test_license_enterprise() {
+    set_cached_license(Some(License {
+        customer_id: "test-customer-id".into(),
+        subscription: false,
+        valid_until: None,
+        limits: None,
+        version_date_limit: None,
+        tier: LicenseTier::Enterprise,
+        support_type: SupportType::Basic,
+        features: Vec::new(),
+    }));
+}
+
+/// Remove the global license (so tests that require no license can clear one
+/// that was previously set).
+pub(crate) fn clear_test_license() {
+    set_cached_license(None);
+}
+
+/// Return a minimal `DeviceInfo` suitable for test requests.
+///
+/// `parse_client_ip_agent` in the enrollment server requires a non-`None`
+/// `DeviceInfo` with a valid IP address.  Tests that call `NewDevice` or
+/// `ExistingDevice` must pass this instead of `None`.
+pub(crate) fn make_device_info() -> DeviceInfo {
+    DeviceInfo {
+        ip_address: "127.0.0.1".to_owned(),
+        user_agent: Some("test-client/1.0".to_owned()),
+        version: None,
+        platform: None,
+    }
+}
+
+/// Insert a test user, returning the saved `User<Id>`.
+pub(crate) async fn create_user(pool: &PgPool) -> User<Id> {
+    static USER_CTR: AtomicU16 = AtomicU16::new(0);
+    let user_number = USER_CTR.fetch_add(1, Ordering::Relaxed);
+    let username = format!("test-user-{user_number}");
+    User::new(
+        username.clone(),
+        None,
+        "Test".to_owned(),
+        "User".to_owned(),
+        format!("{username}@test.example"),
+        None,
+    )
+    .save(pool)
+    .await
+    .expect("failed to save test user")
+}
+
+/// Insert a minimal WireGuard network, returning the saved `WireguardNetwork<Id>`.
+pub(crate) async fn create_network(pool: &PgPool) -> WireguardNetwork<Id> {
+    static NET_CTR: AtomicU16 = AtomicU16::new(0);
+    let network_number = NET_CTR.fetch_add(1, Ordering::Relaxed);
+    WireguardNetwork::new(
+        format!("test-network-{network_number}"),
+        51820 + i32::from(network_number % 10_000),
+        "10.0.0.1".to_owned(),
+        None,
+        Vec::<IpNetwork>::new(),
+        true,  // allow_all_groups
+        false, // acl_enabled
+        false, // acl_default_allow
+        false,
+        false, // mfa_enabled
+        ServiceLocationMode::default(),
+    )
+    .try_set_address("10.0.0.1/24")
+    .expect("failed to set network address")
+    .save(pool)
+    .await
+    .expect("failed to save test wireguard network")
+}
+
+/// Create a network with ACL enabled, the ACL AllowedIPs toggle on, and
+/// a manual allowed_ips entry so that the test can verify ACL-derived IPs
+/// are merged alongside the manual ones.
+pub(crate) async fn create_acl_network(pool: &PgPool) -> WireguardNetwork<Id> {
+    let mut network = create_network(pool).await;
+    network.acl_enabled = true;
+    network.allowed_ips_from_acl = true;
+    network.allowed_ips = vec!["10.100.0.0/16".parse::<IpNetwork>().unwrap()];
+    network.save(pool).await.unwrap();
+    WireguardNetwork::find_by_id(pool, network.id)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+/// Insert an applied ACL rule that allows all users and targets a specific
+/// location with the given destination address.
+pub(crate) async fn insert_acl_rule_for_network(
+    pool: &PgPool,
+    network_id: Id,
+    destination: IpNetwork,
+) {
+    let mut conn = pool.acquire().await.unwrap();
+    let rule = AclRule {
+        name: "test-acl-rule".into(),
+        state: RuleState::Applied,
+        enabled: true,
+        allow_all_users: true,
+        addresses: vec![destination],
+        any_address: false,
+        any_port: true,
+        any_protocol: true,
+        use_manual_destination_settings: true,
+        ..Default::default()
+    }
+    .save(&mut *conn)
+    .await
+    .unwrap();
+    AclRuleNetwork::new(rule.id, network_id)
+        .save(&mut *conn)
+        .await
+        .unwrap();
+}
+
+/// Pre-generated valid 32-byte WireGuard public keys (base64, 44 chars each).
+/// Used by `create_device_for_user` so that `Device::validate_pubkey` passes.
+/// 64 entries - enough headroom so the per-function counter modulo never wraps
+/// within a single test and causes unique-key constraint violations.
+static DEVICE_PUBKEYS: &[&str] = &[
+    "HCk2Q1BdaneEkZ6ruMXS3+z5BhMgLTpHVGFue4iVoq8=",
+    "IzA9SldkcX6LmKWyv8zZ5vMADRonNEFOW2h1go+cqbY=",
+    "KjdEUV5reIWSn6y5xtPg7foHFCEuO0hVYm98iZajsL0=",
+    "MT5LWGVyf4yZprPAzdrn9AEOGyg1Qk9caXaDkJ2qt8Q=",
+    "OEVSX2x5hpOgrbrH1OHu+wgVIi88SVZjcH2Kl6Sxvss=",
+    "P0xZZnOAjZqntMHO2+j1Ag8cKTZDUF1qd4SRnqu4xdI=",
+    "RlNgbXqHlKGuu8jV4u/8CRYjMD1KV2RxfouYpbK/zNk=",
+    "TVpndIGOm6i1ws/c6fYDEB0qN0RRXmt4hZKfrLnG0+A=",
+    "VGFue4iVoq+8ydbj8P0KFyQxPktYZXJ/jJmms8DN2uc=",
+    "W2h1go+cqbbD0N3q9wQRHis4RVJfbHmGk6CtusfU4e4=",
+    "Ym98iZajsL3K1+Tx/gsYJTI/TFlmc4CNmqe0wc7b6PU=",
+    "aXaDkJ2qt8TR3uv4BRIfLDlGU2BteoeUoa67yNXi7/w=",
+    "cH2Kl6SxvsvY5fL/DBkmM0BNWmd0gY6bqLXCz9zp9gM=",
+    "d4SRnqu4xdLf7PkGEyAtOkdUYW57iJWir7zJ1uPw/Qo=",
+    "fouYpbK/zNnm8wANGic0QU5baHWCj5yptsPQ3er3BBE=",
+    "hZKfrLnG0+Dt+gcUIS47SFVib3yJlqOwvcrX5PH+Cxg=",
+    "BALTZXNWTYd8/T3/ZGVLj2iq6rx1CisTaFsDI51tJm0=",
+    "H1aOtxVg192/w3swLDEhOLiJeJAApDbkeCesBgj1FoY=",
+    "dDManXe/OByKTnnX3nasuIW5v90v4AMVcduB8UeaVeg=",
+    "se750mhTJC9OZ/IEuumicbisYJD4LFD0Pg5fNMe5WCU=",
+    "DHn1t2Jl72NlGn5Ibh+8NhhwHk2rsBXFxwrTmoq+7i4=",
+    "u0TYPFOzXYMdyK1nzubNC1hZkgCWgbobZcTbXvB00hk=",
+    "yhOHQUCJ8cvyO6AOFLmhZAIKdaX1XvlblYINlusra44=",
+    "3JSkHHX/ZvXQpE/m1GTNX7FlbaWEw4ErzZvG4mb4Ovg=",
+    "xPJIs5HIbJvyHOez+tq/Q6K+7pqmf3K9A79dUzRBiLc=",
+    "f8QhJe5WZxGmUoOz2RV6/ZDvrLafDyXcU+NIsBikquI=",
+    "fE/yFFbtTJCPBZ2f26nwdF1CDm9zsYi1S3LrKhM9RDU=",
+    "HKTCZa/89kBFJ1Q4xR1V2zCHA3JJnJ+e3xXw8oMJymc=",
+    "LTSZo8kxFV9b/174q4AO7tzLk2V/QU2m0z3FfCU6AT0=",
+    "WdkIQ+1pEapTNuuB2cq6Vb7rDnQrBKLfHOrE6uo4KXs=",
+    "SwH9VK1JLqpY0psx7THvZwM8iPpW8wGADrGDuGOywd8=",
+    "tM2P8nETawOUhgddCbXKvcVQ73S34fOz3evdTeOanJI=",
+    "iAOwFGTBUbNypdt2takUIRnLWifokGdop3kEJBUQEhM=",
+    "IDI2TGHSXqEGzfM0ibKyPgzpjU5xwX1Ornk/mdrF5kk=",
+    "Y3cUACqjlpd7/UUQXOU72qU3a/oDh8WvlmCf68qRb0E=",
+    "w0yZWWMo7w4lfz2FCvLZcbrstA5+v2lUadqN7ir6EXM=",
+    "ifKNzCMHCON2DyAyOfNsrSEOCnFE3qdoGorJW9sa5W8=",
+    "Fvi0QbQozpt0bZHOSJ7sYSdiHulJQ8tUKrs2YCUnIZA=",
+    "msRifZswNWKMIO1qdRDcO5X3k289zlPQCwfv7rBahiA=",
+    "LHvi83xB+/8mbicwZS5tzJHzM56zeuRsJ/vmWX+t9HY=",
+    "L/86snIUXvjcySSOGjPhaCQkdKkif/wLHa+SAZO4Wuw=",
+    "1MqpOu+S87nknf2fuxWDOUpTSnF8XkhLqYkb1WvVHMw=",
+    "bzxQu7xoN3pUYJyD9Pov9US+Cb4kq9jQRMPEWElUoBY=",
+    "DdWzrXQnnwsKbGmemiI1dNJMfEwcXDzhvBScEyLOTSs=",
+    "pMo98Ie2k8NP2EvIfAVPKzz1pDIKe6+2n7V/6eOnoAk=",
+    "NHcI0uMRZMtqmfUm66EnHki+vU4DuVj6W4Guil2y/NY=",
+    "AAzN1n0B2pRAyiGatkP4y7JUHr2YLoChXosM6StNiBQ=",
+    "aUsgBY2Jj9HQMH6WBCKoS7Mmgs79muEg+98EiQlYUOI=",
+    "K5SuhK1V5cWhKJMaF8dNpCumXJslGkdKhFNZdqDa25Q=",
+    "qGiBPZvI/p1AwfgkeDku6fRzARKpC4Ll2g/3xgn3LE0=",
+    "EpGq3Za69I7RRYVJPmNBWugO21w+V12YQmNrdoN/ghA=",
+    "xJuGi59oh1ayfTDnt+JFeTndrJ0kFGsMCsaQYZIj/JE=",
+    "3k40iWezVdRKQ24xY6/9A4R5VYY8kZYxCiSsgCJTHug=",
+    "L7bAYyoImfbJVD5Btrr+NRz1tWqfbivgs8l9chOZ3fw=",
+    "8cWXPbsCHMAT+e1KyMLMehPMBz+eKfTjsOVfTI91I9Q=",
+    "KBM38E7TnwbERyrhTTMDHGTh7QiM8aE23Mm1Jls+Dlo=",
+    "yD1BILYgBTCwyt/n03BzulbnuqwATzIt3Mfe4aRYTHQ=",
+    "27rOt2Q+dXzts+yH+EcVPGmek+lnTVoT/tTMUixbkto=",
+    "+O6PPJIZ5PFRYNpSRQtTdJ3MwZsch4nx3pXcLs1fzhI=",
+    "fUZXuNTWaDV8k/fenhQ3X3xEEE+Vfci5Wlz5v8FxmBg=",
+    "DQulk3Vk+ZVJVPB6MYbjEs+j3WBWUInGIoA45LpS6LE=",
+    "ByEtu8Pyhh0GcLfZU8vaBAuXFpHjFRXs/pow2WhPnMM=",
+    "CESlSirNlVnpdaRpSGytDLZf7Og1MGCK3aXlwAdi818=",
+    "m7BLtL2MfMNClD80MhYFa8BC9nfrDnLtGpCJnX+lZV4=",
+];
+
+/// Insert a test device for the given user, returning the saved `Device<Id>`.
+/// The device is automatically added to all existing networks so that
+/// `WireguardNetworkDevice` join records exist (required for config-building).
+pub(crate) async fn create_device_for_user(pool: &PgPool, user_id: Id) -> Device<Id> {
+    static DEV_CTR: AtomicU16 = AtomicU16::new(0);
+    let device_number = DEV_CTR.fetch_add(1, Ordering::Relaxed);
+    // Use a pre-generated valid 32-byte base64 WireGuard public key.
+    let pubkey = DEVICE_PUBKEYS[device_number as usize % DEVICE_PUBKEYS.len()].to_owned();
+    let mut conn = pool
+        .acquire()
+        .await
+        .expect("failed to acquire DB connection");
+    let device = Device::new(
+        format!("test-device-{device_number}"),
+        pubkey,
+        user_id,
+        DeviceType::User,
+        None,
+        true,
+    )
+    .save(&mut *conn)
+    .await
+    .expect("failed to save test device");
+    // Add to all networks that exist at this point so WireguardNetworkDevice
+    // join rows are created (needed by build_device_config_response).
+    let user = User::find_by_id(&mut *conn, user_id)
+        .await
+        .expect("failed to find user")
+        .expect("user not found");
+    join_device_to_all_networks(&mut conn, &device, &user)
+        .await
+        .expect("failed to add device to networks");
+    device
+}
+
+/// Insert a test user AND a test device for that user, returning both.
+pub(crate) async fn create_user_with_device(pool: &PgPool) -> (User<Id>, Device<Id>) {
+    let user = create_user(pool).await;
+    let device = create_device_for_user(pool, user.id).await;
+    (user, device)
+}
+
+/// Insert a valid enrollment token for the given user.
+///
+/// The token expires in one hour, so it is always valid in tests.
+///
+/// `admin_id` should be the ID of the user who is initiating enrollment
+/// (typically an admin).  The enrollment welcome-page template references
+/// `{{ admin_first_name }}` etc., so Tera will fail to render it when those
+/// variables are absent.  Pass `Some(user_id)` to populate those fields
+/// (using the user as their own admin is fine for tests).
+pub(crate) async fn create_enrollment_token(
+    pool: &PgPool,
+    user_id: Id,
+    admin_id: Option<Id>,
+) -> Token {
+    let token = Token::new(
+        user_id,
+        admin_id,
+        None,
+        3600, // 1 hour
+        Some(ENROLLMENT_TOKEN_TYPE.to_owned()),
+    );
+    token
+        .save(pool)
+        .await
+        .expect("failed to save enrollment token");
+    token
+}
+
+/// Insert a polling token for the given device, returning the raw token string.
+pub(crate) async fn create_polling_token(pool: &PgPool, device_id: Id) -> String {
+    PollingToken::new(device_id)
+        .save(pool)
+        .await
+        .expect("failed to save polling token")
+        .token
+}
+
+/// Send an `EnrollmentStart` request to the handler and consume the response.
+///
+/// The enrollment server requires `start_session()` to be called (setting
+/// `Token::used_at`) before any subsequent `NewDevice` or `ExistingDevice`
+/// request can be processed.  Call this helper with a fresh token immediately
+/// after `complete_proxy_handshake` to open the enrollment session.
+///
+/// The function sends a single `EnrollmentStartRequest` with the given token
+/// ID and waits for the `EnrollmentStartResponse` (or any payload - panicking
+/// if the stream closes without a response).
+pub(crate) async fn start_enrollment_session(context: &mut HandlerTestContext, token_id: &str) {
+    static ENROLL_CTR: AtomicU64 = AtomicU64::new(1000);
+    let id = ENROLL_CTR.fetch_add(1, Ordering::Relaxed);
+
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::EnrollmentStart(
+            EnrollmentStartRequest {
+                token: token_id.to_owned(),
+            },
+        )),
+    });
+
+    // Consume the response (EnrollmentStartResponse or an error).
+    let response = context.mock_proxy_mut().recv_outbound().await;
+    match &response.payload {
+        Some(core_response::Payload::EnrollmentStart(_)) => { /* success */ }
+        Some(core_response::Payload::CoreError(e)) => {
+            panic!(
+                "start_enrollment_session: got CoreError status={} msg={}",
+                e.status_code, e.message
+            );
+        }
+        other => panic!(
+            "start_enrollment_session: expected EnrollmentStart response, got: {:?}",
+            other.as_ref().map(discriminant)
+        ),
+    }
+}
+
+/// Assign a single-step MFA flow to a location.
+///
+/// Setting `mfa_enabled` alone is not enough: the legacy MFA mode is derived from the location's
+/// flow configuration, and a location with no flow derives `None`, which the MFA start path refuses.
+async fn assign_mfa_flow(
+    pool: &PgPool,
+    location_id: Id,
+    title: &str,
+    methods: Vec<VpnClientMfaMethod>,
+) {
+    let mut conn = pool.acquire().await.expect("failed to acquire connection");
+    let (flow, _steps) = MfaFlow::create(&mut conn, title.to_owned(), vec![methods])
+        .await
+        .expect("failed to create test mfa flow");
+    MfaFlow::assign_to_location(
+        &mut conn,
+        location_id,
+        &[LocationMfaFlowAssignment {
+            flow_id: flow.id,
+            is_default: true,
+            group_ids: Vec::new(),
+        }],
+    )
+    .await
+    .expect("failed to assign test mfa flow to location");
+}
+
+/// Insert a WireGuard network whose single MFA step contains exactly `methods`.
+pub(crate) async fn create_mfa_network_with_methods(
+    pool: &PgPool,
+    methods: Vec<VpnClientMfaMethod>,
+) -> WireguardNetwork<Id> {
+    static NET_CTR: AtomicU16 = AtomicU16::new(0);
+    let network_number = NET_CTR.fetch_add(1, Ordering::Relaxed);
+    let network = WireguardNetwork::new(
+        format!("test-mfa-network-{network_number}"),
+        41820 + i32::from(network_number % 10_000),
+        "10.1.0.1".to_owned(),
+        None,
+        Vec::<IpNetwork>::new(),
+        true,  // allow_all_groups
+        false, // acl_enabled
+        false, // acl_default_allow
+        false,
+        true, // mfa_enabled
+        ServiceLocationMode::default(),
+    )
+    .try_set_address("10.1.0.1/24")
+    .expect("failed to set mfa network address")
+    .save(pool)
+    .await
+    .expect("failed to save test mfa wireguard network");
+
+    assign_mfa_flow(
+        pool,
+        network.id,
+        &format!("test-mfa-flow-{network_number}"),
+        methods,
+    )
+    .await;
+
+    network
+}
+
+/// Insert a WireGuard network that derives the legacy `Internal` MFA mode.
+pub(crate) async fn create_mfa_network(pool: &PgPool) -> WireguardNetwork<Id> {
+    create_mfa_network_with_methods(
+        pool,
+        vec![
+            VpnClientMfaMethod::Totp,
+            VpnClientMfaMethod::Email,
+            VpnClientMfaMethod::Biometric,
+            VpnClientMfaMethod::MobileApprove,
+        ],
+    )
+    .await
+}
+
+/// Insert a WireGuard network that derives the legacy `External` MFA mode.
+pub(crate) async fn create_external_mfa_network(pool: &PgPool) -> WireguardNetwork<Id> {
+    static NET_CTR: AtomicU16 = AtomicU16::new(0);
+    let network_number = NET_CTR.fetch_add(1, Ordering::Relaxed);
+    let network = WireguardNetwork::new(
+        format!("test-ext-mfa-network-{network_number}"),
+        31820 + i32::from(network_number % 10_000),
+        "10.2.0.1".to_owned(),
+        None,
+        Vec::<IpNetwork>::new(),
+        true,  // allow_all_groups
+        false, // acl_enabled
+        false, // acl_default_allow
+        false,
+        true, // mfa_enabled
+        ServiceLocationMode::default(),
+    )
+    .try_set_address("10.2.0.1/24")
+    .expect("failed to set ext mfa network address")
+    .save(pool)
+    .await
+    .expect("failed to save test external mfa wireguard network");
+
+    // A lone OIDC method is what derives `LocationMfaMode::External`.
+    assign_mfa_flow(
+        pool,
+        network.id,
+        &format!("test-external-mfa-flow-{network_number}"),
+        vec![VpnClientMfaMethod::Oidc],
+    )
+    .await;
+
+    network
+}
+
+/// Configure the minimum provider record required for OIDC MFA availability checks.
+pub(crate) async fn configure_oidc_provider(pool: &PgPool) {
+    OpenIdProvider::new(
+        "Test".to_owned(),
+        "https://idp.example.com".to_owned(),
+        OpenIdProviderKind::Google,
+        "client_id".to_owned(),
+        "client_secret".to_owned().into(),
+        None,
+        None,
+        None,
+        None,
+        true,
+        60,
+        DirectorySyncUserBehavior::Keep,
+        DirectorySyncUserBehavior::Keep,
+        DirectorySyncTarget::All,
+        None,
+        None,
+        Vec::new(),
+        None,
+        false,
+        false,
+        None,
+    )
+    .save(pool)
+    .await
+    .expect("failed to configure OIDC provider");
+}
+
+/// Insert a WireGuard network whose MFA flow has two steps, so
+/// `derive_legacy_mode` yields `None` (no legacy equivalent). Use this to test
+/// omission of multi-step locations for legacy clients.
+pub(crate) async fn create_multi_step_mfa_network(pool: &PgPool) -> WireguardNetwork<Id> {
+    create_multi_step_mfa_network_with_steps(
+        pool,
+        vec![
+            vec![VpnClientMfaMethod::Totp],
+            vec![VpnClientMfaMethod::Email],
+        ],
+    )
+    .await
+}
+
+pub(crate) async fn create_multi_step_mfa_network_with_steps(
+    pool: &PgPool,
+    steps: Vec<Vec<VpnClientMfaMethod>>,
+) -> WireguardNetwork<Id> {
+    static NET_CTR: AtomicU16 = AtomicU16::new(0);
+    let network_number = NET_CTR.fetch_add(1, Ordering::Relaxed);
+    let network = WireguardNetwork::new(
+        format!("test-multi-step-mfa-network-{network_number}"),
+        21820 + i32::from(network_number % 10_000),
+        "10.3.0.1".to_owned(),
+        None,
+        Vec::<IpNetwork>::new(),
+        true,  // allow_all_groups
+        false, // acl_enabled
+        false, // acl_default_allow
+        false,
+        true, // mfa_enabled
+        ServiceLocationMode::default(),
+    )
+    .try_set_address("10.3.0.1/24")
+    .expect("failed to set multi-step mfa network address")
+    .save(pool)
+    .await
+    .expect("failed to save test multi-step mfa wireguard network");
+
+    // Two steps means `derive_legacy_mode` returns `None`.
+    let mut conn = pool.acquire().await.expect("failed to acquire connection");
+    let (flow, _steps) = MfaFlow::create(
+        &mut conn,
+        format!("test-multi-step-mfa-flow-{network_number}"),
+        steps,
+    )
+    .await
+    .expect("failed to create test multi-step mfa flow");
+    MfaFlow::assign_to_location(
+        &mut conn,
+        network.id,
+        &[LocationMfaFlowAssignment {
+            flow_id: flow.id,
+            is_default: true,
+            group_ids: Vec::new(),
+        }],
+    )
+    .await
+    .expect("failed to assign test multi-step mfa flow to location");
+
+    network
+}
+
+/// Enable email MFA for `user`, returning the currently-valid MFA code.
+///
+/// The code is valid immediately and can be passed directly to
+/// `ClientMfaFinishRequest::code`.
+pub(crate) async fn setup_user_email_mfa(pool: &PgPool, user: &mut User<Id>) -> String {
+    configure_working_smtp(pool).await;
+    user.new_email_secret(pool).await.expect("new_email_secret");
+    user.enable_email_mfa(pool).await.expect("enable_email_mfa");
+    // generate_email_mfa_code uses the in-memory secret; note that
+    // legacy_mfa_start also calls generate_email_mfa_code internally -
+    // the two calls will produce the same code because the in-memory secret
+    // hasn't changed. But we need the code *after* the start call, so the
+    // caller should call this helper before start and pass the code to finish.
+    user.generate_email_mfa_code()
+        .expect("generate_email_mfa_code")
+}
+
+/// Link `user` to the identity the mock presents, which OIDC MFA requires before offering the
+/// method. `sub` is the email because that is what [`make_oidc_code`] is called with here.
+pub(crate) async fn link_user_oidc_identity(pool: &PgPool, user: &mut User<Id>) {
+    user.openid_sub = Some(user.email.clone());
+    user.save(pool).await.expect("failed to link OIDC identity");
+}
+
+/// Enable TOTP for `user` and persist the secret.  Call `generate_totp_code`
+/// just before `send_mfa_finish` to produce a fresh code from the stored secret.
+pub(crate) async fn setup_user_totp_mfa(pool: &PgPool, user: &mut User<Id>) {
+    user.new_totp_secret(pool).await.expect("new_totp_secret");
+    user.enable_totp(pool).await.expect("enable_totp");
+}
+
+/// Register a security key of `kind` for `user_id`. The `passkey` blob is a placeholder
+/// because the paths exercised here only check which key rows exist.
+pub(crate) async fn register_webauthn_key(pool: &PgPool, user_id: Id, kind: AuthenticatorKind) {
+    sqlx::query(
+        "INSERT INTO webauthn (user_id, name, passkey, authenticator_kind) \
+        VALUES ($1, $2, $3, $4)",
+    )
+    .bind(user_id)
+    .bind("test key")
+    .bind(vec![0_u8])
+    .bind(kind)
+    .execute(pool)
+    .await
+    .expect("insert webauthn key");
+}
+
+/// Generate a valid 6-digit TOTP code for `user` using the current timestamp.
+///
+/// Mirrors the logic in `User::verify_totp_code`.  Call this immediately before
+/// `send_mfa_finish` so the code is within the current 30-second window.
+pub(crate) fn generate_totp_code(user: &User<Id>) -> String {
+    let secret = user
+        .totp_secret
+        .as_ref()
+        .expect("totp_secret must be set after setup_user_totp_mfa");
+    let ts = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("system time before epoch")
+        .as_secs();
+    totp_custom::<Sha1>(TOTP_CODE_VALIDITY_PERIOD, TOTP_CODE_DIGITS, secret, ts)
+}
+
+/// Generate a TOTP code from a **base32-encoded** secret string (as returned
+/// by `CodeMfaSetupStartResponse.totp_secret`).
+pub(crate) fn totp_code_from_base32_secret(base32_secret: &str) -> String {
+    let secret = base32::decode(base32::Alphabet::Rfc4648 { padding: false }, base32_secret)
+        .expect("invalid base32 TOTP secret from CodeMfaSetupStartResponse");
+    let ts = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("system time before epoch")
+        .as_secs();
+    totp_custom::<Sha1>(TOTP_CODE_VALIDITY_PERIOD, TOTP_CODE_DIGITS, &secret, ts)
+}
+
+/// Send `ClientMfaStart` and return `(response_id, start_token)`.
+///
+/// Panics if the handler returns an error.
+pub(crate) async fn send_mfa_start(
+    context: &mut HandlerTestContext,
+    location_id: Id,
+    pubkey: &str,
+    method: MfaMethod,
+) -> (u64, String) {
+    let (id, token, _challenge) =
+        send_mfa_start_with_challenge(context, location_id, pubkey, method).await;
+    (id, token)
+}
+
+/// Send `ClientMfaStart` and return the raw response for success or error assertions.
+pub(crate) async fn send_mfa_start_raw(
+    context: &mut HandlerTestContext,
+    location_id: Id,
+    pubkey: &str,
+    method: MfaMethod,
+) -> CoreResponse {
+    static MFA_CTR: AtomicU64 = AtomicU64::new(2000);
+    let id = MFA_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::ClientMfaStart(
+            ClientMfaStartRequest {
+                location_id,
+                pubkey: pubkey.to_owned(),
+                method: method as i32,
+                posture_data: None,
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send `ClientMfaStart` and return `(request id, token, challenge)`.
+///
+/// The challenge is `None` for methods that do not issue one (TOTP, email, OIDC); the biometric
+/// and mobile-approve flows return the string the client must sign.
+pub(crate) async fn send_mfa_start_with_challenge(
+    context: &mut HandlerTestContext,
+    location_id: Id,
+    pubkey: &str,
+    method: MfaMethod,
+) -> (u64, String, Option<String>) {
+    let response = send_mfa_start_raw(context, location_id, pubkey, method).await;
+    let id = response.id;
+    let (token, challenge) = match &response.payload {
+        Some(core_response::Payload::ClientMfaStart(r)) => (r.token.clone(), r.challenge.clone()),
+        Some(core_response::Payload::CoreError(e)) => panic!(
+            "send_mfa_start: got CoreError status={} msg={}",
+            e.status_code, e.message
+        ),
+        other => panic!(
+            "send_mfa_start: expected ClientMfaStart response, got: {:?}",
+            other.as_ref().map(discriminant)
+        ),
+    };
+    (id, token, challenge)
+}
+
+/// Register an ed25519 biometric-auth key for `device_id` and return the signing key.
+///
+/// Both legacy signature flows verify a challenge against a key the device enrolled up front, so
+/// a test has to plant one before it can produce a signature the handler will accept.
+pub(crate) async fn register_biometric_key(pool: &PgPool, device_id: Id) -> SigningKey {
+    let mut csprng = UnwrapErr(SysRng);
+    let signing_key = SigningKey::generate(&mut csprng);
+    let pub_key = BASE64_STANDARD.encode(signing_key.verifying_key().as_bytes());
+    BiometricAuth::new(device_id, pub_key)
+        .save(pool)
+        .await
+        .expect("failed to save biometric auth key");
+    signing_key
+}
+
+/// Base64 public key matching [`register_biometric_key`]'s signing key.
+pub(crate) fn biometric_pub_key(signing_key: &SigningKey) -> String {
+    BASE64_STANDARD.encode(signing_key.verifying_key().as_bytes())
+}
+
+/// Sign a challenge the way the client does: ed25519 over the raw challenge bytes, base64-encoded.
+pub(crate) fn sign_challenge(signing_key: &SigningKey, challenge: &str) -> String {
+    BASE64_STANDARD.encode(signing_key.sign(challenge.as_bytes()).to_bytes())
+}
+
+/// Send `ClientMfaFinish` and return `(response, preshared_key)`.
+///
+/// Requires `device_info` because the handler calls `parse_client_ip_agent`.
+/// Panics if the handler returns an error.
+pub(crate) async fn send_mfa_finish(
+    context: &mut HandlerTestContext,
+    token: &str,
+    code: Option<&str>,
+) -> (CoreResponse, String) {
+    send_mfa_finish_signed(context, token, code, None).await
+}
+
+/// Send `ClientMfaFinish` carrying an `auth_pub_key` and return `(response, preshared_key)`.
+///
+/// Mobile approve needs the approving device's key alongside the signature; biometric passes
+/// `None` because the challenge already remembers its owner. Panics if the handler errors.
+pub(crate) async fn send_mfa_finish_signed(
+    context: &mut HandlerTestContext,
+    token: &str,
+    code: Option<&str>,
+    auth_pub_key: Option<&str>,
+) -> (CoreResponse, String) {
+    static MFA_CTR: AtomicU64 = AtomicU64::new(2000);
+    let id = MFA_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::ClientMfaFinish(
+            ClientMfaFinishRequest {
+                token: token.to_owned(),
+                code: code.map(str::to_owned),
+                auth_pub_key: auth_pub_key.map(str::to_owned),
+            },
+        )),
+    });
+    let response = context.mock_proxy_mut().recv_outbound().await;
+    let psk = match &response.payload {
+        Some(core_response::Payload::ClientMfaFinish(r)) => r.preshared_key.clone(),
+        Some(core_response::Payload::CoreError(e)) => panic!(
+            "send_mfa_finish: got CoreError status={} msg={}",
+            e.status_code, e.message
+        ),
+        other => panic!(
+            "send_mfa_finish: expected ClientMfaFinish response, got: {:?}",
+            other.as_ref().map(discriminant)
+        ),
+    };
+    (response, psk)
+}
+
+/// Send `ClientMfaFinish` *without* waiting for a response.
+///
+/// Use this when the caller needs to collect multiple responses (e.g. when
+/// an `AwaitRemoteMfaFinish` response is also expected after the finish).
+/// The global settings are re-synced before the request is sent so that the
+/// handler can verify the JWT with the correct secret key.
+pub(crate) async fn send_mfa_finish_no_recv(
+    context: &mut HandlerTestContext,
+    token: &str,
+    code: Option<&str>,
+) {
+    static MFA_CTR: AtomicU64 = AtomicU64::new(2000);
+    let id = MFA_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::ClientMfaFinish(
+            ClientMfaFinishRequest {
+                token: token.to_owned(),
+                code: code.map(str::to_owned),
+                auth_pub_key: None,
+            },
+        )),
+    });
+}
+
+/// Send `ClientMfaFinish` and return the raw `CoreResponse`.
+///
+/// Like `send_mfa_finish` but does not panic on error - the caller is
+/// responsible for inspecting `response.payload`.  Use this for error-path
+/// tests where an error response is expected.
+pub(crate) async fn send_mfa_finish_raw(
+    context: &mut HandlerTestContext,
+    token: &str,
+    code: Option<&str>,
+) -> CoreResponse {
+    static MFA_CTR: AtomicU64 = AtomicU64::new(2000);
+    let id = MFA_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::ClientMfaFinish(
+            ClientMfaFinishRequest {
+                token: token.to_owned(),
+                code: code.map(str::to_owned),
+                auth_pub_key: None,
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send `ClientMfaTokenValidation` and return `token_valid`.
+pub(crate) async fn send_token_validation(context: &mut HandlerTestContext, token: &str) -> bool {
+    static MFA_CTR: AtomicU64 = AtomicU64::new(2000);
+    let id = MFA_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: None,
+        payload: Some(core_request::Payload::ClientMfaTokenValidation(
+            ClientMfaTokenValidationRequest {
+                token: token.to_owned(),
+            },
+        )),
+    });
+    let response = context.mock_proxy_mut().recv_outbound().await;
+    match &response.payload {
+        Some(core_response::Payload::ClientMfaTokenValidation(r)) => r.token_valid,
+        Some(core_response::Payload::CoreError(e)) => panic!(
+            "send_token_validation: got CoreError status={} msg={}",
+            e.status_code, e.message
+        ),
+        other => panic!(
+            "send_token_validation: expected ClientMfaTokenValidation response, got: {:?}",
+            other.as_ref().map(discriminant)
+        ),
+    }
+}
+
+/// Assert that the next `BidiStreamEvent` is `DesktopClientMfa(Success)` and
+/// return the location id from the event.
+pub(crate) async fn expect_bidi_mfa_success(
+    bidi_rx: &mut UnboundedReceiver<BidiStreamEvent>,
+) -> Id {
+    let event = timeout(RECEIVE_TIMEOUT, bidi_rx.recv())
+        .await
+        .expect("timed out waiting for BidiStreamEvent DesktopClientMfa(Success)")
+        .expect("bidi event channel closed");
+    match event.event {
+        BidiStreamEventType::DesktopClientMfa(e) => match *e {
+            DesktopClientMfaEvent::Success { location, .. } => location.id,
+            other => panic!("expected DesktopClientMfaEvent::Success, got: {other:?}"),
+        },
+        other => panic!("expected BidiStreamEventType::DesktopClientMfa, got: {other:?}"),
+    }
+}
+
+/// Assert that the `VpnClientSession` for a given location and device exists in
+/// the DB and return it.
+pub(crate) async fn assert_vpn_session_exists(
+    pool: &PgPool,
+    location_id: Id,
+    device_id: Id,
+) -> VpnClientSession<Id> {
+    VpnClientSession::try_get_active_session(pool, location_id, device_id)
+        .await
+        .expect("db query failed")
+        .unwrap_or_else(|| {
+            panic!("expected active VpnClientSession for location={location_id} device={device_id}")
+        })
+}
+
+/// Insert a test `OpenIdProvider` backed by the given mock into the database.
+pub(crate) async fn create_oidc_provider(
+    pool: &PgPool,
+    mock: &MockOidcProvider,
+) -> OpenIdProvider<Id> {
+    OpenIdProvider::<NoId> {
+        id: NoId,
+        name: "test-oidc".to_owned(),
+        base_url: mock.base_url.clone(),
+        kind: OpenIdProviderKind::Custom,
+        client_id: mock.client_id.clone(),
+        client_secret: mock.client_secret.clone().into(),
+        display_name: Some("Test OIDC".to_owned()),
+        google_service_account_key: None,
+        google_service_account_email: None,
+        admin_email: None,
+        directory_sync_enabled: false,
+        directory_sync_interval: 600,
+        directory_sync_user_behavior: DirectorySyncUserBehavior::Keep,
+        directory_sync_admin_behavior: DirectorySyncUserBehavior::Keep,
+        directory_sync_target: DirectorySyncTarget::All,
+        okta_private_jwk: None,
+        okta_dirsync_client_id: None,
+        directory_sync_group_match: Vec::new(),
+        jumpcloud_api_key: None,
+        prefetch_users: false,
+        disable_password_management: false,
+        directory_sync_user_groups: None,
+    }
+    .save(pool)
+    .await
+    .expect("failed to save test OpenIdProvider")
+}
+
+/// Set `Settings.public_proxy_url` in the DB (and in the global cache) so
+/// that `edge_callback_url` returns a valid URL during tests.
+pub(crate) async fn set_public_proxy_url(pool: &PgPool, url: &str) {
+    let mut settings = Settings::get_current_settings();
+    settings.public_proxy_url = url.to_owned();
+    update_current_settings(pool, settings)
+        .await
+        .expect("failed to update public_proxy_url in settings");
+}
+
+/// The `email_verified` claim a mock ID token should carry.
+pub(crate) enum EmailVerified {
+    /// `"email_verified": true`.
+    Verified,
+    /// `"email_verified": false`.
+    Unverified,
+    /// The claim is omitted, as many providers do.
+    Absent,
+}
+
+/// Build the authorization code expected by `MockOidcProvider`'s `/token`
+/// endpoint, with the email marked as verified.
+pub(crate) fn make_oidc_code(sub: &str, email: &str, nonce: &str) -> String {
+    make_oidc_code_with_email_verified(sub, email, nonce, EmailVerified::Verified)
+}
+
+/// Build an authorization code carrying the given `email_verified` claim.
+pub(crate) fn make_oidc_code_with_email_verified(
+    sub: &str,
+    email: &str,
+    nonce: &str,
+    email_verified: EmailVerified,
+) -> String {
+    match email_verified {
+        EmailVerified::Verified => format!("{sub}:{email}:{nonce}:true"),
+        EmailVerified::Unverified => format!("{sub}:{email}:{nonce}:false"),
+        EmailVerified::Absent => format!("{sub}:{email}:{nonce}"),
+    }
+}
+
+/// Send an `ActivateUser` request through the handler and return the raw
+/// `CoreResponse`.  The caller must have already started an enrollment session.
+pub(crate) async fn send_activate_user(
+    context: &mut HandlerTestContext,
+    token: &str,
+    password: &str,
+    phone: Option<&str>,
+) -> CoreResponse {
+    static ACT_CTR: AtomicU64 = AtomicU64::new(2000);
+    let id = ACT_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::ActivateUser(ActivateUserRequest {
+            token: Some(token.to_owned()),
+            password: Some(password.to_owned()),
+            phone_number: phone.map(str::to_owned),
+        })),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send an `ActivateUser` request with no password, as the desktop client does for
+/// externally-managed users whose identity provider disabled local password management.
+pub(crate) async fn send_activate_user_without_password(
+    context: &mut HandlerTestContext,
+    token: &str,
+    phone: Option<&str>,
+) -> CoreResponse {
+    static ACT_CTR: AtomicU64 = AtomicU64::new(2500);
+    let id = ACT_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::ActivateUser(ActivateUserRequest {
+            token: Some(token.to_owned()),
+            password: None,
+            phone_number: phone.map(str::to_owned),
+        })),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send a `CodeMfaSetupStart` request for the given method and return the raw
+/// `CoreResponse`.
+pub(crate) async fn send_code_mfa_setup_start(
+    context: &mut HandlerTestContext,
+    token: &str,
+    method: MfaMethod,
+) -> CoreResponse {
+    static MFA_START_CTR: AtomicU64 = AtomicU64::new(3000);
+    let id = MFA_START_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::CodeMfaSetupStart(
+            CodeMfaSetupStartRequest {
+                method: method as i32,
+                token: token.to_owned(),
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Insert a `PASSWORD_RESET` token for the given user, valid for 1 hour.
+pub(crate) async fn create_password_reset_token(pool: &PgPool, user: &User<Id>) -> Token {
+    let token = Token::new(
+        user.id,
+        None,
+        Some(user.email.clone()),
+        3600, // 1 hour
+        Some(PASSWORD_RESET_TOKEN_TYPE.to_owned()),
+    );
+    token
+        .save(pool)
+        .await
+        .expect("failed to save password reset token");
+    token
+}
+
+/// Send a `PasswordResetInit` request and return the raw `CoreResponse`.
+pub(crate) async fn send_password_reset_init(
+    context: &mut HandlerTestContext,
+    email: &str,
+) -> CoreResponse {
+    static PR_INIT_CTR: AtomicU64 = AtomicU64::new(4000);
+    let id = PR_INIT_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::PasswordResetInit(
+            PasswordResetInitializeRequest {
+                email: email.to_owned(),
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send a `PasswordResetStart` request and return the raw `CoreResponse`.
+pub(crate) async fn send_password_reset_start(
+    context: &mut HandlerTestContext,
+    token: &str,
+) -> CoreResponse {
+    static PR_START_CTR: AtomicU64 = AtomicU64::new(4500);
+    let id = PR_START_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::PasswordResetStart(
+            PasswordResetStartRequest {
+                token: token.to_owned(),
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send a `PasswordReset` request and return the raw `CoreResponse`.
+pub(crate) async fn send_password_reset(
+    context: &mut HandlerTestContext,
+    token: &str,
+    password: &str,
+) -> CoreResponse {
+    static PR_CTR: AtomicU64 = AtomicU64::new(5000);
+    let id = PR_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::PasswordReset(PasswordResetRequest {
+            password: password.to_owned(),
+            token: Some(token.to_owned()),
+        })),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send a `CodeMfaSetupFinish` request for the given method and code and
+/// return the raw `CoreResponse`.
+pub(crate) async fn send_code_mfa_setup_finish(
+    context: &mut HandlerTestContext,
+    token: &str,
+    method: MfaMethod,
+    code: &str,
+) -> CoreResponse {
+    static MFA_FINISH_CTR: AtomicU64 = AtomicU64::new(3500);
+    let id = MFA_FINISH_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::CodeMfaSetupFinish(
+            CodeMfaSetupFinishRequest {
+                code: code.to_owned(),
+                token: token.to_owned(),
+                method: method as i32,
+                name: None,
+                fido2_attestation: None,
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send a `CodeMfaSetupFinish` request carrying a FIDO2 attestation instead of a code.
+pub(crate) async fn send_code_mfa_setup_finish_fido2(
+    context: &mut HandlerTestContext,
+    token: &str,
+    name: Option<&str>,
+    attestation: Option<&str>,
+) -> CoreResponse {
+    static MFA_FINISH_FIDO2_CTR: AtomicU64 = AtomicU64::new(3700);
+    let id = MFA_FINISH_FIDO2_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::CodeMfaSetupFinish(
+            CodeMfaSetupFinishRequest {
+                code: String::new(),
+                token: token.to_owned(),
+                method: MfaMethod::Fido2 as i32,
+                name: name.map(str::to_owned),
+                fido2_attestation: attestation.map(str::to_owned),
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send an `MfaConfigStart` request for the given polling token and device key.
+pub(crate) async fn send_mfa_config_start(
+    context: &mut HandlerTestContext,
+    polling_token: &str,
+    pubkey: &str,
+) -> CoreResponse {
+    static MFA_CONFIG_START_CTR: AtomicU64 = AtomicU64::new(4000);
+    let id = MFA_CONFIG_START_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::MfaConfigStart(
+            MfaConfigStartRequest {
+                token: polling_token.to_owned(),
+                pubkey: pubkey.to_owned(),
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Request an email code for an MFA configuration session.
+pub(crate) async fn send_mfa_config_send_code(
+    context: &mut HandlerTestContext,
+    session_token: &str,
+) -> CoreResponse {
+    static MFA_CONFIG_CODE_CTR: AtomicU64 = AtomicU64::new(4250);
+    let id = MFA_CONFIG_CODE_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::MfaConfigSendCode(
+            MfaConfigSendCodeRequest {
+                session_token: session_token.to_owned(),
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send an `MfaConfigAuthorize` request for the given session token, method and code.
+pub(crate) async fn send_mfa_config_authorize(
+    context: &mut HandlerTestContext,
+    session_token: &str,
+    method: MfaMethod,
+    code: &str,
+) -> CoreResponse {
+    static MFA_CONFIG_AUTH_CTR: AtomicU64 = AtomicU64::new(4500);
+    let id = MFA_CONFIG_AUTH_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::MfaConfigAuthorize(
+            MfaConfigAuthorizeRequest {
+                session_token: session_token.to_owned(),
+                method: method as i32,
+                code: code.to_owned(),
+                signature: None,
+                auth_data: None,
+                credential_id: None,
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Request a FIDO2 challenge for an MFA configuration session.
+pub(crate) async fn send_mfa_config_fido2_challenge(
+    context: &mut HandlerTestContext,
+    session_token: &str,
+) -> CoreResponse {
+    static MFA_CONFIG_FIDO2_CHALLENGE_CTR: AtomicU64 = AtomicU64::new(5000);
+    let id = MFA_CONFIG_FIDO2_CHALLENGE_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::MfaConfigFido2Challenge(
+            MfaConfigFido2ChallengeRequest {
+                session_token: session_token.to_owned(),
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Send an `MfaConfigAuthorize` request carrying a FIDO2 assertion.
+pub(crate) async fn send_mfa_config_authorize_fido2(
+    context: &mut HandlerTestContext,
+    session_token: &str,
+    signature: Option<Vec<u8>>,
+    auth_data: Option<Vec<u8>>,
+    credential_id: Option<Vec<u8>>,
+) -> CoreResponse {
+    static MFA_CONFIG_AUTH_FIDO2_CTR: AtomicU64 = AtomicU64::new(5250);
+    let id = MFA_CONFIG_AUTH_FIDO2_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::MfaConfigAuthorize(
+            MfaConfigAuthorizeRequest {
+                session_token: session_token.to_owned(),
+                method: MfaMethod::Fido2 as i32,
+                code: String::new(),
+                signature,
+                auth_data,
+                credential_id,
+            },
+        )),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Sends an `MfaConfigEnd` request for the given session token.
+pub(crate) async fn send_mfa_config_end(
+    context: &mut HandlerTestContext,
+    session_token: &str,
+) -> CoreResponse {
+    static MFA_CONFIG_END_CTR: AtomicU64 = AtomicU64::new(4750);
+    let id = MFA_CONFIG_END_CTR.fetch_add(1, Ordering::Relaxed);
+    context.mock_proxy().send_request(CoreRequest {
+        id,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::MfaConfigEnd(MfaConfigEndRequest {
+            session_token: session_token.to_owned(),
+        })),
+    });
+    context.mock_proxy_mut().recv_outbound().await
+}
+
+/// Set minimal SMTP fields on a [`Settings`] so that `smtp_configured()` returns `true`.
+pub(crate) fn configure_smtp(settings: &mut Settings) {
+    settings.smtp.server = Some("smtp.example.com".into());
+    settings.smtp.port = Some(587);
+    settings.smtp.sender = Some("noreply@example.com".into());
+}
+
+/// Set minimal LDAP fields on a [`Settings`] so that `ldap_configured()` returns `true`.
+pub(crate) fn configure_ldap(settings: &mut Settings) {
+    settings.ldap_url = Some("ldap://localhost".into());
+    settings.ldap_bind_username = Some("cn=admin,dc=example,dc=com".into());
+    settings.ldap_bind_password = Some(SecretStringWrapper::from("secret"));
+    settings.ldap_username_attr = Some("uid".into());
+    settings.ldap_user_search_base = Some("ou=users,dc=example,dc=com".into());
+    settings.ldap_user_obj_class = Some("inetOrgPerson".into());
+    settings.ldap_member_attr = Some("memberUid".into());
+    settings.ldap_groupname_attr = Some("cn".into());
+    settings.ldap_group_obj_class = Some("posixGroup".into());
+    settings.ldap_group_member_attr = Some("memberUid".into());
+    settings.ldap_group_search_base = Some("ou=groups,dc=example,dc=com".into());
+}

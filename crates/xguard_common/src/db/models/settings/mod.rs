@@ -1,0 +1,1252 @@
+use std::{collections::HashMap, fmt, net::IpAddr, time::Duration};
+
+use openidconnect::{JsonWebKeyId, core::CoreRsaPrivateSigningKey};
+use rand::rngs::OsRng;
+use rsa::{
+    RsaPrivateKey,
+    pkcs1::EncodeRsaPrivateKey,
+    pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding},
+};
+use serde::{Deserialize, Deserializer, Serialize};
+use sqlx::{AssertSqlSafe, FromRow, PgExecutor, PgPool, Type, query, query_as};
+use struct_patch::Patch;
+use thiserror::Error;
+use tracing::{debug, info, warn};
+use url::Url;
+use uuid::Uuid;
+use webauthn_rs::prelude::WebauthnBuilder;
+
+use self::smtp::{SmtpAuthentication, SmtpEncryption, SmtpSettings, SmtpSettingsPatch};
+use crate::{
+    config::XGuardConfig, db::Id, global_value, random::gen_alphanumeric, rsa_jwk_thumbprint,
+    secret::SecretStringWrapper, types::AuthFlowType,
+};
+
+pub mod smtp;
+
+const SECRET_KEY_MIN_LEN: usize = 64;
+
+global_value!(SETTINGS, Option<Settings>, None, set_settings, get_settings);
+pub const OPENID_KEY_SIZE: usize = 2048;
+
+/// Initializes global `SETTINGS` struct at program startup
+pub async fn initialize_current_settings(pool: &PgPool) -> sqlx::Result<()> {
+    debug!("Initializing global settings struct");
+    if let Some(settings) = Settings::get(pool).await? {
+        set_settings(Some(settings));
+    } else {
+        debug!(
+            "Settings not found in DB. Using default values to initialize global settings struct"
+        );
+        set_settings(Some(Settings::default()));
+    }
+    Ok(())
+}
+
+/// Helper function which stores updated `Settings` in the database and also updates the global
+/// `SETTINGS` struct.
+///
+/// A `None` signing key keeps the previously stored key, because `Settings` deserialized from an
+/// API body never carries the keys. This function cannot clear a signing key.
+pub async fn update_current_settings<'e, E: sqlx::PgExecutor<'e>>(
+    executor: E,
+    mut new_settings: Settings,
+) -> Result<(), SettingsSaveError> {
+    debug!("Updating current settings to: {new_settings:?}");
+    let previous_settings = get_settings().clone();
+    if let Some(previous_settings) = previous_settings.as_ref() {
+        if new_settings.secret_key.is_none() {
+            new_settings.secret_key = previous_settings.secret_key.clone();
+        }
+        if new_settings.openid_signing_key_der.is_none() {
+            new_settings.openid_signing_key_der = previous_settings.openid_signing_key_der.clone();
+        }
+    }
+    new_settings.validate_with_previous(previous_settings.as_ref())?;
+    new_settings.save(executor).await?;
+    set_settings(Some(new_settings));
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SmtpDependent {
+    LdapRemoteEnrollment,
+    GatewayDisconnectNotifications,
+}
+
+impl fmt::Display for SmtpDependent {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::LdapRemoteEnrollment => "LDAP remote enrollment",
+            Self::GatewayDisconnectNotifications => "gateway disconnect notifications",
+        })
+    }
+}
+
+fn format_smtp_dependents(dependents: &[SmtpDependent]) -> String {
+    dependents
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[derive(Error, Debug)]
+pub enum SettingsValidationError {
+    #[error(
+        "SMTP is required by: {}. Disable these features to delete SMTP settings.",
+        format_smtp_dependents(.0)
+    )]
+    CannotDisableSmtpSettings(Vec<SmtpDependent>),
+    #[error(
+        "SMTP is required by: {}. Configure SMTP before enabling these features.",
+        format_smtp_dependents(.0)
+    )]
+    CannotEnableSmtpDependents(Vec<SmtpDependent>),
+    #[error("LDAP must be configured before remote enrollment for LDAP can be enabled")]
+    LdapRequiredForRemoteEnrollment,
+    #[error("Cannot enable LDAP. Required LDAP fields are not configured")]
+    CannotEnableLdap,
+    #[error("Invalid xguard_url `{0}`, url has to be a domain, not IP")]
+    InvalidXGuardUrl(String),
+    #[error("LDAP attribute `{0}` cannot be used to store enrollment tokens")]
+    ForbiddenLdapEnrollmentTokenAttr(String),
+}
+
+/// Attributes holding a credential or the entry's identifier, which a token must not overwrite.
+pub const FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS: [&str; 4] =
+    ["cn", "sambaNTPassword", "uid", "userPassword"];
+
+#[derive(Error, Debug)]
+pub enum SettingsInitializationError {
+    #[error(transparent)]
+    Db(#[from] sqlx::Error),
+    #[error(transparent)]
+    Save(#[from] SettingsSaveError),
+    #[error("Missing required setting: {0}")]
+    Missing(&'static str),
+    #[error("Invalid required setting `{0}`: {1}")]
+    Invalid(&'static str, &'static str),
+}
+
+#[derive(Error, Debug)]
+pub enum SettingsUrlError {
+    #[error("Unable to parse xguard_url `{0}`")]
+    InvalidXGuardUrl(String),
+    #[error("Unable to derive webauthn_rp_id: xguard_url has no host: {0}")]
+    MissingXGuardHost(String),
+    #[error("Unable to derive webauthn_rp_id: xguard_url has no domain: {0}")]
+    MissingXGuardDomain(String),
+    #[error("xguard_url cannot use an IP address host: {0}")]
+    XGuardUrlUsesIpAddress(String),
+    #[error("Invalid WebAuthn configuration for xguard_url `{0}`: {1}")]
+    InvalidWebauthnConfiguration(String, String),
+    #[error("Public Edge URL is not configured")]
+    PublicEdgeUrlEmpty,
+    #[error("Unparsable Edge url: {0}")]
+    UnparsableEdgeUrl(String),
+    #[error("Edge url missing hostname: {0}")]
+    EdgeUrlMissingHostname(String),
+}
+
+#[derive(Error, Debug)]
+pub enum SettingsSaveError {
+    #[error(transparent)]
+    Db(#[from] sqlx::Error),
+    #[error(transparent)]
+    Validation(#[from] SettingsValidationError),
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Type)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[sqlx(type_name = "openid_username_handling", rename_all = "snake_case")]
+pub enum OpenIdUsernameHandling {
+    #[default]
+    /// Removes all forbidden characters
+    RemoveForbidden,
+    /// Replaces all forbidden characters with `_`
+    ReplaceForbidden,
+    /// Removes the email domain, replaces all other forbidden characters with `_`
+    PruneEmailDomain,
+}
+
+#[derive(Clone, Debug, Copy, PartialEq, Deserialize, Serialize, Default, Type)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[sqlx(type_name = "ldap_sync_status", rename_all = "lowercase")]
+pub enum LdapSyncStatus {
+    InSync,
+    #[default]
+    OutOfSync,
+}
+
+impl LdapSyncStatus {
+    #[must_use]
+    pub fn is_out_of_sync(&self) -> bool {
+        matches!(self, Self::OutOfSync)
+    }
+}
+
+/// Custom deserializer for `Option<T>` fields in patch structs.
+///
+/// By default serde cannot distinguish between a missing JSON key and an explicit `null` value
+/// when deserializing into `Option<Option<T>>` (the shape struct-patch generates for nullable
+/// fields) — both map to the outer `None`, causing a PATCH with `"field": null` to be silently
+/// ignored instead of clearing the field.
+///
+/// This deserializer always wraps the result in `Some(...)`, so:
+/// - JSON key absent  → `None`          (handled by `#[serde(default)]` before this is called)
+/// - `"field": null`  → `Some(None)`    → field gets cleared
+/// - `"field": "val"` → `Some(Some(v))` → field gets updated
+///
+/// See <https://github.com/serde-rs/serde/issues/1042> and the struct-patch test suite.
+fn deserialize_optional_field<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Some(Option::deserialize(deserializer)?))
+}
+
+/// Instance settings.
+///
+/// Fields annotated with `#[serde(skip)]` mean they are not required for the web interface.
+///
+/// IMPORTANT: On update, also revise `SettingsNoSecrets`.
+#[derive(Clone, Default, Deserialize, FromRow, PartialEq, Patch, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[patch(attribute(derive(Deserialize, Serialize)))]
+pub struct Settings {
+    // Modules
+    pub openid_enabled: bool,
+    pub wireguard_enabled: bool,
+    pub webhooks_enabled: bool,
+    pub worker_enabled: bool,
+    // MFA
+    pub challenge_template: String,
+    // Branding
+    pub instance_name: String,
+    pub main_logo_url: String,
+    pub nav_logo_url: String,
+    // SMTP
+    #[patch(nesting, attribute(serde(flatten)))]
+    #[serde(flatten)]
+    #[sqlx(flatten)]
+    pub smtp: SmtpSettings,
+    // Enrollment
+    pub enrollment_vpn_step_optional: bool,
+    pub enrollment_welcome_message: Option<String>,
+    pub enrollment_welcome_email: Option<String>,
+    pub enrollment_welcome_email_subject: Option<String>,
+    pub enrollment_use_welcome_message_as_email: bool,
+    pub enrollment_send_welcome_email: bool,
+    pub enrollment_display_welcome_message: bool,
+    // Instance UUID needed for desktop client
+    #[serde(skip)]
+    #[patch(skip)]
+    pub uuid: Uuid,
+    // LDAP
+    pub ldap_url: Option<String>,
+    pub ldap_bind_username: Option<String>,
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
+    #[patch(attribute(serde(deserialize_with = "deserialize_optional_field", default)))]
+    #[patch(attribute(serde(skip_serializing)))]
+    #[serde(skip_serializing)]
+    pub ldap_bind_password: Option<SecretStringWrapper>,
+    pub ldap_group_search_base: Option<String>,
+    pub ldap_user_search_base: Option<String>,
+    // The structural user class
+    pub ldap_user_obj_class: Option<String>,
+    // The structural group class
+    pub ldap_group_obj_class: Option<String>,
+    pub ldap_username_attr: Option<String>,
+    pub ldap_groupname_attr: Option<String>,
+    pub ldap_group_member_attr: Option<String>,
+    pub ldap_member_attr: Option<String>,
+    pub ldap_use_starttls: bool,
+    pub ldap_tls_verify_cert: bool,
+    #[cfg_attr(feature = "openapi", schema(read_only))]
+    #[patch(skip)]
+    pub ldap_sync_status: LdapSyncStatus,
+    pub ldap_enabled: bool,
+    pub ldap_sync_enabled: bool,
+    pub ldap_is_authoritative: bool,
+    pub ldap_uses_ad: bool,
+    pub ldap_sync_account_status: bool,
+    pub ldap_disable_password_management: bool,
+    pub ldap_sync_interval: i32,
+    // Additional object classes for users which determine the added attributes
+    pub ldap_user_auxiliary_obj_classes: Vec<String>,
+    // The attribute which is used to map LDAP usernames to XGuard usernames
+    #[patch(attribute(serde(deserialize_with = "deserialize_optional_field", default)))]
+    pub ldap_user_rdn_attr: Option<String>,
+    pub ldap_sync_groups: Vec<String>,
+    pub ldap_remote_enrollment_enabled: bool,
+    pub ldap_remote_enrollment_send_invite: bool,
+    #[patch(attribute(serde(deserialize_with = "deserialize_optional_field", default)))]
+    pub ldap_enrollment_token_attr: Option<String>,
+    // Whether to create a new account when users try to log in with external OpenID
+    pub openid_create_account: bool,
+    pub openid_username_handling: OpenIdUsernameHandling,
+    pub license: Option<String>,
+    // Gateway disconnect notifications
+    pub gateway_disconnect_notifications_enabled: bool,
+    pub gateway_disconnect_notifications_inactivity_threshold: i32,
+    pub gateway_disconnect_notifications_reconnect_notification_enabled: bool,
+    // General settings
+    pub xguard_url: String,
+    pub default_admin_group_name: String,
+    pub authentication_period_days: i32,
+    pub mfa_code_timeout_seconds: i32,
+    pub public_proxy_url: String,
+    #[cfg_attr(feature = "openapi", schema(read_only))]
+    #[patch(skip)]
+    pub default_admin_id: Option<Id>,
+    // 1.6 config options
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
+    #[serde(skip)]
+    #[patch(skip)]
+    secret_key: Option<SecretStringWrapper>,
+    #[serde(skip)]
+    #[patch(skip)]
+    pub openid_signing_key_der: Option<Vec<u8>>,
+    pub enable_stats_purge: bool,
+    pub stats_purge_frequency_hours: i32,
+    pub stats_purge_threshold_days: i32,
+    pub enrollment_token_timeout_hours: i32,
+    pub password_reset_token_timeout_hours: i32,
+    pub enrollment_session_timeout_minutes: i32,
+    pub password_reset_session_timeout_minutes: i32,
+}
+
+// Implement manually to avoid exposing the license key.
+impl fmt::Debug for Settings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Settings")
+            .field("openid_enabled", &self.openid_enabled)
+            .field("wireguard_enabled", &self.wireguard_enabled)
+            .field("webhooks_enabled", &self.webhooks_enabled)
+            .field("worker_enabled", &self.worker_enabled)
+            .field("challenge_template", &self.challenge_template)
+            .field("instance_name", &self.instance_name)
+            .field("main_logo_url", &self.main_logo_url)
+            .field("nav_logo_url", &self.nav_logo_url)
+            .field("smtp", &self.smtp)
+            .field(
+                "enrollment_vpn_step_optional",
+                &self.enrollment_vpn_step_optional,
+            )
+            .field(
+                "enrollment_welcome_message",
+                &self.enrollment_welcome_message,
+            )
+            .field("enrollment_welcome_email", &self.enrollment_welcome_email)
+            .field(
+                "enrollment_welcome_email_subject",
+                &self.enrollment_welcome_email_subject,
+            )
+            .field(
+                "enrollment_use_welcome_message_as_email",
+                &self.enrollment_use_welcome_message_as_email,
+            )
+            .field(
+                "enrollment_send_welcome_email",
+                &self.enrollment_send_welcome_email,
+            )
+            .field(
+                "enrollment_display_welcome_message",
+                &self.enrollment_display_welcome_message,
+            )
+            .field("uuid", &self.uuid)
+            .field("ldap_url", &self.ldap_url)
+            .field("ldap_bind_username", &self.ldap_bind_username)
+            .field("ldap_bind_password", &self.ldap_bind_password)
+            .field("ldap_group_search_base", &self.ldap_group_search_base)
+            .field("ldap_user_search_base", &self.ldap_user_search_base)
+            .field("ldap_user_obj_class", &self.ldap_user_obj_class)
+            .field("ldap_group_obj_class", &self.ldap_group_obj_class)
+            .field("ldap_username_attr", &self.ldap_username_attr)
+            .field("ldap_groupname_attr", &self.ldap_groupname_attr)
+            .field("ldap_group_member_attr", &self.ldap_group_member_attr)
+            .field("ldap_member_attr", &self.ldap_member_attr)
+            .field("ldap_use_starttls", &self.ldap_use_starttls)
+            .field("ldap_tls_verify_cert", &self.ldap_tls_verify_cert)
+            .field("ldap_sync_status", &self.ldap_sync_status)
+            .field("ldap_enabled", &self.ldap_enabled)
+            .field("ldap_sync_enabled", &self.ldap_sync_enabled)
+            .field("ldap_is_authoritative", &self.ldap_is_authoritative)
+            .field("ldap_uses_ad", &self.ldap_uses_ad)
+            .field("ldap_sync_account_status", &self.ldap_sync_account_status)
+            .field(
+                "ldap_disable_password_management",
+                &self.ldap_disable_password_management,
+            )
+            .field("ldap_sync_interval", &self.ldap_sync_interval)
+            .field(
+                "ldap_user_auxiliary_obj_classes",
+                &self.ldap_user_auxiliary_obj_classes,
+            )
+            .field("ldap_user_rdn_attr", &self.ldap_user_rdn_attr)
+            .field("ldap_sync_groups", &self.ldap_sync_groups)
+            .field(
+                "ldap_enrollment_token_attr",
+                &self.ldap_enrollment_token_attr,
+            )
+            .field("openid_create_account", &self.openid_create_account)
+            .field("openid_username_handling", &self.openid_username_handling)
+            .field(
+                "gateway_disconnect_notifications_enabled",
+                &self.gateway_disconnect_notifications_enabled,
+            )
+            .field(
+                "gateway_disconnect_notifications_inactivity_threshold",
+                &self.gateway_disconnect_notifications_inactivity_threshold,
+            )
+            .field(
+                "gateway_disconnect_notifications_reconnect_notification_enabled",
+                &self.gateway_disconnect_notifications_reconnect_notification_enabled,
+            )
+            .field("xguard_url", &self.xguard_url)
+            .field("default_admin_group_name", &self.default_admin_group_name)
+            .field(
+                "authentication_period_days",
+                &self.authentication_period_days,
+            )
+            .field("mfa_code_timeout_seconds", &self.mfa_code_timeout_seconds)
+            .field("public_proxy_url", &self.public_proxy_url)
+            .field("default_admin_id", &self.default_admin_id)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Serialize)]
+pub struct SecretFieldChange {
+    field: &'static str,
+    changed: bool,
+    was_set: bool,
+    is_set: bool,
+}
+
+impl SecretFieldChange {
+    #[must_use]
+    pub fn new(
+        field: &'static str,
+        before: &Option<SecretStringWrapper>,
+        after: &Option<SecretStringWrapper>,
+    ) -> Self {
+        Self {
+            field,
+            changed: before != after,
+            was_set: before.is_some(),
+            is_set: after.is_some(),
+        }
+    }
+}
+
+impl Settings {
+    /// The credential settings, paired with whether each one changed. Their values are never
+    /// recorded in the activity log.
+    #[must_use]
+    pub fn secret_changes(before: &Self, after: &Self) -> Vec<SecretFieldChange> {
+        vec![
+            SecretFieldChange::new("smtp_password", &before.smtp.password, &after.smtp.password),
+            SecretFieldChange::new(
+                "smtp_oauth_client_secret",
+                &before.smtp.oauth_client_secret,
+                &after.smtp.oauth_client_secret,
+            ),
+            SecretFieldChange::new(
+                "smtp_oauth_refresh_token",
+                &before.smtp.oauth_refresh_token,
+                &after.smtp.oauth_refresh_token,
+            ),
+            SecretFieldChange::new(
+                "ldap_bind_password",
+                &before.ldap_bind_password,
+                &after.ldap_bind_password,
+            ),
+        ]
+    }
+
+    fn validate_secret_key(&self) -> Result<&str, SettingsInitializationError> {
+        let secret_key = self
+            .secret_key()
+            .ok_or(SettingsInitializationError::Missing("secret_key"))?;
+
+        if secret_key.trim().len() != secret_key.len() {
+            return Err(SettingsInitializationError::Invalid(
+                "secret_key",
+                "cannot have leading or trailing whitespace",
+            ));
+        }
+
+        if secret_key.len() < SECRET_KEY_MIN_LEN {
+            return Err(SettingsInitializationError::Invalid(
+                "secret_key",
+                "must be at least 64 characters long",
+            ));
+        }
+
+        Ok(secret_key)
+    }
+
+    /// Secret key getter.
+    #[must_use]
+    pub fn secret_key(&self) -> Option<&str> {
+        self.secret_key
+            .as_ref()
+            .map(SecretStringWrapper::expose_secret)
+    }
+
+    /// Secret key setter.
+    pub fn set_secret_key(&mut self, secret_key: Option<String>) {
+        self.secret_key = secret_key.map(SecretStringWrapper::from);
+    }
+
+    /// Generate random secret key.
+    fn generate_secret_key(&mut self) {
+        self.secret_key = Some(SecretStringWrapper::from(gen_alphanumeric(
+            SECRET_KEY_MIN_LEN,
+        )));
+    }
+
+    /// Generates a new RSA private key for OpenID signing and serializes it as PKCS#8 DER.
+    fn generate_openid_signing_key_der() -> Result<Vec<u8>, SettingsInitializationError> {
+        let key = RsaPrivateKey::new(&mut OsRng, OPENID_KEY_SIZE).map_err(|_| {
+            SettingsInitializationError::Invalid(
+                "openid_signing_key_der",
+                "failed to generate OpenID signing key",
+            )
+        })?;
+
+        let key_der = key.to_pkcs8_der().map_err(|_| {
+            SettingsInitializationError::Invalid(
+                "openid_signing_key_der",
+                "failed to serialize OpenID signing key",
+            )
+        })?;
+
+        Ok(key_der.as_bytes().to_vec())
+    }
+
+    fn validate_openid_signing_key_der(key_der: &[u8]) -> Result<(), SettingsInitializationError> {
+        RsaPrivateKey::from_pkcs8_der(key_der)
+            .map(|_| ())
+            .map_err(|_| {
+                SettingsInitializationError::Invalid(
+                    "openid_signing_key_der",
+                    "invalid RSA private key",
+                )
+            })
+    }
+
+    /// Serializes the deprecated config-provided OpenID RSA key as PKCS#8 DER for storage.
+    fn openid_signing_key_der_from_config(
+        key: &RsaPrivateKey,
+    ) -> Result<Vec<u8>, SettingsInitializationError> {
+        key.to_pkcs8_der()
+            .map(|doc| doc.as_bytes().to_vec())
+            .map_err(|_| {
+                SettingsInitializationError::Invalid(
+                    "openid_signing_key_der",
+                    "failed to serialize RSA private key",
+                )
+            })
+    }
+
+    /// Builds the runtime OpenID signing key from the stored DER-encoded private key.
+    #[must_use]
+    pub fn openid_key(&self) -> Option<CoreRsaPrivateSigningKey> {
+        let key_der = self.openid_signing_key_der.as_deref()?;
+        let key = RsaPrivateKey::from_pkcs8_der(key_der).ok()?;
+        let pem = key.to_pkcs1_pem(LineEnding::default()).ok()?;
+        let key_id = JsonWebKeyId::new(rsa_jwk_thumbprint(&key));
+        CoreRsaPrivateSigningKey::from_pem(pem.as_ref(), Some(key_id)).ok()
+    }
+
+    /// Parse `xguard_url` and reject unsupported host forms.
+    fn parse_xguard_url(&self) -> Result<Url, SettingsUrlError> {
+        let url = Url::parse(&self.xguard_url)
+            .map_err(|_| SettingsUrlError::InvalidXGuardUrl(self.xguard_url.clone()))?;
+        let host = url
+            .host_str()
+            .ok_or_else(|| SettingsUrlError::MissingXGuardHost(self.xguard_url.clone()))?;
+        if host.parse::<IpAddr>().is_ok() {
+            return Err(SettingsUrlError::XGuardUrlUsesIpAddress(
+                self.xguard_url.clone(),
+            ));
+        }
+        Ok(url)
+    }
+
+    /// Derive the WebAuthn relying party ID from `xguard_url`.
+    pub fn webauthn_rp_id(&self) -> Result<String, SettingsUrlError> {
+        let url = self.parse_xguard_url()?;
+        let domain = url
+            .domain()
+            .map(str::to_owned)
+            .or_else(|| match url.host_str() {
+                Some("localhost") => Some("localhost".to_owned()),
+                _ => None,
+            });
+
+        domain.ok_or_else(|| SettingsUrlError::MissingXGuardDomain(self.xguard_url.clone()))
+    }
+
+    /// Derive the cookie domain from `xguard_url`.
+    pub fn cookie_domain(&self) -> Result<String, SettingsUrlError> {
+        let url = self.parse_xguard_url()?;
+        url.host_str()
+            .map(str::to_owned)
+            .ok_or_else(|| SettingsUrlError::MissingXGuardHost(self.xguard_url.clone()))
+    }
+
+    /// Build a WebAuthn configuration from the current XGuard URL.
+    pub fn build_webauthn(&self) -> Result<webauthn_rs::Webauthn, SettingsUrlError> {
+        let url = self.parse_xguard_url()?;
+        let rp_id = self.webauthn_rp_id()?;
+        let builder = WebauthnBuilder::new(&rp_id, &url).map_err(|err| {
+            SettingsUrlError::InvalidWebauthnConfiguration(
+                self.xguard_url.clone(),
+                err.to_string(),
+            )
+        })?;
+        builder.build().map_err(|err| {
+            SettingsUrlError::InvalidWebauthnConfiguration(
+                self.xguard_url.clone(),
+                err.to_string(),
+            )
+        })
+    }
+
+    pub async fn get<'e, E>(executor: E) -> sqlx::Result<Option<Self>>
+    where
+        E: PgExecutor<'e>,
+    {
+        query_as(
+            "SELECT openid_enabled, wireguard_enabled, webhooks_enabled, worker_enabled, \
+            challenge_template, instance_name, main_logo_url, nav_logo_url, smtp_server, \
+            smtp_port, smtp_encryption, smtp_user, smtp_password, smtp_sender, \
+            smtp_authentication, smtp_oauth_issuer_url, smtp_oauth_client_id, \
+            smtp_oauth_client_secret, smtp_oauth_refresh_token, smtp_oauth_tenant_id, \
+            smtp_tls_verify_cert, \
+            enrollment_vpn_step_optional, enrollment_welcome_message, \
+            enrollment_welcome_email, enrollment_welcome_email_subject, \
+            enrollment_use_welcome_message_as_email, enrollment_send_welcome_email, \
+            enrollment_display_welcome_message, \
+            uuid, ldap_url, ldap_bind_username, ldap_bind_password, \
+            ldap_group_search_base, ldap_user_search_base, ldap_user_obj_class, \
+            ldap_group_obj_class, ldap_username_attr, ldap_groupname_attr, \
+            ldap_group_member_attr, ldap_member_attr, openid_create_account, \
+            license, gateway_disconnect_notifications_enabled, ldap_use_starttls, \
+            ldap_tls_verify_cert, gateway_disconnect_notifications_inactivity_threshold, \
+            gateway_disconnect_notifications_reconnect_notification_enabled, \
+            ldap_sync_status, ldap_enabled, ldap_sync_enabled, ldap_is_authoritative, \
+            ldap_sync_interval, ldap_user_auxiliary_obj_classes, ldap_uses_ad, \
+            ldap_sync_account_status, ldap_disable_password_management, ldap_user_rdn_attr, ldap_sync_groups, \
+            ldap_remote_enrollment_enabled, ldap_remote_enrollment_send_invite, \
+            ldap_enrollment_token_attr, openid_username_handling, xguard_url, \
+            default_admin_group_name, authentication_period_days, mfa_code_timeout_seconds, \
+            public_proxy_url, default_admin_id, secret_key, openid_signing_key_der, \
+            enable_stats_purge, stats_purge_frequency_hours, stats_purge_threshold_days, \
+            enrollment_token_timeout_hours, password_reset_token_timeout_hours, \
+            enrollment_session_timeout_minutes, password_reset_session_timeout_minutes \
+            FROM \"settings\" WHERE id = 1",
+        )
+        .fetch_optional(executor)
+        .await
+    }
+
+    /// Checks if given settings are correct
+    pub fn validate(&mut self) -> Result<(), SettingsValidationError> {
+        self.validate_with_previous(None)
+    }
+
+    /// Validates an update against its previous settings state.
+    pub fn validate_against(&mut self, previous: &Self) -> Result<(), SettingsValidationError> {
+        self.validate_with_previous(Some(previous))
+    }
+
+    fn validate_with_previous(
+        &mut self,
+        previous: Option<&Self>,
+    ) -> Result<(), SettingsValidationError> {
+        debug!("Validating settings: {self:?}");
+        if self.uuid.is_nil() {
+            warn!("Detected empty UUID in settings. Generating a new one.");
+            self.uuid = Uuid::new_v4();
+        }
+        self.build_webauthn()
+            .map_err(|_| SettingsValidationError::InvalidXGuardUrl(self.xguard_url.clone()))?;
+
+        let mut smtp_dependents = Vec::new();
+        if !self.smtp_configured() {
+            if self.ldap_remote_enrollment_enabled {
+                smtp_dependents.push(SmtpDependent::LdapRemoteEnrollment);
+            }
+            if self.gateway_disconnect_notifications_enabled {
+                smtp_dependents.push(SmtpDependent::GatewayDisconnectNotifications);
+            }
+        }
+        if !smtp_dependents.is_empty() {
+            let error = if previous.is_some_and(Self::smtp_configured) {
+                SettingsValidationError::CannotDisableSmtpSettings(smtp_dependents)
+            } else {
+                SettingsValidationError::CannotEnableSmtpDependents(smtp_dependents)
+            };
+            warn!("{error}");
+            return Err(error);
+        }
+
+        // Check if LDAP can be enabled
+        if self.ldap_enabled && !self.ldap_configured() {
+            warn!("Cannot enable LDAP. Required fields are not configured.");
+            return Err(SettingsValidationError::CannotEnableLdap);
+        }
+
+        if self.ldap_remote_enrollment_enabled && !self.ldap_configured() {
+            warn!("Cannot enable remote enrollment for LDAP. LDAP is not configured.");
+            return Err(SettingsValidationError::LdapRequiredForRemoteEnrollment);
+        }
+
+        // LDAP attribute names are case-insensitive.
+        if let Some(attr) = self.ldap_enrollment_token_attribute()
+            && let Some(forbidden) = FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS
+                .iter()
+                .find(|forbidden| forbidden.eq_ignore_ascii_case(attr.trim()))
+        {
+            warn!("Cannot use LDAP attribute {forbidden} to store enrollment tokens.");
+            return Err(SettingsValidationError::ForbiddenLdapEnrollmentTokenAttr(
+                attr.to_owned(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub async fn save<'e, E>(&self, executor: E) -> sqlx::Result<()>
+    where
+        E: PgExecutor<'e>,
+    {
+        query!(
+            "UPDATE \"settings\" SET \
+            openid_enabled = $1, \
+            wireguard_enabled = $2, \
+            webhooks_enabled = $3, \
+            worker_enabled = $4, \
+            challenge_template = $5, \
+            instance_name = $6, \
+            main_logo_url = $7, \
+            nav_logo_url = $8, \
+            smtp_server = $9, \
+            smtp_port = $10, \
+            smtp_encryption = $11, \
+            smtp_user = $12, \
+            smtp_password = $13, \
+            smtp_sender = $14, \
+            smtp_authentication = $15, \
+            smtp_oauth_issuer_url = $16, \
+            smtp_oauth_client_id = $17, \
+            smtp_oauth_client_secret = $18, \
+            smtp_oauth_refresh_token = $19, \
+            enrollment_vpn_step_optional = $20, \
+            enrollment_welcome_message = $21, \
+            enrollment_welcome_email = $22, \
+            enrollment_welcome_email_subject = $23, \
+            enrollment_use_welcome_message_as_email = $24, \
+            enrollment_send_welcome_email = $25, \
+            enrollment_display_welcome_message = $26, \
+            uuid = $27, \
+            ldap_url = $28, \
+            ldap_bind_username = $29, \
+            ldap_bind_password  = $30, \
+            ldap_group_search_base = $31, \
+            ldap_user_search_base = $32, \
+            ldap_user_obj_class = $33, \
+            ldap_group_obj_class = $34, \
+            ldap_username_attr = $35, \
+            ldap_groupname_attr = $36, \
+            ldap_group_member_attr = $37, \
+            ldap_member_attr = $38, \
+            ldap_use_starttls = $39, \
+            ldap_tls_verify_cert = $40, \
+            openid_create_account = $41, \
+            license = $42, \
+            gateway_disconnect_notifications_enabled = $43, \
+            gateway_disconnect_notifications_inactivity_threshold = $44, \
+            gateway_disconnect_notifications_reconnect_notification_enabled = $45, \
+            ldap_sync_status = $46, \
+            ldap_enabled = $47, \
+            ldap_sync_enabled = $48, \
+            ldap_is_authoritative = $49, \
+            ldap_sync_interval = $50, \
+            ldap_user_auxiliary_obj_classes = $51, \
+            ldap_uses_ad = $52, \
+            ldap_user_rdn_attr = $53, \
+            ldap_sync_groups = $54, \
+            ldap_remote_enrollment_enabled = $55, \
+            ldap_remote_enrollment_send_invite = $56, \
+            openid_username_handling = $57, \
+            xguard_url = $58, \
+            default_admin_group_name = $59, \
+            authentication_period_days = $60, \
+            mfa_code_timeout_seconds = $61, \
+            public_proxy_url = $62, \
+            default_admin_id = $63, \
+            secret_key = $64, \
+            openid_signing_key_der = $65, \
+            enable_stats_purge = $66, \
+            stats_purge_frequency_hours = $67, \
+            stats_purge_threshold_days = $68, \
+            enrollment_token_timeout_hours = $69, \
+            password_reset_token_timeout_hours = $70, \
+            enrollment_session_timeout_minutes = $71, \
+            password_reset_session_timeout_minutes = $72, \
+            ldap_sync_account_status = $73, \
+            ldap_disable_password_management = $74, \
+            smtp_oauth_tenant_id = $75, \
+            smtp_tls_verify_cert = $76, \
+            ldap_enrollment_token_attr = $77 \
+            WHERE id = 1",
+            self.openid_enabled,
+            self.wireguard_enabled,
+            self.webhooks_enabled,
+            self.worker_enabled,
+            self.challenge_template,
+            self.instance_name,
+            self.main_logo_url,
+            self.nav_logo_url,
+            self.smtp.server,
+            self.smtp.port,
+            &self.smtp.encryption as &SmtpEncryption,
+            self.smtp.user,
+            &self.smtp.password as &Option<SecretStringWrapper>,
+            self.smtp.sender,
+            &self.smtp.authentication as &SmtpAuthentication,
+            self.smtp.oauth_issuer_url,
+            self.smtp.oauth_client_id,
+            &self.smtp.oauth_client_secret as &Option<SecretStringWrapper>,
+            &self.smtp.oauth_refresh_token as &Option<SecretStringWrapper>,
+            self.enrollment_vpn_step_optional,
+            self.enrollment_welcome_message,
+            self.enrollment_welcome_email,
+            self.enrollment_welcome_email_subject,
+            self.enrollment_use_welcome_message_as_email,
+            self.enrollment_send_welcome_email,
+            self.enrollment_display_welcome_message,
+            self.uuid,
+            self.ldap_url,
+            self.ldap_bind_username,
+            &self.ldap_bind_password as &Option<SecretStringWrapper>,
+            self.ldap_group_search_base,
+            self.ldap_user_search_base,
+            self.ldap_user_obj_class,
+            self.ldap_group_obj_class,
+            self.ldap_username_attr,
+            self.ldap_groupname_attr,
+            self.ldap_group_member_attr,
+            self.ldap_member_attr,
+            self.ldap_use_starttls,
+            self.ldap_tls_verify_cert,
+            self.openid_create_account,
+            self.license,
+            self.gateway_disconnect_notifications_enabled,
+            self.gateway_disconnect_notifications_inactivity_threshold,
+            self.gateway_disconnect_notifications_reconnect_notification_enabled,
+            &self.ldap_sync_status as &LdapSyncStatus,
+            self.ldap_enabled,
+            self.ldap_sync_enabled,
+            self.ldap_is_authoritative,
+            self.ldap_sync_interval,
+            &self.ldap_user_auxiliary_obj_classes as &Vec<String>,
+            self.ldap_uses_ad,
+            self.ldap_user_rdn_attr,
+            &self.ldap_sync_groups as &Vec<String>,
+            self.ldap_remote_enrollment_enabled,
+            self.ldap_remote_enrollment_send_invite,
+            &self.openid_username_handling as &OpenIdUsernameHandling,
+            self.xguard_url,
+            self.default_admin_group_name,
+            self.authentication_period_days,
+            self.mfa_code_timeout_seconds,
+            self.public_proxy_url,
+            self.default_admin_id,
+            &self.secret_key as &Option<SecretStringWrapper>,
+            &self.openid_signing_key_der as &Option<Vec<u8>>,
+            self.enable_stats_purge,
+            self.stats_purge_frequency_hours,
+            self.stats_purge_threshold_days,
+            self.enrollment_token_timeout_hours,
+            self.password_reset_token_timeout_hours,
+            self.enrollment_session_timeout_minutes,
+            self.password_reset_session_timeout_minutes,
+            self.ldap_sync_account_status,
+            self.ldap_disable_password_management,
+            self.smtp.oauth_tenant_id,
+            self.smtp.tls_verify_cert,
+            self.ldap_enrollment_token_attr,
+        )
+        .execute(executor)
+        .await?;
+
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn get_current_settings() -> Self {
+        // fetch global settings
+        let maybe_settings = get_settings().clone();
+
+        // panic if settings have not been initialized, since it should happen at startup
+        maybe_settings.expect("Global settings have not been initialized")
+    }
+
+    // Set default values for settings if not set yet.
+    // This is only relevant to a subset of settings which are nullable
+    // and we want to initialize their values.
+    pub async fn initialize_runtime_defaults(
+        pool: &PgPool,
+    ) -> Result<(), SettingsInitializationError> {
+        info!("Initializing runtime default settings");
+
+        let default_settings = HashMap::from([
+            ("enrollment_welcome_message", defaults::WELCOME_MESSAGE),
+            ("enrollment_welcome_email", defaults::WELCOME_MESSAGE),
+            (
+                "enrollment_welcome_email_subject",
+                defaults::WELCOME_EMAIL_SUBJECT,
+            ),
+        ]);
+
+        for (field, value) in default_settings {
+            let query_string = format!("UPDATE settings SET {field} = $1 WHERE {field} IS NULL");
+            query(AssertSqlSafe(query_string))
+                .bind(value)
+                .execute(pool)
+                .await?;
+        }
+
+        let mut settings = Self::get(pool).await?.unwrap_or_default();
+
+        if settings.secret_key.is_some() {
+            settings.validate_secret_key()?;
+        } else {
+            settings.generate_secret_key();
+        }
+
+        match settings.openid_signing_key_der.as_deref() {
+            Some(key_der) => {
+                Self::validate_openid_signing_key_der(key_der)?;
+            }
+            None => {
+                settings.openid_signing_key_der = Some(Self::generate_openid_signing_key_der()?);
+            }
+        }
+
+        update_current_settings(pool, settings).await?;
+
+        Ok(())
+    }
+
+    /// Check if all required SMTP options are configured.
+    /// User & password can be empty for no-auth servers.
+    ///
+    /// Meant to be used to check if sending emails is enabled in current instance.
+    #[must_use]
+    pub fn smtp_configured(&self) -> bool {
+        self.smtp.server.is_some()
+            && self.smtp.port.is_some()
+            && self.smtp.sender.is_some()
+            && self.smtp.server != Some(String::new())
+            && self.smtp.sender != Some(String::new())
+    }
+
+    /// Check if all required LDAP options are configured.
+    ///
+    /// Meant to be used to check if LDAP integration can be enabled.
+    #[must_use]
+    pub fn ldap_configured(&self) -> bool {
+        let non_empty = |opt: &Option<String>| opt.as_deref().is_some_and(|s| !s.is_empty());
+        self.ldap_url
+            .as_deref()
+            .is_some_and(|s| Url::parse(s).is_ok())
+            && non_empty(&self.ldap_bind_username)
+            && self.ldap_bind_password.is_some()  // just check the presence, don't expose the secret
+            && non_empty(&self.ldap_username_attr)
+            && non_empty(&self.ldap_user_search_base)
+            && non_empty(&self.ldap_user_obj_class)
+            && non_empty(&self.ldap_member_attr)
+            && non_empty(&self.ldap_groupname_attr)
+            && non_empty(&self.ldap_group_obj_class)
+            && non_empty(&self.ldap_group_member_attr)
+            && non_empty(&self.ldap_group_search_base)
+    }
+
+    /// Marks LDAP out of sync when LDAP is disabled or its sync scope changed since `before`.
+    pub fn invalidate_ldap_sync_status(&mut self, before: &Self) {
+        if !self.ldap_enabled
+            || before.ldap_is_authoritative != self.ldap_is_authoritative
+            || before.ldap_sync_groups != self.ldap_sync_groups
+        {
+            self.ldap_sync_status = LdapSyncStatus::OutOfSync;
+        }
+    }
+
+    /// Returns the LDAP attribute used to store enrollment tokens, if one is configured.
+    #[must_use]
+    pub fn ldap_enrollment_token_attribute(&self) -> Option<&str> {
+        self.ldap_enrollment_token_attr
+            .as_deref()
+            .filter(|attr| !attr.is_empty())
+    }
+
+    #[must_use]
+    pub fn ldap_using_username_as_rdn(&self) -> bool {
+        self.ldap_user_rdn_attr.as_deref().is_none_or(|rdn| {
+            rdn.is_empty()
+                || self
+                    .ldap_username_attr
+                    .as_deref()
+                    .is_some_and(|attr| rdn.eq_ignore_ascii_case(attr))
+        })
+    }
+
+    /// Get the XGuard URL from the current settings
+    pub fn url() -> Result<Url, url::ParseError> {
+        let settings = Self::get_current_settings();
+        Url::parse(&settings.xguard_url)
+    }
+
+    /// Returns configured URL with "auth/callback" appended to the path.
+    pub fn callback_url(&self) -> Result<Url, url::ParseError> {
+        let mut url = Url::parse(&self.xguard_url)?;
+        // Append "auth/callback" to the URL.
+        if let Ok(mut path_segments) = url.path_segments_mut() {
+            path_segments.extend(&["auth", "callback"]);
+        }
+        Ok(url)
+    }
+
+    #[must_use]
+    pub fn authentication_timeout(&self) -> Duration {
+        Duration::from_hours(self.authentication_period_days as u64 * 24)
+    }
+
+    #[must_use]
+    pub fn stats_purge_frequency(&self) -> Duration {
+        Duration::from_hours(self.stats_purge_frequency_hours as u64)
+    }
+
+    #[must_use]
+    pub fn stats_purge_threshold(&self) -> Duration {
+        Duration::from_hours(self.stats_purge_threshold_days as u64 * 24)
+    }
+
+    #[must_use]
+    pub fn enrollment_token_timeout(&self) -> Duration {
+        Duration::from_hours(self.enrollment_token_timeout_hours as u64)
+    }
+
+    #[must_use]
+    pub fn password_reset_token_timeout(&self) -> Duration {
+        Duration::from_hours(self.password_reset_token_timeout_hours as u64)
+    }
+
+    #[must_use]
+    pub fn enrollment_session_timeout(&self) -> Duration {
+        Duration::from_mins(self.enrollment_session_timeout_minutes as u64)
+    }
+
+    #[must_use]
+    pub fn password_reset_session_timeout(&self) -> Duration {
+        Duration::from_mins(self.password_reset_session_timeout_minutes as u64)
+    }
+
+    pub fn secret_key_required(&self) -> Result<&str, SettingsInitializationError> {
+        self.validate_secret_key()
+    }
+
+    /// Builds the runtime OpenID signing key from stored DER bytes or returns an error if missing or invalid.
+    pub fn openid_key_required(
+        &self,
+    ) -> Result<CoreRsaPrivateSigningKey, SettingsInitializationError> {
+        let key_der =
+            self.openid_signing_key_der
+                .as_deref()
+                .ok_or(SettingsInitializationError::Missing(
+                    "openid_signing_key_der",
+                ))?;
+
+        Self::validate_openid_signing_key_der(key_der)?;
+
+        self.openid_key()
+            .ok_or(SettingsInitializationError::Invalid(
+                "openid_signing_key_der",
+                "failed to build OpenID signing key",
+            ))
+    }
+
+    pub fn proxy_public_url(&self) -> Result<Url, url::ParseError> {
+        Url::parse(&self.public_proxy_url)
+    }
+
+    pub fn proxy_hostname(&self) -> Result<String, SettingsUrlError> {
+        if self.public_proxy_url.trim().is_empty() {
+            return Err(SettingsUrlError::PublicEdgeUrlEmpty);
+        }
+        let url = self
+            .proxy_public_url()
+            .map_err(|_err| SettingsUrlError::UnparsableEdgeUrl(self.public_proxy_url.clone()))?;
+        let hostname = url
+            .host_str()
+            .ok_or_else(|| SettingsUrlError::EdgeUrlMissingHostname(self.public_proxy_url.clone()))?
+            .to_owned();
+
+        Ok(hostname)
+    }
+
+    #[allow(deprecated)]
+    fn apply_from_config(&mut self, config: &XGuardConfig) {
+        const MINUTE: u64 = 60;
+        const HOUR: u64 = MINUTE * 60;
+        const DAY: u64 = HOUR * 24;
+
+        if let Some(url) = &config.url {
+            self.xguard_url = url.to_string();
+        }
+        if let Some(secret_key) = &config.secret_key {
+            self.secret_key = Some(SecretStringWrapper::from(secret_key.to_owned()));
+            if let Err(err) = self.validate_secret_key() {
+                warn!(
+                    "Invalid secret_key provided in deprecated config, generating new one: {err}"
+                );
+                self.generate_secret_key();
+            }
+        }
+        if let Some(openid_signing_key) = &config.openid_signing_key {
+            match Self::openid_signing_key_der_from_config(openid_signing_key) {
+                Ok(key_der) => {
+                    self.openid_signing_key_der = Some(key_der);
+                }
+                Err(err) => {
+                    warn!(
+                        "Invalid openid_signing_key provided in deprecated config, generating new one: {err}"
+                    );
+                    self.openid_signing_key_der = Self::generate_openid_signing_key_der().ok();
+                }
+            }
+        }
+        if let Some(enrollment_url) = &config.enrollment_url {
+            self.public_proxy_url = enrollment_url.to_string();
+        }
+        if let Some(mfa_code_timeout) = config.mfa_code_timeout {
+            self.mfa_code_timeout_seconds = mfa_code_timeout.as_secs() as i32;
+        }
+        if let Some(session_timeout) = config.session_timeout {
+            self.authentication_period_days = (session_timeout.as_secs() / DAY) as i32;
+        }
+        if let Some(disable_stats_purge) = config.disable_stats_purge {
+            self.enable_stats_purge = !disable_stats_purge;
+        }
+        if let Some(stats_purge_frequency) = config.stats_purge_frequency {
+            self.stats_purge_frequency_hours = (stats_purge_frequency.as_secs() / HOUR) as i32;
+        }
+        if let Some(stats_purge_threshold) = config.stats_purge_threshold {
+            self.stats_purge_threshold_days = (stats_purge_threshold.as_secs() / DAY) as i32;
+        }
+        if let Some(enrollment_token_timeout) = config.enrollment_token_timeout {
+            self.enrollment_token_timeout_hours =
+                (enrollment_token_timeout.as_secs() / HOUR) as i32;
+        }
+        if let Some(password_reset_token_timeout) = config.password_reset_token_timeout {
+            self.password_reset_token_timeout_hours =
+                (password_reset_token_timeout.as_secs() / HOUR) as i32;
+        }
+        if let Some(enrollment_session_timeout) = config.enrollment_session_timeout {
+            self.enrollment_session_timeout_minutes =
+                (enrollment_session_timeout.as_secs() / MINUTE) as i32;
+        }
+        if let Some(password_reset_session_timeout) = config.password_reset_session_timeout {
+            self.password_reset_session_timeout_minutes =
+                (password_reset_session_timeout.as_secs() / MINUTE) as i32;
+        }
+    }
+
+    pub async fn update_from_config<'e, E>(
+        &mut self,
+        executor: E,
+        config: &XGuardConfig,
+    ) -> Result<(), SettingsSaveError>
+    where
+        E: PgExecutor<'e>,
+    {
+        info!("Updating Settings from XGuardConfig: {config:?}");
+        self.apply_from_config(config);
+
+        update_current_settings(executor, self.clone()).await?;
+
+        info!("Updated Settings from XGuardConfig: {config:?}");
+        Ok(())
+    }
+
+    /// Returns configured Edge Component URL with the correct callback path appended depending on auth flow type.
+    pub fn edge_callback_url(&self, auth_flow_type: AuthFlowType) -> Result<Url, url::ParseError> {
+        let mut url = self.proxy_public_url()?;
+        // Append callback segments to the URL.
+        if let Ok(mut path_segments) = url.path_segments_mut() {
+            match auth_flow_type {
+                AuthFlowType::Enrollment => path_segments.extend(&["openid", "callback"]),
+                AuthFlowType::Mfa => path_segments.extend(&["openid", "mfa", "callback"]),
+            };
+        }
+        Ok(url)
+    }
+
+    pub fn cookie_secure(&self) -> Result<bool, SettingsUrlError> {
+        let url = self.parse_xguard_url()?;
+        Ok(url.scheme() == "https")
+    }
+
+    #[must_use]
+    pub fn configured_public_proxy_url(&self) -> Option<String> {
+        (!self.public_proxy_url.is_empty()).then(|| self.public_proxy_url.clone())
+    }
+
+    #[must_use]
+    pub fn edge_public_settings_changed(&self, other: &Self) -> bool {
+        self.smtp_configured() != other.smtp_configured()
+            || self.public_proxy_url != other.public_proxy_url
+    }
+}
+
+#[derive(Serialize)]
+pub struct SettingsEssentials {
+    pub instance_name: String,
+    pub main_logo_url: String,
+    pub nav_logo_url: String,
+    pub wireguard_enabled: bool,
+    pub webhooks_enabled: bool,
+    pub worker_enabled: bool,
+    pub openid_enabled: bool,
+}
+
+impl SettingsEssentials {
+    pub async fn get_settings_essentials<'e, E>(executor: E) -> sqlx::Result<Self>
+    where
+        E: PgExecutor<'e>,
+    {
+        query_as!(
+            SettingsEssentials,
+            "SELECT s.instance_name, s.main_logo_url, s.nav_logo_url, s.wireguard_enabled, \
+            s.webhooks_enabled, s.worker_enabled, s.openid_enabled \
+			FROM settings s \
+			WHERE s.id = 1 \
+			LIMIT 1"
+        )
+        .fetch_one(executor)
+        .await
+    }
+}
+
+pub mod defaults;
+#[cfg(test)]
+mod tests;

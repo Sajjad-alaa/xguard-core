@@ -21,24 +21,24 @@ import type { ApiError, LdapDryRunResult, Settings } from '../../../shared/api/t
 import { businessBadgeProps } from '../../../shared/components/badges/BusinessBadge';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { DescriptionBlock } from '../../../shared/components/DescriptionBlock/DescriptionBlock';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { EvenSplit } from '../../../shared/defguard-ui/components/EvenSplit/EvenSplit';
-import { Fold } from '../../../shared/defguard-ui/components/Fold/Fold';
-import { Helper } from '../../../shared/defguard-ui/components/Helper/Helper';
-import { IconKind } from '../../../shared/defguard-ui/components/Icon';
-import { MarkedSection } from '../../../shared/defguard-ui/components/MarkedSection/MarkedSection';
-import { MarkedSectionHeader } from '../../../shared/defguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { EvenSplit } from '../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
+import { Fold } from '../../../shared/xguard-ui/components/Fold/Fold';
+import { Helper } from '../../../shared/xguard-ui/components/Helper/Helper';
+import { IconKind } from '../../../shared/xguard-ui/components/Icon';
+import { MarkedSection } from '../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
+import { MarkedSectionHeader } from '../../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import {
   Snackbar,
   SnackbarAnchor,
-} from '../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { TooltipContent } from '../../../shared/defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../../shared/defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../../shared/defguard-ui/providers/tooltip/TooltipTrigger';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+} from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { TooltipContent } from '../../../shared/xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../../shared/xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../../shared/xguard-ui/providers/tooltip/TooltipTrigger';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
@@ -620,8 +620,8 @@ const PageForm = () => {
                       <field.FormInteractiveBlock
                         variant={'radio'}
                         value={false}
-                        title={m.settings_ldap_authority_defguard_title()}
-                        content={m.settings_ldap_authority_defguard_content()}
+                        title={m.settings_ldap_authority_xguard_title()}
+                        content={m.settings_ldap_authority_xguard_content()}
                       />
                     )}
                   </form.AppField>

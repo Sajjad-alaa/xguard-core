@@ -11,16 +11,16 @@ import {
 import { useMemo } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import type { ButtonProps } from '../../shared/defguard-ui/components/Button/types';
-import { EmptyStateFlexible } from '../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
-import { tableEditColumnSize } from '../../shared/defguard-ui/components/table/consts';
-import { TableBody } from '../../shared/defguard-ui/components/table/TableBody/TableBody';
-import { TableCell } from '../../shared/defguard-ui/components/table/TableCell/TableCell';
-import { TableEditCell } from '../../shared/defguard-ui/components/table/TableEditCell/TableEditCell';
-import { TableTop } from '../../shared/defguard-ui/components/table/TableTop/TableTop';
-import type { TableFilterMessages } from '../../shared/defguard-ui/components/table/types';
-import { Snackbar } from '../../shared/defguard-ui/providers/snackbar/snackbar';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
+import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import { tableEditColumnSize } from '../../shared/xguard-ui/components/table/consts';
+import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/TableBody';
+import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
+import { TableEditCell } from '../../shared/xguard-ui/components/table/TableEditCell/TableEditCell';
+import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
+import type { TableFilterMessages } from '../../shared/xguard-ui/components/table/types';
+import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
 import { getLocationsQueryOptions } from '../../shared/query';
 import { buildPostureCheckMenuItems } from './postureCheckMenu';
 import {
@@ -192,33 +192,33 @@ export const PostureChecksTable = ({
           </TableCell>
         ),
       }),
-      columnHelper.accessor('defguardDesktopFilters', {
-        id: 'defguard_desktop',
+      columnHelper.accessor('xguardDesktopFilters', {
+        id: 'xguard_desktop',
         header: 'Desktop client',
         minSize: 180,
         enableColumnFilter: true,
         filterFn: 'arrIncludesSome',
         meta: {
-          filterOptions: columnFilterOptions.defguard_desktop,
+          filterOptions: columnFilterOptions.xguard_desktop,
         },
         cell: (info) => (
           <TableCell>
-            <span>{info.row.original.defguardDesktop}</span>
+            <span>{info.row.original.xguardDesktop}</span>
           </TableCell>
         ),
       }),
-      columnHelper.accessor('defguardMobileFilters', {
-        id: 'defguard_mobile',
+      columnHelper.accessor('xguardMobileFilters', {
+        id: 'xguard_mobile',
         header: 'Mobile app',
         minSize: 180,
         enableColumnFilter: true,
         filterFn: 'arrIncludesSome',
         meta: {
-          filterOptions: columnFilterOptions.defguard_mobile,
+          filterOptions: columnFilterOptions.xguard_mobile,
         },
         cell: (info) => (
           <TableCell>
-            <span>{info.row.original.defguardMobile}</span>
+            <span>{info.row.original.xguardMobile}</span>
           </TableCell>
         ),
       }),

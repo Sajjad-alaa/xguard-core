@@ -1,6 +1,6 @@
 import { m } from '../../../../paraglide/messages';
-import { Icon, IconKind } from '../../../defguard-ui/components/Icon';
-import { ThemeVariable } from '../../../defguard-ui/types';
+import { Icon, IconKind } from '../../../xguard-ui/components/Icon';
+import { ThemeVariable } from '../../../xguard-ui/types';
 import type { ContextualHelpDoc } from '../types';
 
 type Props = {

@@ -6,12 +6,12 @@ import z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../api/api';
 import type { DeviceLocationIp, DeviceLocationIpsResponse } from '../../../api/types';
-import { Modal } from '../../../defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../defguard-ui/components/ModalControls/ModalControls';
-import { SuggestedIpInput } from '../../../defguard-ui/components/SuggestedIPInput/SuggestedIPInput';
-import { Snackbar } from '../../../defguard-ui/providers/snackbar/snackbar';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
-import { createZodIssue, zodIssueMessage } from '../../../defguard-ui/utils/zod';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
+import { SuggestedIpInput } from '../../../xguard-ui/components/SuggestedIPInput/SuggestedIPInput';
+import { Snackbar } from '../../../xguard-ui/providers/snackbar/snackbar';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
+import { createZodIssue, zodIssueMessage } from '../../../xguard-ui/utils/zod';
 import { useAppForm } from '../../../form';
 import {
   closeModal,

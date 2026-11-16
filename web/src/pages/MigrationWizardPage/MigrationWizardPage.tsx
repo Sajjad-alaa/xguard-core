@@ -167,7 +167,7 @@ export const MigrationWizardPage = () => {
   useEffect(() => {
     if (settings) {
       useMigrationWizardStore.setState({
-        defguard_url: settings.defguard_url,
+        xguard_url: settings.xguard_url,
         public_proxy_url: settings.public_proxy_url,
         default_admin_group_name: settings.default_admin_group_name,
         authentication_period_days: settings.authentication_period_days,

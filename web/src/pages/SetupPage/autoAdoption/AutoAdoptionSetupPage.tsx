@@ -6,13 +6,13 @@ import type { SetupAutoAdoptionResponse } from '../../../shared/api/types';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import type { WizardPageStep } from '../../../shared/components/wizard/types';
 import { WizardPage } from '../../../shared/components/wizard/WizardPage/WizardPage';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { CodeCard } from '../../../shared/defguard-ui/components/CodeCard/CodeCard';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { ExternalLink } from '../../../shared/defguard-ui/components/ExternalLink/ExternalLink';
-import { Icon } from '../../../shared/defguard-ui/components/Icon';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { CodeCard } from '../../../shared/xguard-ui/components/CodeCard/CodeCard';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { ExternalLink } from '../../../shared/xguard-ui/components/ExternalLink/ExternalLink';
+import { Icon } from '../../../shared/xguard-ui/components/Icon';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import worldMap from '../assets/world-map.png';
 import { AutoAdoptionAdminUserStep } from './steps/AutoAdoptionAdminUserStep';
 import { AutoAdoptionExternalUrlSettingsStep } from './steps/AutoAdoptionExternalUrlSettingsStep';
@@ -25,7 +25,7 @@ import { AutoAdoptionVpnSettingsStep } from './steps/AutoAdoptionVpnSettingsStep
 import { AutoAdoptionSetupStep, type AutoAdoptionSetupStepValue } from './types';
 import { useAutoAdoptionSetupWizardStore } from './useAutoAdoptionSetupWizardStore';
 import './style.scss';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 
 const componentLabel = (component: string): string => {
   if (component === 'edge') return m.initial_setup_auto_adoption_component_edge();
@@ -110,7 +110,7 @@ const AutoAdoptionFailedWelcomeContent = ({
           <Icon icon="support" />
           <p>
             {m.initial_setup_auto_adoption_failed_support_business_prefix()}{' '}
-            <a href="mailto:support@defguard.net">
+            <a href="mailto:support@xguard.local">
               {m.initial_setup_auto_adoption_failed_support_business_link()}
             </a>{' '}
             {m.initial_setup_auto_adoption_failed_support_business_suffix()}
@@ -120,7 +120,7 @@ const AutoAdoptionFailedWelcomeContent = ({
           <Icon icon="config" />
           <p>
             {m.initial_setup_auto_adoption_failed_support_community_prefix()}{' '}
-            <ExternalLink href="https://github.com/DefGuard/defguard/discussions">
+            <ExternalLink href="https://github.com/Sajjad-alaa/xguard-core/discussions">
               {m.initial_setup_auto_adoption_failed_support_community_link()}
             </ExternalLink>
           </p>

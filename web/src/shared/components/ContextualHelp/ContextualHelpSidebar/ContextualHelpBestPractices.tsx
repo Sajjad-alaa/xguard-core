@@ -1,6 +1,6 @@
 import { m } from '../../../../paraglide/messages';
-import { Icon, IconKind } from '../../../defguard-ui/components/Icon';
-import { RenderMarkdown } from '../../../defguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { Icon, IconKind } from '../../../xguard-ui/components/Icon';
+import { RenderMarkdown } from '../../../xguard-ui/components/RenderMarkdown/RenderMarkdown';
 
 type Props = {
   content: string;

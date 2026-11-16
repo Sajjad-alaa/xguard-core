@@ -3,11 +3,11 @@ import './style.scss';
 import { useMutation } from '@tanstack/react-query';
 import { getFile } from 'easy-file-picker';
 import { m } from '../../../paraglide/messages';
-import { Button } from '../../defguard-ui/components/Button/Button';
-import { FieldError } from '../../defguard-ui/components/FieldError/FieldError';
-import { Icon, IconKind } from '../../defguard-ui/components/Icon';
-import { ThemeVariable } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Button } from '../../xguard-ui/components/Button/Button';
+import { FieldError } from '../../xguard-ui/components/FieldError/FieldError';
+import { Icon, IconKind } from '../../xguard-ui/components/Icon';
+import { ThemeVariable } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import type { UploadFieldProps } from './types';
 
 export const UploadField = ({

@@ -3,7 +3,7 @@ import { LayoutGrid } from '../LayoutGrid/LayoutGrid';
 import { Page } from '../Page/Page';
 import './style.scss';
 import clsx from 'clsx';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { Breadcrumbs } from '../Breadcrumbs/Breadcrumbs';
 import type { BreadcrumbsProps } from '../Breadcrumbs/types';
 import { EditHeader } from '../EditHeader/EditHeader';

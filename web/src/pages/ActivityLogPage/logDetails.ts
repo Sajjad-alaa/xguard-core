@@ -5,7 +5,7 @@ import {
   type ActivityLogEventTypeValue,
 } from '../../shared/api/activity-log-types';
 import type { ActivityLogEventMetadata } from '../../shared/api/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 
 /**
  * Events whose details are presented in the log details drawer. Mirrors the settings

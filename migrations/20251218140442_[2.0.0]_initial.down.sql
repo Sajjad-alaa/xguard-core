@@ -89,7 +89,7 @@ ALTER TABLE settings
     DROP COLUMN ca_key_der,
     DROP COLUMN ca_cert_der,
     DROP COLUMN ca_expiry,
-    DROP COLUMN defguard_url,
+    DROP COLUMN xguard_url,
     DROP COLUMN default_admin_group_name,
     DROP COLUMN authentication_period_days,
     DROP COLUMN mfa_code_timeout_seconds,

@@ -1,0 +1,1518 @@
+use std::{
+    collections::VecDeque,
+    convert::Infallible,
+    sync::{Arc, Mutex, PoisonError},
+    time::Duration,
+};
+
+use axum::{
+    Extension, Json,
+    extract::Path,
+    http::StatusCode,
+    response::sse::{Event, KeepAlive, Sse},
+};
+use xguard_certs::der_to_pem;
+use xguard_common::{
+    VERSION,
+    auth::claims::{Claims, ClaimsType},
+    db::{
+        Id,
+        models::{
+            Certificates, Settings,
+            certificates::ProxyCertSource,
+            gateway::Gateway,
+            initial_setup_wizard::{InitialSetupState, InitialSetupStep},
+            proxy::Proxy,
+            settings::update_current_settings,
+            wizard::Wizard,
+        },
+    },
+    types::proxy::ProxyControlMessage,
+    utils::{strip_scheme, validate_host_only},
+};
+use xguard_proto::{
+    common::{CertBundle, CertificateInfo},
+    gateway::gateway_setup_client::GatewaySetupClient,
+    proxy::{AcmeStep, proxy_setup_client::ProxySetupClient},
+};
+use xguard_version::{Version, client::ClientVersionInterceptor};
+use futures::Stream;
+use reqwest::Url;
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use tokio::{
+    sync::{
+        mpsc::{Sender, UnboundedReceiver, UnboundedSender, unbounded_channel},
+        oneshot,
+    },
+    time::{Instant, sleep_until, timeout},
+};
+use tokio_stream::StreamExt;
+use tonic::{
+    Request, Status,
+    service::Interceptor,
+    transport::{Certificate, ClientTlsConfig, Endpoint},
+};
+use tracing::Instrument;
+
+#[cfg(feature = "openapi")]
+use crate::handlers::ApiErrorResponse;
+use crate::{
+    auth::{AdminRole, SessionInfo},
+    cert_settings::ensure_https,
+    enterprise::{LicenseFeature, has_enterprise_access},
+    error::WebError,
+    handlers::settings::broadcast_public_settings,
+    letsencrypt::{ACME_TIMEOUT, acme_step_name, call_proxy_trigger_acme, parse_cert_expiry},
+    setup_logs::scope_setup_logs,
+    version::{MIN_GATEWAY_VERSION, MIN_PROXY_VERSION},
+};
+
+const TOKEN_CLIENT_ID: &str = "XGuard Core";
+const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
+const KEEPALIVE: Duration = Duration::from_secs(5);
+/// Maximum lifetime of a one-time setup session token.
+/// The setup handshake must complete within this window; tokens that outlive
+/// it are useless and limiting the expiry reduces the damage window if the
+/// token is captured from the plaintext setup channel.
+const SETUP_TOKEN_EXPIRY_SECS: u64 = 300;
+
+/// Guard that aborts a tokio task when dropped
+struct TaskGuard(tokio::task::JoinHandle<()>);
+
+impl Drop for TaskGuard {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ProxySetupRequest {
+    pub ip_or_domain: String,
+    pub grpc_port: u16,
+    pub common_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct GatewaySetupRequest {
+    pub common_name: String,
+    pub ip_or_domain: String,
+    pub grpc_port: u16,
+}
+
+/// Empty request body for the ACME stream endpoint.
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct AcmeStreamRequest {}
+
+#[derive(Debug, Serialize, Copy, Clone)]
+#[serde(tag = "step", content = "data")]
+pub enum SetupStep {
+    CheckingConfiguration,
+    CheckingAvailability,
+    CheckingVersion,
+    ObtainingCsr,
+    SigningCertificate,
+    ConfiguringTls,
+    Done,
+}
+
+#[derive(Serialize)]
+pub struct SetupResponse {
+    #[serde(flatten)]
+    pub step: SetupStep,
+    /// Gateway or Edge version.
+    pub version: Option<String>,
+    pub message: Option<String>,
+    pub logs: Option<Vec<String>>,
+    pub error: bool,
+}
+
+pub(crate) enum AdoptionProgress {
+    Step(SetupStep),
+    Version(String),
+    /// A log line streamed from the gateway's `Start` RPC during setup.
+    Log(String),
+}
+
+#[derive(Clone)]
+struct AuthInterceptor {
+    token: String,
+}
+
+impl AuthInterceptor {
+    const fn new(token: String) -> Self {
+        Self { token }
+    }
+}
+
+impl Interceptor for AuthInterceptor {
+    fn call(&mut self, mut request: Request<()>) -> Result<Request<()>, Status> {
+        request.metadata_mut().insert(
+            "authorization",
+            format!("Bearer {}", self.token).parse().unwrap(),
+        );
+        Ok(request)
+    }
+}
+
+fn fallback_message(err: &str, last_step: SetupStep) -> String {
+    format!(
+        r#"{{"step":"{last_step:?}","message":"Failed to serialize error response: {err}","error":true}}"#,
+    )
+}
+
+fn error_message(message: &str, last_step: SetupStep, logs: Option<Vec<String>>) -> Event {
+    let response = SetupResponse {
+        step: last_step,
+        version: None,
+        message: Some(message.to_owned()),
+        logs,
+        error: true,
+    };
+
+    Event::default().data(match serde_json::to_string(&response) {
+        Ok(body) => body,
+        Err(e) => fallback_message(&e.to_string(), last_step),
+    })
+}
+
+fn set_step_message(next_step: SetupStep) -> Event {
+    let response = SetupResponse {
+        step: next_step,
+        version: None,
+        message: None,
+        logs: None,
+        error: false,
+    };
+
+    match serde_json::to_string(&response) {
+        Ok(body) => Event::default().data(body),
+        Err(e) => Event::default().data(fallback_message(&e.to_string(), next_step)),
+    }
+}
+
+struct SetupFlow {
+    last_step: SetupStep,
+    log_buffer: Arc<Mutex<VecDeque<String>>>,
+    log_rx: UnboundedReceiver<String>,
+}
+
+impl SetupFlow {
+    fn new(log_rx: UnboundedReceiver<String>, log_buffer: Arc<Mutex<VecDeque<String>>>) -> Self {
+        Self {
+            last_step: SetupStep::CheckingConfiguration,
+            log_buffer,
+            log_rx,
+        }
+    }
+
+    fn step(&mut self, next_step: SetupStep) -> Event {
+        self.last_step = next_step;
+        set_step_message(next_step)
+    }
+
+    fn error(&mut self, message: &str) -> Event {
+        error!("{message}");
+
+        let mut collected_logs = {
+            let mut guard = self
+                .log_buffer
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            std::mem::take(&mut *guard).into_iter().collect::<Vec<_>>()
+        };
+        while let Ok(log) = self.log_rx.try_recv() {
+            collected_logs.push(log);
+        }
+        let logs = if collected_logs.is_empty() {
+            None
+        } else {
+            Some(collected_logs)
+        };
+
+        error_message(message, self.last_step, logs)
+    }
+}
+
+/// Stream the progress of edge (proxy) TLS setup
+///
+/// Drives the whole TLS setup flow and reports its progress as Server-Sent Events.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/proxy/setup/stream",
+    tag = "proxy",
+    request_body = ProxySetupRequest,
+    responses(
+        (status = 200, description = "Server-Sent Event stream with setup progress. Each event carries the current step name and its result.", content_type = "text/event-stream", body = String, example = json!("data: {\"step\":\"CheckingConfiguration\",\"version\":null,\"message\":null,\"logs\":null,\"error\":false}\n\ndata: {\"step\":\"CheckingVersion\",\"version\":\"2.1.0\",\"message\":null,\"logs\":null,\"error\":false}\n\ndata: {\"step\":\"SigningCertificate\",\"version\":null,\"message\":null,\"logs\":null,\"error\":false}\n\ndata: {\"step\":\"Done\",\"version\":null,\"message\":null,\"logs\":null,\"error\":false}\n\n")),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn setup_proxy_tls_stream(
+    _admin: AdminRole,
+    session: SessionInfo,
+    Extension(pool): Extension<PgPool>,
+    proxy_control_tx: Option<Extension<Sender<ProxyControlMessage>>>,
+    Json(request): Json<ProxySetupRequest>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let (log_tx, log_rx) = unbounded_channel::<String>();
+    let log_buffer = Arc::new(Mutex::new(VecDeque::new()));
+    let inner_log_buffer = Arc::clone(&log_buffer);
+    let inner_stream = async_stream::stream! {
+        let mut flow = SetupFlow::new(log_rx, inner_log_buffer.clone());
+
+        // check if tries to connect more then 1 proxy without active enterprise license
+        if !has_enterprise_access(Some(LicenseFeature::ComponentHa)) {
+            match Proxy::list(&pool).await {
+                Ok(current_proxies) => {
+                    if !current_proxies.is_empty() {
+                        yield Ok(flow.error(
+                            "Enterprise license is required for connecting more than one Edge.",
+                        ));
+                        return;
+                    }
+                }
+                Err(e) => {
+                    yield Ok(flow.error(&format!("Failed to query existing proxies: {e}")));
+                    return;
+                }
+            }
+        }
+
+        debug!("License check passed");
+
+        let ip_or_domain = strip_scheme(&request.ip_or_domain);
+
+        if let Err(msg) = validate_host_only(ip_or_domain) {
+            yield Ok(flow.error(&msg));
+            return;
+        }
+
+        // `u16` covers the expected port range, so we just have to check for 0
+        if request.grpc_port == 0 {
+            yield Ok(flow.error("grpc_port must not be 0"));
+            return;
+        }
+
+        // Step 1: Check configuration
+        yield Ok(flow.step(SetupStep::CheckingConfiguration));
+        match Proxy::find_by_address_port(&pool, ip_or_domain, i32::from(request.grpc_port)).await {
+            Ok(Some(proxy)) => {
+                yield Ok(flow.error(&format!(
+                    "Edge with address {ip_or_domain}:{} is already registered with name \"{}\".",
+                     request.grpc_port, proxy.name
+                )));
+                return;
+            }
+            Ok(None) => {
+                debug!(
+                    "Verified no existing Edge registration for {ip_or_domain}:{}",
+                     request.grpc_port
+                );
+            }
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to query existing Edge: {e}")));
+                return;
+            }
+        }
+
+        debug!("Configuration check passed");
+
+        let url_str = format!("http://{ip_or_domain}:{}",  request.grpc_port);
+        let url = match Url::parse(&url_str) {
+            Ok(u) => u,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Invalid URL: {e}")));
+                return;
+            }
+        };
+
+        debug!("Successfully validated Edge address: {url_str}");
+
+        let endpoint = match Endpoint::from_shared(url_str) {
+            Ok(e) => e,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to create endpoint: {e}")));
+                return;
+            }
+        };
+
+        let endpoint = endpoint
+            .http2_keep_alive_interval(KEEPALIVE)
+            .tcp_keepalive(Some(KEEPALIVE))
+            .keep_alive_while_idle(true);
+
+        debug!("Connection endpoint configured with keep-alive settings");
+
+        let certs = match Certificates::get(&pool).await {
+            Ok(Some(c)) => c,
+            Ok(None) => {
+                yield Ok(flow.error("CA certificate not found"));
+                return;
+            }
+            Err(err) => {
+                yield Ok(flow.error(&format!("Failed to load certificates: {err}")));
+                return;
+            }
+        };
+        let Some(ca_cert_der) = certs.ca_cert_der.clone() else {
+            yield Ok(flow.error("CA certificate not found in settings"));
+            return;
+        };
+
+        let cert_pem = match der_to_pem(&ca_cert_der, xguard_certs::PemLabel::Certificate) {
+            Ok(pem) => pem,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to convert CA cert DER to PEM: {e}")));
+                return;
+            }
+        };
+        let tls = ClientTlsConfig::new().ca_certificate(Certificate::from_pem(&cert_pem));
+
+        debug!("Loaded CA certificate for secure communication");
+
+        let endpoint = match endpoint.tls_config(tls) {
+            Ok(e) => e,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to configure TLS for endpoint: {e}")));
+                return;
+            }
+        };
+
+        debug!(
+            "Prepared secure connection endpoint for Edge at {ip_or_domain}:{}",
+             request.grpc_port
+        );
+
+        let version = match Version::parse(VERSION) {
+            Ok(v) => v,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to parse version: {e}")));
+                return;
+            }
+        };
+
+        // Step 2: Check availability
+        yield Ok(flow.step(SetupStep::CheckingAvailability));
+
+        let version_clone = version.clone();
+        let token = match Claims::new(
+            xguard_common::auth::claims::ClaimsType::Gateway,
+            url.to_string(),
+            TOKEN_CLIENT_ID.to_owned(),
+            SETUP_TOKEN_EXPIRY_SECS,
+        )
+        .to_jwt()
+        {
+            Ok(token) => token,
+            Err(err) => {
+                yield Ok(flow.error(&format!("Failed to generate setup token: {err}")));
+                return;
+            }
+        };
+
+        debug!("Generated secure setup token for Edge authentication");
+
+        let version_interceptor = ClientVersionInterceptor::new(version);
+        let auth_interceptor = AuthInterceptor::new(token);
+        let mut client = ProxySetupClient::with_interceptor(endpoint.connect_lazy(), move |mut req: Request<()>| {
+            req = version_interceptor.clone().call(req)?;
+            auth_interceptor.clone().call(req)
+        });
+
+        debug!(
+            "Initiating connection to Edge at {ip_or_domain}:{}",
+             request.grpc_port
+        );
+
+        let response_with_metadata = match timeout(CONNECTION_TIMEOUT, client.start(())).await {
+            Ok(Ok(response)) => response,
+            Ok(Err(status)) => {
+                let error_msg = status.message();
+                if error_msg.contains("h2 protocol error") || error_msg.contains("http2 error") {
+                    yield Ok(flow.error(&format!(
+                        "Failed to connect to Edge at {ip_or_domain}:{}: {error_msg}. This may indicate that \
+                        the Edge is already configured with TLS. Please check if the Edge has \
+                        already been set up.",
+                         request.grpc_port
+                    )));
+                } else {
+                    yield Ok(flow.error(&format!(
+                        "Failed to connect to Edge at {ip_or_domain}:{}: {error_msg}. Please ensure the \
+                        address and port are correct and that the Edge component is running.",
+                         request.grpc_port
+                    )));
+                }
+                return;
+            }
+            Err(_) => {
+                yield Ok(flow.error(&format!(
+                    "Connection to Edge at {ip_or_domain}:{} timed out after {} seconds",
+                    request.grpc_port, CONNECTION_TIMEOUT.as_secs()
+                )));
+                return;
+            }
+        };
+
+        debug!("Successfully connected to Edge");
+
+        // Step 3: Check version
+        yield Ok(flow.step(SetupStep::CheckingVersion));
+
+        let proxy_version = response_with_metadata
+            .metadata()
+            .get(xguard_version::VERSION_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(xguard_version::Version::parse)
+            .transpose()
+            .unwrap_or(None);
+
+        debug!("Edge metadata: {:?}", response_with_metadata.metadata());
+        debug!("Edge version: {proxy_version:?}");
+
+        if let Some(proxy_version) = proxy_version {
+            if proxy_version < MIN_PROXY_VERSION {
+                yield Ok(flow.error(&format!(
+                    "Edge version {proxy_version} is older than Core version {version_clone}. \
+                    Please update the Edge component.",
+                )));
+                return;
+            }
+
+            debug!(
+                "Edge version {} is compatible with Core version {}",
+                proxy_version, version_clone
+            );
+
+            let response = SetupResponse {
+                step: SetupStep::CheckingVersion,
+                version: Some(proxy_version.to_string()),
+                message: None,
+                logs: None,
+                error: false,
+            };
+
+            match serde_json::to_string(&response) {
+                Ok(body) => yield Ok(Event::default().data(body)),
+                Err(e) => {
+                    yield Ok(flow.error(&format!("Failed to serialize version response: {e}")));
+                    return;
+                }
+            }
+        } else {
+            yield Ok(flow.error("Failed to determine Edge version"));
+            return;
+        }
+
+        let mut response = response_with_metadata.into_inner();
+        let spawn_log_buffer = inner_log_buffer.clone();
+        let log_reader_task = tokio::spawn(
+            scope_setup_logs(spawn_log_buffer, async move {
+                    while let Some(log_entry) = response.next().await {
+                        match log_entry {
+                            Ok(entry) => {
+                                let level = entry
+                                    .level
+                                    .strip_prefix("Level(")
+                                    .and_then(|s| s.strip_suffix(")"))
+                                    .unwrap_or(&entry.level)
+                                    .to_uppercase();
+
+                                let formatted = format!(
+                                    "{} {} {}: message={}",
+                                    entry.timestamp, level, entry.target, entry.message
+                                );
+                                if log_tx.send(formatted).is_err() {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                let _ = log_tx.send(format!("Error reading log: {e}"));
+                                break;
+                            }
+                        }
+                    }
+                })
+                .instrument(tracing::Span::current()),
+        );
+
+        let _log_task_guard = TaskGuard(log_reader_task);
+
+        // Step 4: Obtain CSR
+        yield Ok(flow.step(SetupStep::ObtainingCsr));
+
+        let Some(hostname) = url.host_str() else {
+            yield Ok(flow.error("URL does not have a valid host"));
+            return;
+        };
+
+        let csr_response = match client.get_csr(CertificateInfo { cert_hostname: hostname.to_owned() }).await {
+            Ok(r) => r.into_inner(),
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to obtain CSR: {e}")));
+                return;
+            }
+        };
+
+        let csr = match xguard_certs::Csr::from_der(&csr_response.der_data) {
+            Ok(c) => c,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to parse CSR: {e}")));
+                return;
+            }
+        };
+
+        if let Err(e) = csr.verify_hostname(hostname) {
+            yield Ok(flow.error(&format!("CSR hostname validation failed: {e}")));
+            return;
+        }
+
+        debug!("Received certificate signing request from Edge for hostname: {hostname}");
+
+        // Step 5: Sign certificate
+        yield Ok(flow.step(SetupStep::SigningCertificate));
+
+        let Some(ca_cert_der) = certs.ca_cert_der else {
+            yield Ok(flow.error("CA certificate not found in settings"));
+            return;
+        };
+        let Some(ca_key_pair) = certs.ca_key_der else {
+            yield Ok(flow.error("CA key pair not found in settings"));
+            return;
+        };
+
+        let ca = match xguard_certs::CertificateAuthority::from_cert_der_key_pair(&ca_cert_der, &ca_key_pair) {
+            Ok(c) => c,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to create CA: {e}")));
+                return;
+            }
+        };
+
+        debug!("Certificate authority loaded and ready to sign certificates");
+
+        let cert = match ca.sign_server_cert(&csr) {
+            Ok(c) => c,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to sign CSR: {e}")));
+                return;
+            }
+        };
+
+        debug!("Successfully signed certificate for Edge");
+
+        // Step 6: Configure TLS
+        yield Ok(flow.step(SetupStep::ConfiguringTls));
+
+        let core_client = match ca.issue_core_client_cert(&request.common_name) {
+            Ok(c) => c,
+            Err(e) => {
+                yield Ok(flow.error(&format!("Failed to issue Core client certificate: {e}")));
+                return;
+            }
+        };
+
+        let bundle = CertBundle {
+            component_cert_der: cert.der().to_vec(),
+            ca_cert_der: ca_cert_der.clone(),
+            core_client_cert_der: core_client.cert_der.clone(),
+        };
+        if let Err(e) = client.send_cert(bundle).await {
+            yield Ok(flow.error(&format!("Failed to send certificate: {e}")));
+            return;
+        }
+
+        debug!("Certificate successfully delivered to Edge");
+
+        let xguard_certs::CertificateInfo { not_after: expiry, serial, .. } =
+            match xguard_certs::CertificateInfo::from_der(cert.der()) {
+                Ok(dt) => dt,
+                Err(err) => {
+                    yield Ok(flow.error(&format!("Failed to get certificate expiry: {err}")));
+                    return;
+                }
+            };
+
+        debug!("Certificate expiry date determined: {expiry}");
+
+        let mut proxy = Proxy::new(
+            request.common_name.as_str(),
+            ip_or_domain,
+            i32::from(request.grpc_port),
+            session.user.fullname().as_str(),
+        );
+        proxy.certificate_serial = Some(serial);
+        proxy.certificate_expiry = Some(expiry);
+        proxy.core_client_cert_der = Some(core_client.cert_der);
+        proxy.core_client_cert_key_der = Some(core_client.key_der);
+        proxy.core_client_cert_expiry = Some(core_client.expiry);
+
+        let proxy = match proxy.save(&pool).await {
+            Ok(p) => p,
+            Err(err) => {
+                yield Ok(flow.error(&format!("Failed to save Edge to database: {err}")));
+                return;
+            }
+        };
+
+        debug!(
+            "Edge '{}' registered successfully with ID: {}",
+            request.common_name, proxy.id
+        );
+        debug!("Establishing connection to newly configured Edge");
+
+        if let Some(proxy_control_tx) = proxy_control_tx {
+            if let Err(err) = proxy_control_tx.send(ProxyControlMessage::StartConnection(proxy.id)).await {
+                yield Ok(flow.error(&format!(
+                    "Failed send message to connect to Edge after setup: {err}"
+                )));
+                return;
+            }
+        } else {
+            debug!("Edge control channel not available; skipping connection initiation");
+        }
+
+        info!("Edge setup completed successfully");
+
+        match Wizard::get(&pool).await {
+            Ok(wizard) => {
+                if !wizard.completed {
+                    let state = InitialSetupState {
+                        step: InitialSetupStep::InternalUrlSettings,
+                    };
+                    if let Err(err) = state.save(&pool).await {
+                        yield Ok(flow.error(&format!("Failed to update setup step in wizard: {err}")));
+                        return;
+                    }
+                    debug!("Initial setup step advanced to 'InternalUrlSettings'");
+                }
+            }
+            Err(err) => {
+                yield Ok(flow.error(&format!("Failed to fetch wizard state: {err}")));
+                return;
+            }
+        }
+
+        // Step 7: Done
+        yield Ok(flow.step(SetupStep::Done));
+    };
+
+    let adoption_span = tracing::info_span!("proxy_adoption");
+    let stream = async_stream::stream! {
+        tokio::pin!(inner_stream);
+        while let Some(item) = scope_setup_logs(log_buffer.clone(), inner_stream.next())
+            .instrument(adoption_span.clone())
+            .await
+        {
+            yield item;
+        }
+    };
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+/// Core adoption logic: performs the full gateway mTLS setup and saves the gateway to DB.
+///
+/// Sends progress events over `progress_tx` when provided (SSE flow); passes `None` for the
+/// direct REST endpoint.
+async fn perform_gateway_adoption(
+    pool: &PgPool,
+    network_id: Id,
+    name: String,
+    ip_or_domain_raw: String,
+    grpc_port: u16,
+    modified_by: String,
+    progress_tx: Option<UnboundedSender<AdoptionProgress>>,
+) -> Result<Gateway<Id>, String> {
+    let step = |s| {
+        if let Some(ref tx) = progress_tx {
+            let _ = tx.send(AdoptionProgress::Step(s));
+        }
+    };
+
+    let ip_or_domain = strip_scheme(&ip_or_domain_raw);
+
+    validate_host_only(ip_or_domain)?;
+
+    // `u16` covers the expected port range, so we just have to check for 0
+    if grpc_port == 0 {
+        return Err("grpc_port must not be 0".to_owned());
+    }
+
+    // License check: non-enterprise installs are limited to one gateway per network.
+    if !has_enterprise_access(Some(LicenseFeature::ComponentHa)) {
+        let gateways = Gateway::find_by_location_id(pool, network_id)
+            .await
+            .map_err(|e| format!("Failed to query existing Gateways: {e}"))?;
+        if !gateways.is_empty() {
+            return Err("Enterprise license is required.".to_owned());
+        }
+    }
+
+    // Step 1: Check configuration
+    step(SetupStep::CheckingConfiguration);
+
+    match Gateway::find_by_url(pool, ip_or_domain, grpc_port).await {
+        Ok(Some(gateway)) => {
+            return Err(format!(
+                "A Gateway with URL {ip_or_domain}:{grpc_port} is already registered with \
+                name \"{}\".",
+                gateway.name
+            ));
+        }
+        Err(e) => {
+            return Err(format!("Failed to query existing Gateway: {e}"));
+        }
+        Ok(None) => {
+            debug!("Verified no existing Gateway registration for {ip_or_domain}:{grpc_port}");
+        }
+    }
+
+    let url_str = format!("http://{ip_or_domain}:{grpc_port}");
+    let url = Url::parse(&url_str).map_err(|e| format!("Invalid URL: {e}"))?;
+
+    debug!("Successfully validated Gateway address: {url_str}");
+
+    let endpoint = Endpoint::from_shared(url.to_string())
+        .map_err(|e| format!("Failed to create endpoint: {e}"))?
+        .http2_keep_alive_interval(KEEPALIVE)
+        .tcp_keepalive(Some(KEEPALIVE))
+        .keep_alive_while_idle(true);
+
+    debug!("Connection endpoint configured with keep-alive settings");
+
+    let certs = match Certificates::get(pool).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return Err("CA certificate not found".to_owned()),
+        Err(e) => return Err(format!("Failed to load certificates: {e}")),
+    };
+
+    let ca_cert_der = certs
+        .ca_cert_der
+        .ok_or_else(|| "CA certificate not found in settings".to_owned())?;
+
+    let cert_pem = der_to_pem(&ca_cert_der, xguard_certs::PemLabel::Certificate)
+        .map_err(|e| format!("Failed to convert CA cert DER to PEM: {e}"))?;
+
+    let tls = ClientTlsConfig::new().ca_certificate(Certificate::from_pem(&cert_pem));
+
+    debug!("Loaded CA certificate for secure communication");
+
+    let endpoint = endpoint
+        .tls_config(tls)
+        .map_err(|e| format!("Failed to configure TLS for endpoint: {e}"))?;
+
+    debug!("Prepared secure connection endpoint for Gateway at {ip_or_domain}:{grpc_port}");
+
+    let version = Version::parse(VERSION).map_err(|e| format!("Failed to parse version: {e}"))?;
+
+    // Step 2: Check availability
+    step(SetupStep::CheckingAvailability);
+
+    let token = Claims::new(
+        ClaimsType::Gateway,
+        url.to_string(),
+        TOKEN_CLIENT_ID.to_owned(),
+        SETUP_TOKEN_EXPIRY_SECS,
+    )
+    .to_jwt()
+    .map_err(|e| format!("Failed to generate setup token: {e}"))?;
+
+    debug!("Generated secure setup token for Gateway authentication");
+
+    let version_interceptor = ClientVersionInterceptor::new(version.clone());
+    let auth_interceptor = AuthInterceptor::new(token);
+    let mut client = GatewaySetupClient::with_interceptor(
+        endpoint.connect_lazy(),
+        move |mut req: Request<()>| {
+            req = version_interceptor.clone().call(req)?;
+            auth_interceptor.clone().call(req)
+        },
+    );
+
+    debug!("Initiating connection to Gateway at {ip_or_domain}:{grpc_port}");
+
+    let response_with_metadata = match timeout(CONNECTION_TIMEOUT, client.start(())).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(status)) => {
+            let error_msg = status.message();
+            if error_msg.contains("h2 protocol error") || error_msg.contains("http2 error") {
+                return Err(format!(
+                    "Failed to connect to Gateway at {ip_or_domain}:{grpc_port}: {error_msg}. \
+                    This may indicate that the Gateway is already configured with TLS. \
+                    Please, check if the Gateway has already been set up.",
+                ));
+            }
+            return Err(format!(
+                "Failed to connect to Gateway at {ip_or_domain}:{grpc_port}: {error_msg}. \
+                Please ensure the address and port are correct and that the Gateway is running.",
+            ));
+        }
+        Err(_) => {
+            return Err(format!(
+                "Connection to Gateway at {ip_or_domain}:{grpc_port} timed out after {} seconds.",
+                CONNECTION_TIMEOUT.as_secs(),
+            ));
+        }
+    };
+
+    debug!("Successfully connected to Gateway");
+
+    // Step 3: Check version
+    step(SetupStep::CheckingVersion);
+
+    let gateway_version = response_with_metadata
+        .metadata()
+        .get(xguard_version::VERSION_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .map(xguard_version::Version::parse)
+        .transpose()
+        .unwrap_or(None)
+        .ok_or("Failed to determine Gateway version")?;
+
+    debug!("Gateway metadata: {:?}", response_with_metadata.metadata());
+    debug!("Gateway version: {gateway_version:?}");
+
+    if gateway_version < MIN_GATEWAY_VERSION {
+        return Err(format!(
+            "Gateway version {gateway_version} is older than Core version {version}. \
+            Please update the Gateway component.",
+        ));
+    }
+
+    debug!("Gateway version {gateway_version} is compatible with Core version {version}");
+
+    if let Some(ref tx) = progress_tx {
+        let _ = tx.send(AdoptionProgress::Version(gateway_version.to_string()));
+    }
+
+    // Forward gateway log entries to the progress channel while CSR/cert steps run.
+    let mut log_stream = response_with_metadata.into_inner();
+    let tx_for_logs = progress_tx.clone();
+    let log_task = tokio::spawn(async move {
+        while let Some(result) = log_stream.next().await {
+            if let Some(ref tx) = tx_for_logs {
+                let line = match result {
+                    Ok(entry) => {
+                        let level = entry
+                            .level
+                            .strip_prefix("Level(")
+                            .and_then(|s| s.strip_suffix(")"))
+                            .unwrap_or(&entry.level)
+                            .to_uppercase();
+                        format!(
+                            "{} {level} {}: message={}",
+                            entry.timestamp, entry.target, entry.message
+                        )
+                    }
+                    Err(e) => format!("Error reading gateway log: {e}"),
+                };
+                if tx.send(AdoptionProgress::Log(line)).is_err() {
+                    break;
+                }
+            }
+        }
+    });
+
+    // Step 4: Obtain CSR
+    step(SetupStep::ObtainingCsr);
+
+    let hostname = url
+        .host_str()
+        .ok_or("URL does not have a valid host")?
+        .to_owned();
+
+    let csr_response = client
+        .get_csr(CertificateInfo {
+            cert_hostname: hostname.clone(),
+        })
+        .await
+        .map_err(|e| format!("Failed to obtain CSR: {e}"))?
+        .into_inner();
+
+    let csr = xguard_certs::Csr::from_der(&csr_response.der_data)
+        .map_err(|e| format!("Failed to parse CSR: {e}"))?;
+
+    csr.verify_hostname(&hostname)
+        .map_err(|e| format!("CSR hostname validation failed: {e}"))?;
+
+    debug!("Received certificate signing request from Gateway for hostname: {hostname}");
+
+    // Step 5: Sign certificate
+    step(SetupStep::SigningCertificate);
+
+    let ca_key_pair = certs
+        .ca_key_der
+        .ok_or_else(|| "CA key pair not found in settings".to_owned())?;
+
+    let ca =
+        xguard_certs::CertificateAuthority::from_cert_der_key_pair(&ca_cert_der, &ca_key_pair)
+            .map_err(|e| format!("Failed to create CA: {e}"))?;
+
+    debug!("Certificate authority loaded and ready to sign certificates");
+
+    let cert = ca
+        .sign_server_cert(&csr)
+        .map_err(|e| format!("Failed to sign CSR: {e}"))?;
+
+    debug!("Successfully signed certificate for Gateway");
+
+    // Step 6: Configure TLS
+    step(SetupStep::ConfiguringTls);
+
+    let core_client = ca
+        .issue_core_client_cert(&name)
+        .map_err(|e| format!("Failed to issue Core client certificate: {e}"))?;
+
+    let bundle = CertBundle {
+        component_cert_der: cert.der().to_vec(),
+        ca_cert_der: ca_cert_der.clone(),
+        core_client_cert_der: core_client.cert_der.clone(),
+    };
+
+    client
+        .send_cert(bundle)
+        .await
+        .map_err(|e| format!("Failed to send certificate: {e}"))?;
+
+    // Abort the log-forwarding task to drop the h2 receiver and send RST_STREAM.
+    // The gateway's GatewaySetup gRPC server can now complete its graceful shutdown
+    // and restart with the new TLS identity.
+    log_task.abort();
+
+    debug!("Certificate successfully delivered to Gateway");
+
+    let xguard_certs::CertificateInfo {
+        not_after: expiry,
+        serial,
+        ..
+    } = xguard_certs::CertificateInfo::from_der(cert.der())
+        .map_err(|e| format!("Failed to get certificate expiry: {e}"))?;
+
+    debug!("Certificate expiry date determined: {expiry}");
+
+    let mut gateway = Gateway::new(
+        network_id,
+        name,
+        ip_or_domain.to_owned(),
+        grpc_port.into(),
+        modified_by,
+    );
+
+    gateway.certificate_serial = Some(serial);
+    gateway.certificate_expiry = Some(expiry);
+    gateway.core_client_cert_der = Some(core_client.cert_der);
+    gateway.core_client_cert_key_der = Some(core_client.key_der);
+    gateway.core_client_cert_expiry = Some(core_client.expiry);
+
+    let saved = gateway
+        .save(pool)
+        .await
+        .map_err(|e| format!("Failed to save Gateway to database: {e}"))?;
+
+    debug!("Gateway setup completed successfully");
+
+    Ok(saved)
+}
+
+/// Stream the progress of gateway TLS setup
+///
+/// Drives the whole TLS setup flow and reports its progress as Server-Sent Events.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/network/{network_id}/gateways/setup",
+    tag = "gateway",
+    params(
+        ("network_id" = i64, Path, description = "ID of the network."),
+    ),
+    request_body = GatewaySetupRequest,
+    responses(
+        (status = 200, description = "Server-Sent Event stream with setup progress. Each event carries the current step name and its result.", content_type = "text/event-stream", body = String, example = json!("data: {\"step\":\"CheckingConfiguration\",\"version\":null,\"message\":null,\"logs\":null,\"error\":false}\n\ndata: {\"step\":\"CheckingVersion\",\"version\":\"2.1.0\",\"message\":null,\"logs\":null,\"error\":false}\n\ndata: {\"step\":\"ConfiguringTls\",\"version\":null,\"message\":null,\"logs\":null,\"error\":false}\n\ndata: {\"step\":\"Done\",\"version\":null,\"message\":null,\"logs\":null,\"error\":false}\n\n")),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn setup_gateway_tls_stream(
+    _admin: AdminRole,
+    session: SessionInfo,
+    Path(network_id): Path<Id>,
+    Extension(pool): Extension<PgPool>,
+    Json(request): Json<GatewaySetupRequest>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let (log_tx, log_rx) = unbounded_channel::<String>();
+    let log_buffer = Arc::new(Mutex::new(VecDeque::new()));
+    let (progress_tx, mut progress_rx) = unbounded_channel::<AdoptionProgress>();
+
+    let pool_clone = pool.clone();
+    let modified_by = session.user.fullname();
+    let task_log_buffer = Arc::clone(&log_buffer);
+    let adoption_span = tracing::info_span!("gateway_adoption");
+    let task_handle = tokio::spawn(
+        scope_setup_logs(task_log_buffer, async move {
+            perform_gateway_adoption(
+                &pool_clone,
+                network_id,
+                request.common_name,
+                request.ip_or_domain,
+                request.grpc_port,
+                modified_by,
+                Some(progress_tx),
+            )
+            .await
+        })
+        .instrument(adoption_span),
+    );
+
+    let inner_log_buffer = Arc::clone(&log_buffer);
+    let inner_stream = async_stream::stream! {
+        let mut flow = SetupFlow::new(log_rx, inner_log_buffer);
+
+        loop {
+            match progress_rx.recv().await {
+                Some(AdoptionProgress::Step(step)) => {
+                    yield Ok(flow.step(step));
+                }
+                Some(AdoptionProgress::Version(v)) => {
+                    let response = SetupResponse {
+                        step: SetupStep::CheckingVersion,
+                        version: Some(v),
+                        message: None,
+                        logs: None,
+                        error: false,
+                    };
+                    match serde_json::to_string(&response) {
+                        Ok(body) => yield Ok(Event::default().data(body)),
+                        Err(e) => {
+                            yield Ok(flow.error(&format!(
+                                "Failed to serialize version response: {e}"
+                            )));
+                            return;
+                        }
+                    }
+                }
+                Some(AdoptionProgress::Log(line)) => {
+                    // Buffer the log line so it appears in any subsequent error event.
+                    let _ = log_tx.send(line);
+                }
+                None => break,
+            }
+        }
+
+        match task_handle.await {
+            Ok(Ok(_gateway)) => {
+                yield Ok(flow.step(SetupStep::Done));
+            }
+            Ok(Err(msg)) => {
+                yield Ok(flow.error(&msg));
+            }
+            Err(join_err) => {
+                yield Ok(flow.error(&format!("Gateway adoption task failed: {join_err}")));
+            }
+        }
+    };
+
+    // Wrap each poll of inner_stream in scope_setup_logs so that any error!() call
+    // inside flow.error() is captured into log_buffer before the event is drained.
+    // This mirrors how setup_proxy_tls_stream captures Core logs for its error events.
+    let stream_span = tracing::info_span!("gateway_adoption_stream");
+    let stream = async_stream::stream! {
+        tokio::pin!(inner_stream);
+        while let Some(item) = scope_setup_logs(log_buffer.clone(), inner_stream.next())
+            .instrument(stream_span.clone())
+            .await
+        {
+            yield item;
+        }
+    };
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct GatewayAdoptRequest {
+    pub name: String,
+    pub ip_or_domain: String,
+    pub grpc_port: u16,
+}
+
+/// Adopt a gateway in a location
+///
+/// Registers the gateway, issues its client certificate and returns the created gateway.
+/// Use `GET /api/v1/network/{network_id}/gateways/setup` to follow the setup progress.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/network/{network_id}/gateways/adopt",
+    tag = "gateway",
+    request_body = GatewayAdoptRequest,
+    params(
+        ("network_id" = i64, Path, description = "ID of the network."),
+    ),
+    responses(
+        (status = 201, description = "Gateway adopted.", body = Gateway),
+        (status = 400, description = "Invalid request, or the gateway is unreachable or too old.", body = ApiErrorResponse, example = json!({"msg": "Gateway version is not supported"})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 404, description = "Network not found.", body = ApiErrorResponse, example = json!({"msg": "network not found"})),
+        (status = 500, description = "Unable to adopt gateway.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn adopt_gateway(
+    _admin: AdminRole,
+    session: SessionInfo,
+    Path(network_id): Path<Id>,
+    Extension(pool): Extension<PgPool>,
+    Json(request): Json<GatewayAdoptRequest>,
+) -> Result<(StatusCode, Json<Gateway<Id>>), WebError> {
+    perform_gateway_adoption(
+        &pool,
+        network_id,
+        request.name,
+        request.ip_or_domain,
+        request.grpc_port,
+        session.user.fullname(),
+        None,
+    )
+    .await
+    .map(|gateway| (StatusCode::CREATED, Json(gateway)))
+    .map_err(WebError::BadRequest)
+}
+
+#[derive(Debug, Serialize)]
+struct AcmeSetupResponse {
+    step: &'static str,
+    error: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    logs: Option<Vec<String>>,
+}
+
+fn acme_event(step: &'static str) -> Event {
+    let body = serde_json::to_string(&AcmeSetupResponse {
+        step,
+        error: false,
+        message: None,
+        logs: None,
+    })
+    .unwrap_or_else(|_| format!(r#"{{"step":"{step}","error":false}}"#));
+    Event::default().data(body)
+}
+
+fn acme_error_event(step: &'static str, message: String, logs: Option<Vec<String>>) -> Event {
+    let body = serde_json::to_string(&AcmeSetupResponse {
+        step,
+        error: true,
+        message: Some(message.clone()),
+        logs,
+    })
+    .unwrap_or_else(|_| format!(r#"{{"step":"{step}","error":true,"message":"{message}"}}"#));
+    Event::default().data(body)
+}
+
+/// Apply a freshly issued ACME certificate. Three effects, in order: the stored public proxy URL
+/// is upgraded to `https://` now that the proxy serves TLS, the certificate is pushed to the
+/// proxy, and, if that upgrade actually changed the URL, updated public settings are pushed too
+/// so the proxy starts marking its session cookies `Secure`.
+async fn apply_acme_certificate(
+    pool: &PgPool,
+    proxy_control_tx: Option<&Sender<ProxyControlMessage>>,
+    cert_pem: String,
+    key_pem: String,
+) {
+    let before = Settings::get_current_settings();
+    let mut settings = before.clone();
+    settings.public_proxy_url = ensure_https(&settings.public_proxy_url);
+    let edge_settings_changed = before.edge_public_settings_changed(&settings);
+    let settings_updated = match update_current_settings(pool, settings).await {
+        Ok(()) => true,
+        Err(err) => {
+            error!(
+                "Failed to update Settings::public_proxy_url to HTTPs after successful ACME challenge: {err}"
+            );
+            false
+        }
+    };
+
+    // Post-wizard: broadcast certs to the proxy via bidi channel.
+    if let Some(tx) = proxy_control_tx {
+        let msg = ProxyControlMessage::BroadcastHttpsCerts { cert_pem, key_pem };
+        if let Err(e) = tx.send(msg).await {
+            error!("Failed to broadcast HttpsCerts to Edge: {e}");
+        }
+
+        if settings_updated && edge_settings_changed {
+            let settings = Settings::get_current_settings();
+            broadcast_public_settings(pool, &settings, tx).await;
+        }
+    }
+}
+
+/// Stream the progress of Let's Encrypt certificate issuance on the edge
+///
+/// Reports progress as Server-Sent Events. The domain and credentials are taken from the
+/// settings, so no parameters are needed.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/proxy/acme/stream",
+    tag = "proxy",
+    request_body = AcmeStreamRequest,
+    responses(
+        (status = 200, description = "Server-Sent Event stream with setup progress. Each event carries the current step name and its result.", content_type = "text/event-stream", body = String, example = json!("data: {\"step\":\"Connecting\",\"error\":false}\n\ndata: {\"step\":\"CheckingDomain\",\"error\":false}\n\ndata: {\"step\":\"ValidatingDomain\",\"error\":false}\n\ndata: {\"step\":\"IssuingCertificate\",\"error\":false}\n\ndata: {\"step\":\"Done\",\"error\":false}\n\n")),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn stream_proxy_acme(
+    _admin: AdminRole,
+    Extension(pool): Extension<PgPool>,
+    proxy_control_tx: Option<Extension<Sender<ProxyControlMessage>>>,
+    Json(_body): Json<AcmeStreamRequest>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let stream = async_stream::stream! {
+        let certs = match Certificates::get_or_default(&pool).await {
+            Ok(c) => c,
+            Err(e) => {
+                yield Ok(acme_error_event("Connecting", format!("Failed to load certificates: {e}"),
+                    None));
+                return;
+            }
+        };
+
+        let settings = Settings::get_current_settings();
+        let domain = match settings.proxy_hostname() {
+            Ok(domain) => domain,
+            Err(err) => {
+                yield Ok(acme_error_event("Connecting", err.to_string(), None));
+                return;
+            }
+        };
+
+        let account_credentials_json = certs.acme_account_credentials.clone().unwrap_or_default();
+
+        let proxies = match Proxy::all_enabled(&pool).await {
+            Ok(list) => list,
+            Err(e) => {
+                yield Ok(acme_error_event(
+                    "Connecting",
+                    format!("Failed to load Edge list from DB: {e}"),
+                    None,
+                ));
+                return;
+            }
+        };
+
+        let Some(proxy) = proxies.into_iter().next() else {
+            yield Ok(acme_error_event(
+                "Connecting",
+                "No Edge found in database. Please complete the edge adoption step \
+                 first.".to_owned(),
+                None,
+            ));
+            return;
+        };
+
+        let proxy_host = &proxy.address;
+        let proxy_port = proxy.port;
+        info!(
+            "Triggering ACME HTTP-01 via Edge gRPC TriggerAcme for domain: {domain} \
+             Edge={proxy_host}:{proxy_port}"
+        );
+
+        let (progress_tx, mut progress_rx) =
+            unbounded_channel::<AcmeStep>();
+        let (result_tx, result_rx) =
+            oneshot::channel::<Result<(String, String, String), (String, Vec<String>)>>();
+
+        let pool_clone = pool.clone();
+        let domain_clone = domain.clone();
+        let acct_creds_clone = account_credentials_json.clone();
+        tokio::spawn(async move {
+            let result = call_proxy_trigger_acme(
+                &pool_clone,
+                &proxy,
+                domain_clone,
+                acct_creds_clone,
+                progress_tx,
+            )
+            .await;
+            let _ = result_tx.send(result);
+        });
+
+        let mut current_step: &'static str = "Connecting";
+        let deadline = Instant::now() + ACME_TIMEOUT;
+
+        // Drain progress steps until the ACME task finishes (channel closed) or times out.
+        loop {
+            tokio::select! {
+                maybe_step = progress_rx.recv() => {
+                    match maybe_step {
+                        Some(step) => {
+                            current_step = acme_step_name(step);
+                            yield Ok(acme_event(current_step));
+                        }
+                        None => {
+                            // progress_tx dropped - ACME task finished; stop polling progress.
+                            break;
+                        }
+                    }
+                }
+
+                () = sleep_until(deadline) => {
+                    yield Ok(acme_error_event(
+                        current_step,
+                        format!(
+                            "ACME certificate issuance timed out after \
+                             {} seconds.", ACME_TIMEOUT.as_secs()
+                        ),
+                        None,
+                    ));
+                    return;
+                }
+            }
+        }
+
+        // Progress channel closed - collect the final result.
+        match result_rx.await {
+            Ok(Ok((cert_pem, key_pem, new_account_credentials_json))) => {
+                let acme_cert_expiry = parse_cert_expiry(&cert_pem);
+                match Certificates::get_or_default(&pool).await {
+                    Ok(mut updated_certs) => {
+                        updated_certs.acme_domain = Some(domain.clone());
+                        updated_certs.proxy_http_cert_pem = Some(cert_pem.clone());
+                        updated_certs.proxy_http_cert_key_pem = Some(key_pem.clone());
+                        updated_certs.proxy_http_cert_expiry = acme_cert_expiry;
+                        updated_certs.acme_account_credentials =
+                            Some(new_account_credentials_json);
+                        updated_certs.proxy_http_cert_source =
+                            ProxyCertSource::LetsEncrypt;
+                        if let Err(e) = updated_certs.save(&pool).await {
+                            yield Ok(acme_error_event(
+                                "Installing",
+                                format!("Failed to save certificate: {e}"),
+                                None,
+                            ));
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        yield Ok(acme_error_event(
+                            "Installing",
+                            format!("Failed to reload certificates for saving: {e}"),
+                            None,
+                        ));
+                        return;
+                    }
+                }
+
+                apply_acme_certificate(
+                    &pool,
+                    proxy_control_tx.as_ref().map(|extension| &extension.0),
+                    cert_pem,
+                    key_pem,
+                )
+                .await;
+
+                info!("ACME certificate issued and saved for domain: {domain}");
+                yield Ok(acme_event("Done"));
+            }
+            Ok(Err((acme_err, logs))) => {
+                let msg = format!("ACME issuance failed: {acme_err}");
+                error!("{msg}");
+                yield Ok(acme_error_event(current_step, msg, Some(logs)));
+            }
+            Err(_) => {
+                yield Ok(acme_error_event(
+                    current_step,
+                    "ACME task terminated unexpectedly.".to_owned(),
+                    None,
+                ));
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+#[cfg(test)]
+mod tests {
+    use xguard_common::db::{
+        models::{
+            Settings,
+            settings::{initialize_current_settings, update_current_settings},
+        },
+        setup_pool,
+    };
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use tokio::sync::mpsc;
+
+    use super::*;
+
+    #[sqlx::test]
+    async fn test_apply_acme_certificate_broadcasts_public_settings(
+        _: PgPoolOptions,
+        options: PgConnectOptions,
+    ) {
+        let pool = setup_pool(options).await;
+        initialize_current_settings(&pool).await.unwrap();
+
+        let mut settings = Settings::get_current_settings();
+        settings.public_proxy_url = "http://edge.example.com".to_owned();
+        update_current_settings(&pool, settings).await.unwrap();
+
+        let (proxy_control_tx, mut proxy_control_rx) = mpsc::channel(8);
+        apply_acme_certificate(
+            &pool,
+            Some(&proxy_control_tx),
+            "certificate".to_owned(),
+            "private-key".to_owned(),
+        )
+        .await;
+
+        match proxy_control_rx
+            .recv()
+            .await
+            .expect("missing certificate broadcast")
+        {
+            ProxyControlMessage::BroadcastHttpsCerts { cert_pem, key_pem } => {
+                assert_eq!(cert_pem, "certificate");
+                assert_eq!(key_pem, "private-key");
+            }
+            _ => panic!("expected certificate broadcast"),
+        }
+
+        match proxy_control_rx
+            .recv()
+            .await
+            .expect("missing public settings broadcast")
+        {
+            ProxyControlMessage::BroadcastPublicSettings { public_url, .. } => {
+                assert_eq!(public_url.as_deref(), Some("https://edge.example.com"));
+            }
+            _ => panic!("expected public settings broadcast"),
+        }
+
+        assert!(proxy_control_rx.try_recv().is_err());
+        let settings = Settings::get(&pool).await.unwrap().unwrap();
+        assert_eq!(settings.public_proxy_url, "https://edge.example.com");
+    }
+}

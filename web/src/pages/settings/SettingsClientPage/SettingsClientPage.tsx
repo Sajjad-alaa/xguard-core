@@ -16,11 +16,11 @@ import { SelectMultiple } from '../../../shared/components/SelectMultiple/Select
 import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCard';
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { Icon, type IconKindValue } from '../../../shared/defguard-ui/components/Icon';
-import { MarkedSection } from '../../../shared/defguard-ui/components/MarkedSection/MarkedSection';
-import { ThemeSpacing, ThemeVariable } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { Icon, type IconKindValue } from '../../../shared/xguard-ui/components/Icon';
+import { MarkedSection } from '../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
+import { ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import {
   getEnterpriseSettingsQueryOptions,
   getGroupsInfoQueryOptions,
@@ -34,8 +34,8 @@ import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
 import { businessBadgeProps } from '../../../shared/components/badges/BusinessBadge';
 import { Controls } from '../../../shared/components/Controls/Controls';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { canUseBusinessFeature, licenseActionCheck } from '../../../shared/utils/license';

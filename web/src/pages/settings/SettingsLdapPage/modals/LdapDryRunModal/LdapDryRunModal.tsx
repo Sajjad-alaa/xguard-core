@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { m } from '../../../../../paraglide/messages';
 import type { LdapDryRunResult } from '../../../../../shared/api/types';
-import { Modal } from '../../../../../shared/defguard-ui/components/Modal/Modal';
-import { Tabs } from '../../../../../shared/defguard-ui/components/Tabs/Tabs';
+import { Modal } from '../../../../../shared/xguard-ui/components/Modal/Modal';
+import { Tabs } from '../../../../../shared/xguard-ui/components/Tabs/Tabs';
 import './style.scss';
-import { SizedBox } from '../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../shared/defguard-ui/types';
+import { SizedBox } from '../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../shared/xguard-ui/types';
 import { DryRunTable } from './DryRunTable';
 
 type Props = {
@@ -14,12 +14,12 @@ type Props = {
   onClose: () => void;
 };
 
-type DryRunTab = 'defguard' | 'ldap';
+type DryRunTab = 'xguard' | 'ldap';
 
 export const LdapDryRunModal = ({ isOpen, result, onClose }: Props) => {
-  const [tab, setTab] = useState<DryRunTab>('defguard');
+  const [tab, setTab] = useState<DryRunTab>('xguard');
 
-  const activeData = (tab === 'defguard' ? result?.defguard : result?.ldap) ?? [];
+  const activeData = (tab === 'xguard' ? result?.xguard : result?.ldap) ?? [];
 
   return (
     <Modal
@@ -34,9 +34,9 @@ export const LdapDryRunModal = ({ isOpen, result, onClose }: Props) => {
       <Tabs
         items={[
           {
-            title: m.modal_ldap_dry_run_tab_defguard(),
-            active: tab === 'defguard',
-            onClick: () => setTab('defguard'),
+            title: m.modal_ldap_dry_run_tab_xguard(),
+            active: tab === 'xguard',
+            onClick: () => setTab('xguard'),
           },
           {
             title: m.modal_ldap_dry_run_tab_ldap(),

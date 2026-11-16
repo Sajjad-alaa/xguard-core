@@ -11,9 +11,9 @@ import {
   type LicenseCheckResponse,
 } from '../../../../../../../shared/api/types';
 import { CopyButton } from '../../../../../../../shared/components/CopyButton/CopyButton';
-import { Modal } from '../../../../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../../../../../shared/form';
 import { formChangeLogic } from '../../../../../../../shared/formLogic';
 import {

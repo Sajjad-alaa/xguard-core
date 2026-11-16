@@ -3,7 +3,7 @@ import { AppLoaderPage } from '../../../pages/AppLoaderPage/AppLoaderPage';
 import { MigrationWizardPage } from '../../../pages/MigrationWizardPage/MigrationWizardPage';
 import { useMigrationWizardStore } from '../../../pages/MigrationWizardPage/store/useMigrationWizardStore';
 import { ActiveWizard } from '../../../shared/api/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import {
   getMigrationStateQueryOptions,
   getSessionInfoQueryOptions,

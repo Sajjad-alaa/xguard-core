@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import './style.scss';
 
 type Props = {

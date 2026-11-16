@@ -1,7 +1,7 @@
 import clsx from 'clsx';
-import { Icon } from '../../../../../defguard-ui/components/Icon';
-import { ProgressionBar } from '../../../../../defguard-ui/components/ProgressionBar/ProgressionBar';
-import { isPresent } from '../../../../../defguard-ui/utils/isPresent';
+import { Icon } from '../../../../../xguard-ui/components/Icon';
+import { ProgressionBar } from '../../../../../xguard-ui/components/ProgressionBar/ProgressionBar';
+import { isPresent } from '../../../../../xguard-ui/utils/isPresent';
 import type { TopBarLicenseProgressProps } from '../types';
 
 export const TopBarLicenseProgress = ({

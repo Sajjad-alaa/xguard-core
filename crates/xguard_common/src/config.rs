@@ -1,0 +1,501 @@
+use std::{net::IpAddr, sync::OnceLock};
+
+use clap::{Args, Parser, Subcommand, ValueEnum, value_parser};
+use humantime::Duration;
+use ipnetwork::IpNetwork;
+use openidconnect::{JsonWebKeyId, core::CoreRsaPrivateSigningKey};
+use reqwest::Url;
+use rsa::{
+    RsaPrivateKey,
+    pkcs1::{DecodeRsaPrivateKey, EncodeRsaPrivateKey},
+    pkcs8::{DecodePrivateKey, LineEnding},
+};
+use secrecy::SecretString;
+use serde::Serialize;
+
+use crate::{VERSION, db::Id, rsa_jwk_thumbprint};
+
+pub static SERVER_CONFIG: OnceLock<XGuardConfig> = OnceLock::new();
+
+pub fn server_config() -> &'static XGuardConfig {
+    SERVER_CONFIG
+        .get()
+        .expect("Server configuration not set yet")
+}
+
+#[derive(Clone, Debug, Parser, Serialize)]
+#[command(name = "xguard", version = VERSION)]
+// TODO: find a better workaround for clap not working nice with test args
+#[cfg_attr(test, command(ignore_errors(true)))]
+pub struct XGuardConfig {
+    #[arg(long, env = "XGUARD_LOG_LEVEL", default_value = "info")]
+    pub log_level: String,
+
+    #[arg(long, env = "XGUARD_LOG_FILE")]
+    pub log_file: Option<String>,
+
+    /// Only used when log_file is set.
+    #[arg(
+        long,
+        env = "XGUARD_LOG_FILE_ROTATION",
+        value_enum,
+        default_value_t = LogFileRotation::Daily
+    )]
+    pub log_file_rotation: LogFileRotation,
+
+    /// Rotated log files to keep, all of them when unset.
+    #[arg(long, env = "XGUARD_LOG_FILE_MAX_FILES")]
+    pub log_file_max_files: Option<usize>,
+
+    #[arg(long, env = "XGUARD_SECRET_KEY")]
+    #[serde(skip_serializing)]
+    #[deprecated(since = "2.0.0", note = "Use Settings.secret_key instead")]
+    pub secret_key: Option<SecretString>,
+
+    #[arg(long, env = "XGUARD_DB_HOST", default_value = "localhost")]
+    pub database_host: String,
+
+    #[arg(long, env = "XGUARD_DB_PORT", default_value_t = 5432)]
+    pub database_port: u16,
+
+    #[arg(long, env = "XGUARD_DB_NAME", default_value = "xguard")]
+    pub database_name: String,
+
+    #[arg(long, env = "XGUARD_DB_USER", default_value = "xguard")]
+    pub database_user: String,
+
+    #[arg(long, env = "XGUARD_DB_PASSWORD", default_value = "")]
+    #[serde(skip_serializing)]
+    pub database_password: SecretString,
+
+    #[arg(long, env = "XGUARD_DB_POOL_SIZE", value_parser = value_parser!(u32).range(1..), default_value_t = 10)]
+    pub database_pool_size: u32,
+
+    #[arg(long, env = "XGUARD_HTTP_PORT", default_value_t = 8000)]
+    pub http_port: u16,
+
+    #[arg(long, env = "XGUARD_GRPC_PORT", default_value_t = 50055)]
+    pub grpc_port: u16,
+
+    // Certificate and key for gRPC communication over HTTPS.
+    // Kept in runtime config for backwards compatibility - workers still use this.
+    #[arg(long, env = "XGUARD_GRPC_CERT")]
+    pub grpc_cert: Option<String>,
+    #[arg(long, env = "XGUARD_GRPC_KEY")]
+    pub grpc_key: Option<String>,
+
+    #[arg(long, env = "XGUARD_OPENID_KEY", value_parser = Self::parse_openid_key)]
+    #[deprecated(since = "2.0.0", note = "Use auto-generated openid signing key")]
+    #[serde(skip_serializing)]
+    pub openid_signing_key: Option<RsaPrivateKey>,
+
+    #[arg(long, env = "XGUARD_HMAC", default_value_t = false)]
+    #[deprecated(
+        since = "2.0.0",
+        note = "Temporary compatibility flag for OpenID signing"
+    )]
+    pub hmac: bool,
+
+    #[arg(long, env = "XGUARD_URL", value_parser = Url::parse)]
+    #[serde(skip_serializing)]
+    #[deprecated(since = "2.0.0", note = "Use Settings.xguard_url instead")]
+    pub url: Option<Url>,
+
+    #[arg(long, env = "XGUARD_DISABLE_STATS_PURGE")]
+    #[deprecated(since = "2.0.0", note = "Use Settings.enable_stats_purge instead")]
+    pub disable_stats_purge: Option<bool>,
+
+    #[arg(long, env = "XGUARD_STATS_PURGE_FREQUENCY")]
+    #[serde(skip_serializing)]
+    #[deprecated(since = "2.0.0", note = "Use Settings.stats_purge_frequency instead")]
+    pub stats_purge_frequency: Option<Duration>,
+
+    #[arg(long, env = "XGUARD_STATS_PURGE_THRESHOLD")]
+    #[serde(skip_serializing)]
+    #[deprecated(since = "2.0.0", note = "Use Settings.stats_purge_threshold instead")]
+    pub stats_purge_threshold: Option<Duration>,
+
+    #[arg(long, env = "XGUARD_ENROLLMENT_URL", value_parser = Url::parse)]
+    #[serde(skip_serializing)]
+    #[deprecated(since = "2.0.0", note = "Use Settings.public_proxy_url instead")]
+    pub enrollment_url: Option<Url>,
+
+    #[arg(long, env = "XGUARD_PROXY_URL")]
+    #[serde(skip_serializing)]
+    pub proxy_url: Option<String>,
+
+    #[arg(long, env = "XGUARD_ENROLLMENT_TOKEN_TIMEOUT")]
+    #[serde(skip_serializing)]
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use Settings.enrollment_token_timeout instead"
+    )]
+    pub enrollment_token_timeout: Option<Duration>,
+
+    #[arg(long, env = "XGUARD_MFA_CODE_TIMEOUT")]
+    #[serde(skip_serializing)]
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use Settings.mfa_code_timeout_seconds instead"
+    )]
+    pub mfa_code_timeout: Option<Duration>,
+
+    #[arg(long, env = "XGUARD_SESSION_TIMEOUT")]
+    #[serde(skip_serializing)]
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use Settings.authentication_period_days instead"
+    )]
+    pub session_timeout: Option<Duration>,
+
+    #[arg(long, env = "XGUARD_PASSWORD_RESET_TOKEN_TIMEOUT")]
+    #[serde(skip_serializing)]
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use Settings.password_reset_token_timeout instead"
+    )]
+    pub password_reset_token_timeout: Option<Duration>,
+
+    #[arg(long, env = "XGUARD_ENROLLMENT_SESSION_TIMEOUT")]
+    #[serde(skip_serializing)]
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use Settings.enrollment_session_timeout instead"
+    )]
+    pub enrollment_session_timeout: Option<Duration>,
+
+    #[arg(long, env = "XGUARD_PASSWORD_RESET_SESSION_TIMEOUT")]
+    #[serde(skip_serializing)]
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use Settings.password_reset_session_timeout instead"
+    )]
+    pub password_reset_session_timeout: Option<Duration>,
+
+    #[arg(long, env = "XGUARD_COOKIE_DOMAIN")]
+    pub cookie_domain: Option<String>,
+
+    #[arg(long, env = "XGUARD_COOKIE_INSECURE")]
+    // If not present, it will be guessed based on Settings.xguard_url
+    pub cookie_insecure: Option<bool>,
+
+    #[command(subcommand)]
+    #[serde(skip_serializing)]
+    pub cmd: Option<Command>,
+
+    #[arg(long, env = "XGUARD_CHECK_PERIOD", default_value = "12h")]
+    #[serde(skip_serializing)]
+    pub check_period: Duration,
+
+    #[arg(long, env = "XGUARD_CHECK_PERIOD_NO_LICENSE", default_value = "24h")]
+    #[serde(skip_serializing)]
+    pub check_period_no_license: Duration,
+
+    #[arg(long, env = "XGUARD_CHECK_RENEWAL_WINDOW", default_value = "1h")]
+    #[serde(skip_serializing)]
+    pub check_period_renewal_window: Duration,
+
+    #[arg(long, env = "XGUARD_HTTP_BIND_ADDRESS")]
+    pub http_bind_address: Option<IpAddr>,
+
+    #[arg(long, env = "XGUARD_GRPC_BIND_ADDRESS")]
+    pub grpc_bind_address: Option<IpAddr>,
+
+    #[arg(long, env = "XGUARD_ADOPT_GATEWAY")]
+    pub adopt_gateway: Option<String>,
+
+    #[arg(long, env = "XGUARD_ADOPT_EDGE")]
+    pub adopt_edge: Option<String>,
+
+    /// Maximum number of requests per second per client IP before rate limiting kicks in.
+    /// Set to 0 to disable rate limiting.
+    #[arg(long, env = "XGUARD_RATELIMIT_PERSECOND", default_value_t = 0)]
+    pub rate_limit_per_second: u64,
+
+    /// Maximum burst size for the rate limiter (token bucket capacity per client IP).
+    /// Set to 0 to disable rate limiting.
+    #[arg(long, env = "XGUARD_RATELIMIT_BURST", default_value_t = 0)]
+    pub rate_limit_burst: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum LogFileRotation {
+    Never,
+    Hourly,
+    #[default]
+    Daily,
+    Weekly,
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub enum Command {
+    #[command(
+        about = "Initialize development environment. Inserts test network and device into database."
+    )]
+    InitDevEnv,
+    #[command(
+        about = "Add a new VPN location and return a gateway token. Used for automated setup."
+    )]
+    InitVpnLocation(InitVpnLocationArgs),
+    #[command(about = "Output the gateway gRPC configuration payload for a VPN location by ID.")]
+    GatewayConfig(GatewayConfigArgs),
+    #[command(
+        subcommand,
+        arg_required_else_help = true,
+        about = "Manage users, groups, and external identity provider integrations."
+    )]
+    Manage(ManageCommand),
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub enum ManageCommand {
+    #[command(about = "Create a new admin user account and add it to an admin group.")]
+    CreateAdmin(CreateAdminArgs),
+    #[command(about = "Change a user's password.")]
+    ChangePassword(ChangePasswordArgs),
+    #[command(about = "List all users.")]
+    ListUsers,
+    #[command(
+        arg_required_else_help = true,
+        about = "Mark an existing group as a XGuard admin group, granting its members admin privileges."
+    )]
+    SetAdminGroup(SetAdminGroupArgs),
+    #[command(about = "Create a new group.")]
+    CreateGroup(CreateGroupArgs),
+    #[command(about = "List all groups and their admin status.")]
+    ListGroups,
+    #[command(about = "Add a user to a group by username.")]
+    AddUserToGroup(AddUserToGroupArgs),
+    #[command(about = "Disable the LDAP integration.")]
+    DisableLdapIntegration,
+    #[command(
+        about = "Disable directory synchronization for the configured OIDC external identity provider."
+    )]
+    DisableOidcDirectorySync,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct InitVpnLocationArgs {
+    #[arg(long)]
+    pub name: String,
+    #[arg(long)]
+    pub address: IpNetwork,
+    #[arg(long)]
+    pub endpoint: String,
+    #[arg(long)]
+    pub port: i32,
+    #[arg(long)]
+    pub dns: Option<String>,
+    #[arg(long)]
+    pub mtu: u32,
+    #[arg(long)]
+    pub fwmark: u32,
+    #[arg(long)]
+    pub allowed_ips: Vec<IpNetwork>,
+    #[arg(long)]
+    pub id: Option<Id>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct GatewayConfigArgs {
+    #[arg(long)]
+    pub location_id: Id,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct CreateAdminArgs {
+    #[arg(long)]
+    pub username: String,
+    #[arg(long)]
+    pub password: SecretString,
+    #[command(flatten)]
+    pub group: Option<GroupSelector>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct ChangePasswordArgs {
+    #[arg(long)]
+    pub username: String,
+    #[arg(long)]
+    pub password: SecretString,
+}
+
+#[derive(Args, Debug, Clone)]
+#[group(required = false, multiple = false)]
+pub struct GroupSelector {
+    #[arg(long)]
+    pub group_name: Option<String>,
+    #[arg(long)]
+    pub group_id: Option<Id>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct SetAdminGroupArgs {
+    #[command(flatten)]
+    pub group: GroupSelector,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct CreateGroupArgs {
+    #[arg(long)]
+    pub name: String,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct AddUserToGroupArgs {
+    #[arg(long)]
+    pub username: String,
+    #[command(flatten)]
+    pub group: GroupSelector,
+}
+
+impl XGuardConfig {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::parse()
+    }
+
+    // this is an ugly workaround to avoid `cargo test` args being captured by `clap`
+    #[must_use]
+    pub fn new_test_config() -> Self {
+        #[expect(
+            deprecated,
+            reason = "Test config still initializes compatibility-only deprecated fields"
+        )]
+        let config = Self {
+            log_level: "info".to_owned(),
+            log_file: None,
+            log_file_rotation: LogFileRotation::Daily,
+            log_file_max_files: None,
+            secret_key: None,
+            database_host: "localhost".to_owned(),
+            database_port: 5432,
+            database_name: "xguard".to_owned(),
+            database_user: "xguard".to_owned(),
+            database_password: SecretString::from(String::new()),
+            // sqlx safe default
+            database_pool_size: 10,
+            http_port: 8000,
+            grpc_port: 50055,
+            grpc_cert: None,
+            grpc_key: None,
+            openid_signing_key: None,
+            hmac: false,
+            url: None,
+            disable_stats_purge: None,
+            stats_purge_frequency: None,
+            stats_purge_threshold: None,
+            proxy_url: None,
+            enrollment_url: None,
+            enrollment_token_timeout: None,
+            mfa_code_timeout: None,
+            session_timeout: None,
+            password_reset_token_timeout: None,
+            enrollment_session_timeout: None,
+            password_reset_session_timeout: None,
+            cookie_domain: None,
+            cookie_insecure: Some(false),
+            cmd: None,
+            check_period: std::time::Duration::from_hours(12).into(),
+            check_period_no_license: std::time::Duration::from_hours(24).into(),
+            check_period_renewal_window: std::time::Duration::from_hours(1).into(),
+            http_bind_address: None,
+            grpc_bind_address: None,
+            adopt_gateway: None,
+            adopt_edge: None,
+            rate_limit_per_second: 0,
+            rate_limit_burst: 0,
+        };
+
+        config
+    }
+
+    /// Validate that the auto-adoption flags are consistent.
+    ///
+    /// Both `--adopt-edge` and `--adopt-gateway` must be supplied together.
+    pub fn validate_adopt_flags(&self) -> Result<(), String> {
+        match (&self.adopt_edge, &self.adopt_gateway) {
+            (Some(_), None) => Err("--adopt-edge (XGUARD_ADOPT_EDGE) was provided but \
+                --adopt-gateway (XGUARD_ADOPT_GATEWAY) is missing. \
+                Both flags must be provided together to launch the auto-adoption wizard."
+                .to_owned()),
+            (None, Some(_)) => Err("--adopt-gateway (XGUARD_ADOPT_GATEWAY) was provided but \
+                --adopt-edge (XGUARD_ADOPT_EDGE) is missing. \
+                Both flags must be provided together to launch the auto-adoption wizard."
+                .to_owned()),
+            _ => Ok(()),
+        }
+    }
+
+    /// Try PKCS#1 and PKCS#8 PEM formats.
+    fn parse_openid_key(path: &str) -> Result<RsaPrivateKey, rsa::pkcs8::Error> {
+        if let Ok(key) = RsaPrivateKey::read_pkcs1_pem_file(path) {
+            Ok(key)
+        } else {
+            RsaPrivateKey::read_pkcs8_pem_file(path)
+        }
+    }
+
+    #[must_use]
+    #[deprecated(since = "2.0.0", note = "Use auto-generated openid signing key")]
+    pub fn openid_key(&self) -> Option<CoreRsaPrivateSigningKey> {
+        #[allow(deprecated)]
+        let key = self.openid_signing_key.as_ref()?;
+        if let Ok(pem) = key.to_pkcs1_pem(LineEnding::default()) {
+            let key_id = JsonWebKeyId::new(rsa_jwk_thumbprint(key));
+            CoreRsaPrivateSigningKey::from_pem(pem.as_ref(), Some(key_id)).ok()
+        } else {
+            None
+        }
+    }
+}
+
+impl Default for XGuardConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_cli() {
+        use clap::CommandFactory;
+        XGuardConfig::command().debug_assert();
+    }
+
+    fn make_config(adopt_edge: Option<&str>, adopt_gateway: Option<&str>) -> XGuardConfig {
+        let mut config = XGuardConfig::new_test_config();
+        config.adopt_edge = adopt_edge.map(str::to_owned);
+        config.adopt_gateway = adopt_gateway.map(str::to_owned);
+        config
+    }
+
+    #[test]
+    fn test_validate_adopt_flags() {
+        // neither flag: valid, no auto-adoption requested
+        assert!(make_config(None, None).validate_adopt_flags().is_ok());
+
+        // both flags: valid
+        assert!(
+            make_config(Some("edge.example.com:8080"), Some("gw.example.com:8080"))
+                .validate_adopt_flags()
+                .is_ok()
+        );
+
+        // only one flag at a time: must be an error
+        assert!(
+            make_config(Some("edge.example.com:8080"), None)
+                .validate_adopt_flags()
+                .is_err()
+        );
+        assert!(
+            make_config(None, Some("gw.example.com:8080"))
+                .validate_adopt_flags()
+                .is_err()
+        );
+    }
+}

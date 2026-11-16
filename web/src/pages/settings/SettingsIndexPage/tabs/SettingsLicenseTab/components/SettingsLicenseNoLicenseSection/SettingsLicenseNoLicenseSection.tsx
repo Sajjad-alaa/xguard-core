@@ -1,13 +1,13 @@
 import { m } from '../../../../../../../paraglide/messages';
 import { SettingsCard } from '../../../../../../../shared/components/SettingsCard/SettingsCard';
 import { externalLink } from '../../../../../../../shared/constants';
-import { Badge } from '../../../../../../../shared/defguard-ui/components/Badge/Badge';
-import { BadgeVariant } from '../../../../../../../shared/defguard-ui/components/Badge/types';
-import { Button } from '../../../../../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../../../../../shared/defguard-ui/components/Divider/Divider';
-import { ExternalLink } from '../../../../../../../shared/defguard-ui/components/ExternalLink/ExternalLink';
-import { SizedBox } from '../../../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../../../shared/defguard-ui/types';
+import { Badge } from '../../../../../../../shared/xguard-ui/components/Badge/Badge';
+import { BadgeVariant } from '../../../../../../../shared/xguard-ui/components/Badge/types';
+import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../../../../shared/xguard-ui/components/Divider/Divider';
+import { ExternalLink } from '../../../../../../../shared/xguard-ui/components/ExternalLink/ExternalLink';
+import { SizedBox } from '../../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../../../shared/xguard-ui/types';
 import businessImage from '../../assets/business.png';
 import enterpriseImage from '../../assets/enterprise.png';
 
@@ -17,7 +17,7 @@ export const SettingsLicenseNoLicenseSection = () => {
       <header>
         <h5>{m.settings_license_choose_plan_title()}</h5>
         <ExternalLink
-          href={externalLink.defguard.pricing}
+          href={externalLink.xguard.pricing}
           rel="noreferrer noopener"
           target="_blank"
         >
@@ -51,7 +51,7 @@ export const SettingsLicenseNoLicenseSection = () => {
             <SizedBox height={ThemeSpacing.Md} />
             <div className="actions">
               <a
-                href={externalLink.defguard.pricing}
+                href={externalLink.xguard.pricing}
                 rel="noreferrer noopener"
                 target="_blank"
               >
@@ -81,7 +81,7 @@ export const SettingsLicenseNoLicenseSection = () => {
             <SizedBox height={ThemeSpacing.Md} />
             <div className="actions">
               <a
-                href={externalLink.defguard.sales}
+                href={externalLink.xguard.sales}
                 rel="noreferrer noopener"
                 target="_blank"
               >

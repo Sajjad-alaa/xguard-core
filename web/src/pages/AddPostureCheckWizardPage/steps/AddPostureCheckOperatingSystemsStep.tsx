@@ -5,9 +5,9 @@ import {
   PostureCheckOperatingSystemsSection,
 } from '../../../shared/components/postureChecksEditor/PostureCheckEditorSections';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { AppText } from '../../../shared/defguard-ui/components/AppText/AppText';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { TextStyle, ThemeVariable } from '../../../shared/defguard-ui/types';
+import { AppText } from '../../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { TextStyle, ThemeVariable } from '../../../shared/xguard-ui/types';
 import type { PostureCheckVersionValues } from '../../PostureChecksPage/types';
 import { useAddPostureCheckWizardStore } from '../useAddPostureCheckWizardStore';
 

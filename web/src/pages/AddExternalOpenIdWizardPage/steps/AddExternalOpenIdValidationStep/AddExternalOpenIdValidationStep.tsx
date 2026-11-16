@@ -4,18 +4,18 @@ import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
-import { AppText } from '../../../../shared/defguard-ui/components/AppText/AppText';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { IconKind } from '../../../../shared/defguard-ui/components/Icon';
-import { InfoBanner } from '../../../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
+import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { IconKind } from '../../../../shared/xguard-ui/components/Icon';
+import { InfoBanner } from '../../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import {
   TextStyle,
   ThemeSpacing,
   ThemeVariable,
-} from '../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+} from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { mfaAvailabilityInvalidateKey } from '../../../../shared/query';
 import { useAddExternalOpenIdStore } from '../../useAddExternalOpenIdStore';
 

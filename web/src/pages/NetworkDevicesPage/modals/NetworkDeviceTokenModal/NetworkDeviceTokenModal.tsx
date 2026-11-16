@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
-import { AppText } from '../../../../shared/defguard-ui/components/AppText/AppText';
-import { CopyField } from '../../../../shared/defguard-ui/components/CopyField/CopyField';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
+import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
+import { CopyField } from '../../../../shared/xguard-ui/components/CopyField/CopyField';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import {
   TextStyle,
   ThemeSpacing,
   ThemeVariable,
-} from '../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+} from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,

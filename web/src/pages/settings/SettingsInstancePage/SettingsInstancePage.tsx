@@ -15,20 +15,20 @@ import { Page } from '../../../shared/components/Page/Page';
 import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCard';
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { Fold } from '../../../shared/defguard-ui/components/Fold/Fold';
-import { MarkedSection } from '../../../shared/defguard-ui/components/MarkedSection/MarkedSection';
-import { MarkedSectionHeader } from '../../../shared/defguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { Fold } from '../../../shared/xguard-ui/components/Fold/Fold';
+import { MarkedSection } from '../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
+import { MarkedSectionHeader } from '../../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { getSettingsQueryOptions } from '../../../shared/query';
-import { isValidDefguardUrl } from '../../../shared/utils/defguardUrl';
-import { canonicalizeUrl } from '../../../shared/utils/defguardUrlValidation';
+import { isValidXGuardUrl } from '../../../shared/utils/xguardUrl';
+import { canonicalizeUrl } from '../../../shared/utils/xguardUrlValidation';
 import {
   createNumericSelectOptions,
   withNumericFallbackOption,
@@ -76,13 +76,13 @@ export const SettingsInstancePage = () => {
 
 export const formSchema = z
   .object({
-    defguard_url: z
+    xguard_url: z
       .string({
-        error: m.settings_instance_error_defguard_url_required(),
+        error: m.settings_instance_error_xguard_url_required(),
       })
-      .min(1, m.settings_instance_error_defguard_url_required())
+      .min(1, m.settings_instance_error_xguard_url_required())
       .url(m.settings_instance_error_invalid_url())
-      .refine(isValidDefguardUrl, m.settings_instance_error_invalid_host()),
+      .refine(isValidXGuardUrl, m.settings_instance_error_invalid_host()),
     instance_name: z
       .string(m.form_error_required())
       .trim()
@@ -107,9 +107,9 @@ export const formSchema = z
       .int()
       .min(1),
   })
-  .superRefine(({ defguard_url, public_proxy_url }, context) => {
-    if (canonicalizeUrl(defguard_url) === canonicalizeUrl(public_proxy_url)) {
-      for (const path of ['defguard_url', 'public_proxy_url'] as const) {
+  .superRefine(({ xguard_url, public_proxy_url }, context) => {
+    if (canonicalizeUrl(xguard_url) === canonicalizeUrl(public_proxy_url)) {
+      for (const path of ['xguard_url', 'public_proxy_url'] as const) {
         context.addIssue({
           code: 'custom',
           path: [path],
@@ -179,7 +179,7 @@ const Content = ({ settings }: { settings: Settings }) => {
 
   const defaultValues = useMemo(
     (): FormFields => ({
-      defguard_url: settings.defguard_url ?? '',
+      xguard_url: settings.xguard_url ?? '',
       instance_name: settings.instance_name ?? '',
       public_proxy_url: settings.public_proxy_url ?? '',
       authentication_period_days: settings.authentication_period_days ?? 7,
@@ -192,7 +192,7 @@ const Content = ({ settings }: { settings: Settings }) => {
         settings.password_reset_session_timeout_minutes ?? 10,
     }),
     [
-      settings.defguard_url,
+      settings.xguard_url,
       settings.instance_name,
       settings.public_proxy_url,
       settings.authentication_period_days,
@@ -281,12 +281,12 @@ const Content = ({ settings }: { settings: Settings }) => {
             title={m.settings_instance_section_core()}
             description={m.settings_instance_section_core_description()}
           />
-          <form.AppField name="defguard_url">
+          <form.AppField name="xguard_url">
             {(field) => (
               <field.FormInput
                 required
-                label={m.settings_instance_label_defguard_url()}
-                helper={m.settings_instance_helper_defguard_url()}
+                label={m.settings_instance_label_xguard_url()}
+                helper={m.settings_instance_helper_xguard_url()}
               />
             )}
           </form.AppField>

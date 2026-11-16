@@ -12,9 +12,9 @@ import api from '../../shared/api/api';
 import type { LocationConnectedNetworkDevice } from '../../shared/api/types';
 import { TableSkeleton } from '../../shared/components/skeleton/TableSkeleton/TableSkeleton';
 import { TableValuesListCell } from '../../shared/components/TableValuesListCell/TableValuesListCell';
-import { EmptyStateFlexible } from '../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
-import { TableBody } from '../../shared/defguard-ui/components/table/TableBody/TableBody';
-import { TableCell } from '../../shared/defguard-ui/components/table/TableCell/TableCell';
+import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/TableBody';
+import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
 import { ConnectionDurationCell } from './components/ConnectionDurationCell';
 import { DeviceTrafficChartCell } from './components/DeviceTrafficChartCell/DeviceTrafficChartCell';
 

@@ -14,16 +14,16 @@ esac
 
 remote_script=$(cat <<'REMOTE'
 set -euo pipefail
-exec 9>"$HOME/.defguard-load-test.lock"
+exec 9>"$HOME/.xguard-load-test.lock"
 flock -n 9 || { echo 'Another load test is already running'; exit 1; }
 set -a
-source "$HOME/.config/defguard-load-test.env"
+source "$HOME/.config/xguard-load-test.env"
 set +a
-cd "$HOME/defguard"
+cd "$HOME/xguard"
 git fetch origin "$LOAD_TEST_REV"
 git checkout --detach "$LOAD_TEST_REV"
 git submodule update --init --recursive
-cargo build --locked --release -p defguard_load_generator
+cargo build --locked --release -p xguard_load_generator
 
 case "$LOAD_TEST_SCENARIO" in
   polling) command=config-polling; posture=() ;;
@@ -31,7 +31,7 @@ case "$LOAD_TEST_SCENARIO" in
   mfa_posture) command=client-mfa; posture=(--with-posture-checks) ;;
   *) echo "Unknown load-test scenario: $LOAD_TEST_SCENARIO"; exit 1 ;;
 esac
-./target/release/defguard_load_generator test "$command" \
+./target/release/xguard_load_generator test "$command" \
   --proxy-url "$LOAD_TEST_PROXY_URL" \
   --network-id "$NETWORK_ID" \
   --requests-per-second "$RPS" \

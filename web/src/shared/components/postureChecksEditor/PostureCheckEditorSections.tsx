@@ -3,22 +3,22 @@ import { getOperatingSystemVersionOptionLabel } from '../../../pages/AddPostureC
 import { addPostureCheckOperatingSystems } from '../../../pages/AddPostureCheckWizardPage/types';
 import type { OperatingSystemConditionKey } from '../../../pages/AddPostureCheckWizardPage/useAddPostureCheckWizardStore';
 import {
-  type PostureCheckDefguardVersionValue,
+  type PostureCheckXGuardVersionValue,
   PostureCheckOs,
   type PostureCheckOsValue,
   type PostureCheckVersionValues,
 } from '../../../pages/PostureChecksPage/types';
 import { m } from '../../../paraglide/messages';
-import { Checkbox } from '../../defguard-ui/components/Checkbox/Checkbox';
-import { Divider } from '../../defguard-ui/components/Divider/Divider';
-import { EvenSplit } from '../../defguard-ui/components/EvenSplit/EvenSplit';
-import { Input } from '../../defguard-ui/components/Input/Input';
-import { InteractiveBlock } from '../../defguard-ui/components/InteractiveBlock/InteractiveBlock';
-import { Select } from '../../defguard-ui/components/Select/Select';
-import type { SelectOption } from '../../defguard-ui/components/Select/types';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { Textarea } from '../../defguard-ui/components/Textarea/Textarea';
-import { ThemeSpacing } from '../../defguard-ui/types';
+import { Checkbox } from '../../xguard-ui/components/Checkbox/Checkbox';
+import { Divider } from '../../xguard-ui/components/Divider/Divider';
+import { EvenSplit } from '../../xguard-ui/components/EvenSplit/EvenSplit';
+import { Input } from '../../xguard-ui/components/Input/Input';
+import { InteractiveBlock } from '../../xguard-ui/components/InteractiveBlock/InteractiveBlock';
+import { Select } from '../../xguard-ui/components/Select/Select';
+import type { SelectOption } from '../../xguard-ui/components/Select/types';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { Textarea } from '../../xguard-ui/components/Textarea/Textarea';
+import { ThemeSpacing } from '../../xguard-ui/types';
 import { DescriptionBlock } from '../DescriptionBlock/DescriptionBlock';
 import { PolicyOsCard } from '../policyPostures/PolicyOsCard/PolicyOsCard';
 import { SystemSelector } from '../SystemSelector/SystemSelector';
@@ -41,8 +41,8 @@ export type PostureCheckEditorValues = {
   configuredOperatingSystems: PostureCheckOsValue[];
   description: string | null;
   locations: Set<number>;
-  minimumDesktopClientVersion: PostureCheckDefguardVersionValue;
-  minimumMobileClientVersion: PostureCheckDefguardVersionValue;
+  minimumDesktopClientVersion: PostureCheckXGuardVersionValue;
+  minimumMobileClientVersion: PostureCheckXGuardVersionValue;
   name: string;
   operatingSystemState: Record<
     PostureCheckOsValue,
@@ -71,7 +71,7 @@ type OperatingSystemsSectionProps = {
   asCards?: boolean;
 };
 
-type DefguardSectionProps = {
+type XGuardSectionProps = {
   values: PostureCheckEditorValues;
   versionValues: PostureCheckVersionValues;
   updateValues: UpdateValues;
@@ -421,14 +421,14 @@ export const PostureCheckOperatingSystemsSection = ({
   );
 };
 
-export const PostureCheckDefguardSection = ({
+export const PostureCheckXGuardSection = ({
   updateValues,
   values,
   versionValues,
-}: DefguardSectionProps) => {
+}: XGuardSectionProps) => {
   const buildVersionOptions = (
     versions: readonly string[],
-  ): SelectOption<PostureCheckDefguardVersionValue>[] => [
+  ): SelectOption<PostureCheckXGuardVersionValue>[] => [
     {
       key: 'any',
       label: m.posture_checks_version_any(),
@@ -441,8 +441,8 @@ export const PostureCheckDefguardSection = ({
     })),
   ];
 
-  const desktopVersionOptions = buildVersionOptions(versionValues.defguardDesktop);
-  const mobileVersionOptions = buildVersionOptions(versionValues.defguardMobile);
+  const desktopVersionOptions = buildVersionOptions(versionValues.xguardDesktop);
+  const mobileVersionOptions = buildVersionOptions(versionValues.xguardMobile);
   const selectedDesktopVersion =
     desktopVersionOptions.find(
       (option) => option.value === values.minimumDesktopClientVersion,
@@ -453,8 +453,8 @@ export const PostureCheckDefguardSection = ({
     ) ?? mobileVersionOptions[0];
 
   return (
-    <div className="posture-check-defguard">
-      <p className="note">{m.posture_checks_edit_defguard_note()}</p>
+    <div className="posture-check-xguard">
+      <p className="note">{m.posture_checks_edit_xguard_note()}</p>
       <div className="client-version-selects">
         <Select
           label={m.posture_checks_desktop_client()}

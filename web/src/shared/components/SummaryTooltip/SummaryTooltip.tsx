@@ -3,13 +3,13 @@ import './style.scss';
 import type { Placement } from '@floating-ui/react';
 import clsx from 'clsx';
 import { Fragment, type PropsWithChildren, type ReactNode } from 'react';
-import { Divider } from '../../defguard-ui/components/Divider/Divider';
-import { IconKind } from '../../defguard-ui/components/Icon';
-import { Icon } from '../../defguard-ui/components/Icon/Icon';
-import { TooltipContent } from '../../defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../defguard-ui/providers/tooltip/TooltipTrigger';
-import { ThemeVariable } from '../../defguard-ui/types';
+import { Divider } from '../../xguard-ui/components/Divider/Divider';
+import { IconKind } from '../../xguard-ui/components/Icon';
+import { Icon } from '../../xguard-ui/components/Icon/Icon';
+import { TooltipContent } from '../../xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../xguard-ui/providers/tooltip/TooltipTrigger';
+import { ThemeVariable } from '../../xguard-ui/types';
 import type { SummarySection } from './type';
 
 type Props = {

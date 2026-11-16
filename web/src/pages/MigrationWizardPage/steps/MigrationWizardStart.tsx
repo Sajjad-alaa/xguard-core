@@ -1,14 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { m } from '../../../paraglide/messages';
 import { Controls } from '../../../shared/components/Controls/Controls';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { IconKind } from '../../../shared/defguard-ui/components/Icon';
-import { InfoBanner } from '../../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { RenderMarkdown } from '../../../shared/defguard-ui/components/RenderMarkdown/RenderMarkdown';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { IconKind } from '../../../shared/xguard-ui/components/Icon';
+import { InfoBanner } from '../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { RenderMarkdown } from '../../../shared/xguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { getMigrationStateQueryOptions } from '../../../shared/query';
 import { useMigrationWizardStore } from '../store/useMigrationWizardStore';
 

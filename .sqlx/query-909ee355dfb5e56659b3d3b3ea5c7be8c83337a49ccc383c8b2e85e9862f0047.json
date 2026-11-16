@@ -28,7 +28,7 @@
             "name": "activity_log_module",
             "kind": {
               "Enum": [
-                "defguard",
+                "xguard",
                 "client",
                 "vpn",
                 "enrollment",

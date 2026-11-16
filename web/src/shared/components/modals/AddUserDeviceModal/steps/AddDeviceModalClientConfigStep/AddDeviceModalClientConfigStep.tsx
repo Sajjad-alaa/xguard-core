@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react';
 import { m } from '../../../../../../paraglide/messages';
-import { SizedBox } from '../../../../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../defguard-ui/types';
+import { SizedBox } from '../../../../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../xguard-ui/types';
 import { useAddUserDeviceModal } from '../../store/useAddUserDeviceModal';
 import './style.scss';
 import { useQuery } from '@tanstack/react-query';
 import { titleCase } from 'text-case';
 import { externalLink } from '../../../../../constants';
-import { Button } from '../../../../../defguard-ui/components/Button/Button';
-import { CopyField } from '../../../../../defguard-ui/components/CopyField/CopyField';
-import { Divider } from '../../../../../defguard-ui/components/Divider/Divider';
-import { Fold } from '../../../../../defguard-ui/components/Fold/Fold';
-import { FoldButton } from '../../../../../defguard-ui/components/FoldButton/FoldButton';
-import { IconButton } from '../../../../../defguard-ui/components/IconButton/IconButton';
-import { IconButtonMenu } from '../../../../../defguard-ui/components/IconButtonMenu/IconButtonMenu';
-import type { MenuItemsGroup } from '../../../../../defguard-ui/components/Menu/types';
-import { QrCard } from '../../../../../defguard-ui/components/QrCard/QrCard';
+import { Button } from '../../../../../xguard-ui/components/Button/Button';
+import { CopyField } from '../../../../../xguard-ui/components/CopyField/CopyField';
+import { Divider } from '../../../../../xguard-ui/components/Divider/Divider';
+import { Fold } from '../../../../../xguard-ui/components/Fold/Fold';
+import { FoldButton } from '../../../../../xguard-ui/components/FoldButton/FoldButton';
+import { IconButton } from '../../../../../xguard-ui/components/IconButton/IconButton';
+import { IconButtonMenu } from '../../../../../xguard-ui/components/IconButtonMenu/IconButtonMenu';
+import type { MenuItemsGroup } from '../../../../../xguard-ui/components/Menu/types';
+import { QrCard } from '../../../../../xguard-ui/components/QrCard/QrCard';
 import { clientArtifactsQueryOptions } from '../../../../../query';
 import { openClientLink } from '../../../../../utils/openVirtualLink';
 import { ContainerWithIcon } from '../../../../ContainerWithIcon/ContainerWithIcon';
@@ -28,7 +28,7 @@ export const AddDeviceModalClientConfigStep = () => {
 
   const deepLink = useMemo(() => {
     if (!enrollment) return null;
-    return `defguard://addinstance?token=${enrollment.token}&url=${enrollment.url}`;
+    return `xguard://addinstance?token=${enrollment.token}&url=${enrollment.url}`;
   }, [enrollment]);
 
   const qrData = useMemo(() => {
@@ -153,7 +153,7 @@ export const AddDeviceModalClientConfigStep = () => {
           <div className="download">
             <p>{m.modal_add_user_device_client_desktop_download()}</p>
             <a
-              href={clientLinks?.windows_amd64 ?? externalLink.defguard.download}
+              href={clientLinks?.windows_amd64 ?? externalLink.xguard.download}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -224,7 +224,7 @@ export const AddDeviceModalClientConfigStep = () => {
       </ContainerWithIcon>
       <Controls>
         <div className="left">
-          <p>{`Once your Defguard client is configured, you can close this window.`}</p>
+          <p>{`Once your XGuard client is configured, you can close this window.`}</p>
         </div>
         <div className="right">
           <Button

@@ -81,7 +81,7 @@ test *ARGS:
 test-ldap *ARGS:
     #!/usr/bin/env bash
     set -uo pipefail
-    docker compose -p defguard-ldap -f docker-compose.ldap-test.yaml up -d --wait openldap
+    docker compose -p xguard-ldap -f docker-compose.ldap-test.yaml up -d --wait openldap
     LDAP_URL=ldap://localhost:389 \
     LDAP_BIND_USERNAME=cn=admin,dc=example,dc=org \
     LDAP_BIND_PASSWORD=pass123 \
@@ -93,9 +93,9 @@ test-ldap *ARGS:
     LDAP_GROUPNAME_ATTR=cn \
     LDAP_MEMBER_ATTR=memberOf \
     LDAP_GROUP_MEMBER_ATTR=uniqueMember \
-        cargo nextest run --run-ignored only -E 'package(defguard_core) and test(/^ldap::/)' {{ARGS}}
+        cargo nextest run --run-ignored only -E 'package(xguard_core) and test(/^ldap::/)' {{ARGS}}
     status=$?
-    docker compose -p defguard-ldap -f docker-compose.ldap-test.yaml down
+    docker compose -p xguard-ldap -f docker-compose.ldap-test.yaml down
     exit $status
 
 # run e2e tests (requires Docker, IMAGE_TAG defaults to release-2.1)

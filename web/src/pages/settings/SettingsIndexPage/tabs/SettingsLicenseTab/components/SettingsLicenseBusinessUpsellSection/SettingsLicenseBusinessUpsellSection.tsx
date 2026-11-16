@@ -1,10 +1,10 @@
 import { m } from '../../../../../../../paraglide/messages';
 import { SettingsCard } from '../../../../../../../shared/components/SettingsCard/SettingsCard';
 import { externalLink } from '../../../../../../../shared/constants';
-import { Button } from '../../../../../../../shared/defguard-ui/components/Button/Button';
-import { ExternalLink } from '../../../../../../../shared/defguard-ui/components/ExternalLink/ExternalLink';
-import { SizedBox } from '../../../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../../../shared/defguard-ui/types';
+import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
+import { ExternalLink } from '../../../../../../../shared/xguard-ui/components/ExternalLink/ExternalLink';
+import { SizedBox } from '../../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../../../shared/xguard-ui/types';
 import enterpriseImage from '../../assets/enterprise.png';
 
 export const SettingsLicenseBusinessUpsellSection = () => {
@@ -13,7 +13,7 @@ export const SettingsLicenseBusinessUpsellSection = () => {
       <header>
         <h5>{m.settings_license_expand_plan_title()}</h5>
         <ExternalLink
-          href={externalLink.defguard.pricing}
+          href={externalLink.xguard.pricing}
           rel="noreferrer noopener"
           target="_blank"
         >
@@ -37,7 +37,7 @@ export const SettingsLicenseBusinessUpsellSection = () => {
             <SizedBox height={ThemeSpacing.Md} />
             <div className="actions">
               <a
-                href={externalLink.defguard.sales}
+                href={externalLink.xguard.sales}
                 rel="noreferrer noopener"
                 target="_blank"
               >

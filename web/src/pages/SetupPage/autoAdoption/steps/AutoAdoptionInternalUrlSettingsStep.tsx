@@ -7,42 +7,42 @@ import { getApiErrorMessage } from '../../../../shared/api/apiErrorMessages';
 import type { ApiError } from '../../../../shared/api/types';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { Helper } from '../../../../shared/defguard-ui/components/Helper/Helper';
-import { Radio } from '../../../../shared/defguard-ui/components/Radio/Radio';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Helper } from '../../../../shared/xguard-ui/components/Helper/Helper';
+import { Radio } from '../../../../shared/xguard-ui/components/Radio/Radio';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import {
   ensureUrlScheme,
   getCorrectedUrl,
-  isValidDefguardUrl,
-} from '../../../../shared/utils/defguardUrl';
-import { createDistinctUrlRefinement } from '../../../../shared/utils/defguardUrlValidation';
+  isValidXGuardUrl,
+} from '../../../../shared/utils/xguardUrl';
+import { createDistinctUrlRefinement } from '../../../../shared/utils/xguardUrlValidation';
 import { AutoAdoptionSetupStep, type InternalSslType } from '../types';
 import { useAutoAdoptionSetupWizardStore } from '../useAutoAdoptionSetupWizardStore';
 import './style.scss';
 
 export const AutoAdoptionInternalUrlSettingsStep = () => {
   const setActiveStep = useAutoAdoptionSetupWizardStore((s) => s.setActiveStep);
-  const storedUrl = useAutoAdoptionSetupWizardStore((s) => s.defguard_url);
+  const storedUrl = useAutoAdoptionSetupWizardStore((s) => s.xguard_url);
   const storedSslType = useAutoAdoptionSetupWizardStore((s) => s.internal_ssl_type);
 
   const formSchema = z
     .object({
-      defguard_url: z
+      xguard_url: z
         .string({
-          error: m.initial_setup_general_config_error_defguard_url_required(),
+          error: m.initial_setup_general_config_error_xguard_url_required(),
         })
         .overwrite(ensureUrlScheme)
-        .min(1, m.initial_setup_general_config_error_defguard_url_required())
+        .min(1, m.initial_setup_general_config_error_xguard_url_required())
         .url(m.initial_setup_general_config_error_invalid_url())
         .refine(
-          isValidDefguardUrl,
-          m.initial_setup_general_config_error_defguard_url_invalid_host(),
+          isValidXGuardUrl,
+          m.initial_setup_general_config_error_xguard_url_invalid_host(),
         ),
       ssl_type: z.custom<InternalSslType>(),
       cert_pem_file: z.custom<File | null>().nullable(),
@@ -51,7 +51,7 @@ export const AutoAdoptionInternalUrlSettingsStep = () => {
     .superRefine(
       createDistinctUrlRefinement(
         () => useAutoAdoptionSetupWizardStore.getState().public_proxy_url,
-        'defguard_url',
+        'xguard_url',
         m.initial_setup_general_config_error_urls_must_differ(),
       ),
     );
@@ -81,7 +81,7 @@ export const AutoAdoptionInternalUrlSettingsStep = () => {
 
   const form = useAppForm({
     defaultValues: {
-      defguard_url: storedUrl,
+      xguard_url: storedUrl,
       ssl_type: (storedSslType ?? 'none') as InternalSslType,
       cert_pem_file: null as File | null,
       key_pem_file: null as File | null,
@@ -98,12 +98,12 @@ export const AutoAdoptionInternalUrlSettingsStep = () => {
         );
         return;
       }
-      const correctedUrl = getCorrectedUrl(value.defguard_url, value.ssl_type);
+      const correctedUrl = getCorrectedUrl(value.xguard_url, value.ssl_type);
       useAutoAdoptionSetupWizardStore.setState({
-        defguard_url: correctedUrl,
+        xguard_url: correctedUrl,
       });
       mutate({
-        defguard_url: correctedUrl,
+        xguard_url: correctedUrl,
         ssl_type: value.ssl_type,
         cert_pem: value.cert_pem_file ? await value.cert_pem_file.text() : undefined,
         key_pem: value.key_pem_file ? await value.key_pem_file.text() : undefined,
@@ -123,12 +123,12 @@ export const AutoAdoptionInternalUrlSettingsStep = () => {
         <form.AppForm>
           <p>{m.initial_setup_auto_adoption_internal_url_settings_url_description()}</p>
           <SizedBox height={ThemeSpacing.Xl} />
-          <form.AppField name="defguard_url">
+          <form.AppField name="xguard_url">
             {(field) => (
               <field.FormInput
                 required
-                label={m.initial_setup_general_config_label_defguard_url()}
-                helper={m.initial_setup_general_config_helper_defguard_url()}
+                label={m.initial_setup_general_config_label_xguard_url()}
+                helper={m.initial_setup_general_config_helper_xguard_url()}
                 type="text"
               />
             )}
@@ -150,12 +150,12 @@ export const AutoAdoptionInternalUrlSettingsStep = () => {
                 <SizedBox height={ThemeSpacing.Md} />
                 <div className="ssl-option-row">
                   <Radio
-                    text={m.initial_setup_auto_adoption_internal_url_settings_ssl_option_defguard_ca()}
-                    active={sslType === 'defguard_ca'}
-                    onClick={() => form.setFieldValue('ssl_type', 'defguard_ca')}
+                    text={m.initial_setup_auto_adoption_internal_url_settings_ssl_option_xguard_ca()}
+                    active={sslType === 'xguard_ca'}
+                    onClick={() => form.setFieldValue('ssl_type', 'xguard_ca')}
                   />
                   <Helper>
-                    {m.initial_setup_auto_adoption_internal_url_settings_ssl_option_defguard_ca_help()}
+                    {m.initial_setup_auto_adoption_internal_url_settings_ssl_option_xguard_ca_help()}
                   </Helper>
                 </div>
                 <SizedBox height={ThemeSpacing.Md} />

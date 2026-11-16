@@ -17,10 +17,10 @@ import {
 } from '../../../shared/api/types';
 import { Breadcrumbs } from '../../../shared/components/Breadcrumbs/Breadcrumbs';
 import { Page } from '../../../shared/components/Page/Page';
-import { InfoBanner } from '../../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { InfoBanner } from '../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { getLicenseInfoQueryOptions } from '../../../shared/query';
 import { canUseBusinessFeature, licenseActionCheck } from '../../../shared/utils/license';
 import { useAddExternalOpenIdStore } from '../../AddExternalOpenIdWizardPage/useAddExternalOpenIdStore';

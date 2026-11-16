@@ -11,7 +11,7 @@ permissions:
 jobs:
   test:
     runs-on:
-      - codebuild-defguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-xguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
         instance-size:medium
     strategy:
       fail-fast: false
@@ -97,8 +97,8 @@ jobs:
         id: run-test
         working-directory: ./e2e
         env:
-          DEFGUARD_LICENSE_KEY: ${{ secrets.DEFGUARD_LICENSE_KEY }}
-          DEFGUARD_BUSINESS_LICENSE_KEY: ${{ secrets.DEFGUARD_BUSINESS_LICENSE_KEY }}
+          XGUARD_LICENSE_KEY: ${{ secrets.XGUARD_LICENSE_KEY }}
+          XGUARD_BUSINESS_LICENSE_KEY: ${{ secrets.XGUARD_BUSINESS_LICENSE_KEY }}
         run: pnpm test --shard=${{ matrix.shard }}/8
 
       - name: Stop compose
@@ -115,7 +115,7 @@ jobs:
 
   test-migration-wizard:
     runs-on:
-      - codebuild-defguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-xguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
         instance-size:medium
 
     steps:
@@ -193,7 +193,7 @@ jobs:
       - name: Run migration wizard tests
         working-directory: ./e2e
         env:
-          DEFGUARD_LICENSE_KEY: ${{ secrets.DEFGUARD_LICENSE_KEY }}
+          XGUARD_LICENSE_KEY: ${{ secrets.XGUARD_LICENSE_KEY }}
         run: pnpm playwright test --config playwright.config.migration.ts
 
       - name: Stop compose
@@ -210,7 +210,7 @@ jobs:
 
   test-auto-adoption-wizard:
     runs-on:
-      - codebuild-defguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-xguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
         instance-size:medium
 
     steps:
@@ -288,7 +288,7 @@ jobs:
       - name: Run auto-adoption wizard tests
         working-directory: ./e2e
         env:
-          DEFGUARD_LICENSE_KEY: ${{ secrets.DEFGUARD_LICENSE_KEY }}
+          XGUARD_LICENSE_KEY: ${{ secrets.XGUARD_LICENSE_KEY }}
         run: pnpm playwright test --config playwright.config.auto-adoption.ts
 
       - name: Stop compose

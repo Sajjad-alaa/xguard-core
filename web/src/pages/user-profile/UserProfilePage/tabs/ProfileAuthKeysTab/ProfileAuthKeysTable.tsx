@@ -12,14 +12,14 @@ import type { AuthKey, AuthKeyTypeValue } from '../../../../../shared/api/types'
 import type {
   MenuItemProps,
   MenuItemsGroup,
-} from '../../../../../shared/defguard-ui/components/Menu/types';
-import { tableEditColumnSize } from '../../../../../shared/defguard-ui/components/table/consts';
-import { TableBody } from '../../../../../shared/defguard-ui/components/table/TableBody/TableBody';
-import { TableCell } from '../../../../../shared/defguard-ui/components/table/TableCell/TableCell';
-import { TableEditCell } from '../../../../../shared/defguard-ui/components/table/TableEditCell/TableEditCell';
-import { useClipboard } from '../../../../../shared/defguard-ui/hooks/useClipboard';
-import { Snackbar } from '../../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { isPresent } from '../../../../../shared/defguard-ui/utils/isPresent';
+} from '../../../../../shared/xguard-ui/components/Menu/types';
+import { tableEditColumnSize } from '../../../../../shared/xguard-ui/components/table/consts';
+import { TableBody } from '../../../../../shared/xguard-ui/components/table/TableBody/TableBody';
+import { TableCell } from '../../../../../shared/xguard-ui/components/table/TableCell/TableCell';
+import { TableEditCell } from '../../../../../shared/xguard-ui/components/table/TableEditCell/TableEditCell';
+import { useClipboard } from '../../../../../shared/xguard-ui/hooks/useClipboard';
+import { Snackbar } from '../../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { isPresent } from '../../../../../shared/xguard-ui/utils/isPresent';
 import { openModal } from '../../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../../shared/hooks/modalControls/modalTypes';
 import { downloadText } from '../../../../../shared/utils/download';

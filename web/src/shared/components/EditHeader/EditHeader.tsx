@@ -1,8 +1,8 @@
 import clsx from 'clsx';
-import { Badge } from '../../defguard-ui/components/Badge/Badge';
-import { Icon } from '../../defguard-ui/components/Icon';
-import { ThemeVariable } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Badge } from '../../xguard-ui/components/Badge/Badge';
+import { Icon } from '../../xguard-ui/components/Icon';
+import { ThemeVariable } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import './style.scss';
 import type { EditHeaderProps } from './types';
 

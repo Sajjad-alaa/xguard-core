@@ -1,7 +1,7 @@
 import z from 'zod';
 import { m } from '../../../../../../../paraglide/messages';
-import { Modal } from '../../../../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../../../../shared/defguard-ui/components/ModalControls/ModalControls';
+import { Modal } from '../../../../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import { useAppForm } from '../../../../../../../shared/form';
 import {
   closeModal,
@@ -18,12 +18,12 @@ import { useEffect, useState } from 'react';
 import api from '../../../../../../../shared/api/api';
 import { getApiErrorMessage } from '../../../../../../../shared/api/apiErrorMessages';
 import type { ApiError } from '../../../../../../../shared/api/types';
-import { Button } from '../../../../../../../shared/defguard-ui/components/Button/Button';
-import { SizedBox } from '../../../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { useEffectOnce } from '../../../../../../../shared/defguard-ui/hooks/useEffectOnce';
-import { Snackbar } from '../../../../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
+import { SizedBox } from '../../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { useEffectOnce } from '../../../../../../../shared/xguard-ui/hooks/useEffectOnce';
+import { Snackbar } from '../../../../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
 import { formChangeLogic } from '../../../../../../../shared/formLogic';
 import { useTimer } from '../../../../../../../shared/hooks/useTimer';
 import { useUserProfile } from '../../../../hooks/useUserProfilePage';

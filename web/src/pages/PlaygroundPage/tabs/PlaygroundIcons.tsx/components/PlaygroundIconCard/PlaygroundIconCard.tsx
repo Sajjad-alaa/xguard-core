@@ -2,13 +2,13 @@ import { titleCase } from 'text-case';
 import {
   Icon,
   type IconKindValue,
-} from '../../../../../../shared/defguard-ui/components/Icon';
-import { useClipboard } from '../../../../../../shared/defguard-ui/hooks/useClipboard';
+} from '../../../../../../shared/xguard-ui/components/Icon';
+import { useClipboard } from '../../../../../../shared/xguard-ui/hooks/useClipboard';
 import './style.scss';
-import { Snackbar } from '../../../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { TooltipContent } from '../../../../../../shared/defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../../../../../shared/defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../../../../../shared/defguard-ui/providers/tooltip/TooltipTrigger';
+import { Snackbar } from '../../../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { TooltipContent } from '../../../../../../shared/xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../../../../../shared/xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../../../../../shared/xguard-ui/providers/tooltip/TooltipTrigger';
 
 interface Props {
   icon: IconKindValue;

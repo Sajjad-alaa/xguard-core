@@ -15,14 +15,14 @@ import { Page } from '../../../shared/components/Page/Page';
 import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCard';
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
-import { Badge } from '../../../shared/defguard-ui/components/Badge/Badge';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { MarkedSection } from '../../../shared/defguard-ui/components/MarkedSection/MarkedSection';
-import { MarkedSectionHeader } from '../../../shared/defguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Badge } from '../../../shared/xguard-ui/components/Badge/Badge';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { MarkedSection } from '../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
+import { MarkedSectionHeader } from '../../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import {
   EXPIRING_THRESHOLD_DAYS,
   getDaysUntilExpiry,
@@ -88,7 +88,7 @@ const Content = () => {
     const blob = new Blob([caPem], {
       type: 'application/x-pem-file;charset=utf-8',
     });
-    downloadFile(blob, 'defguard-ca', 'pem');
+    downloadFile(blob, 'xguard-ca', 'pem');
   }, [caData?.ca_cert_pem]);
 
   return (

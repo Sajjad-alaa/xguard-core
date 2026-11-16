@@ -17,8 +17,8 @@ These versions are currently being supported with security updates:
 
 Please do **not open a Github Issue for security issues you encounter**. Either:
 
-1. Please follow our [Vulnerability Disclosure Process](https://defguard.net/security/#VDP-title),
+1. Please follow our [Vulnerability Disclosure Process](https://xguard.local/security/#VDP-title),
   or
-2. Report a vulnerability by openining a [security advisory here](https://github.com/defguard/defguard/security/advisories/new).
+2. Report a vulnerability by openining a [security advisory here](https://github.com/Sajjad-alaa/xguard-core/security/advisories/new).
 
 

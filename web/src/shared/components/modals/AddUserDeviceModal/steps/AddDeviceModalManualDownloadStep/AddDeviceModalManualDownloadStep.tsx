@@ -1,11 +1,11 @@
 import { m } from '../../../../../../paraglide/messages';
-import { Divider } from '../../../../../defguard-ui/components/Divider/Divider';
-import { IconKind } from '../../../../../defguard-ui/components/Icon';
-import { InfoBanner } from '../../../../../defguard-ui/components/InfoBanner/InfoBanner';
-import { ModalControls } from '../../../../../defguard-ui/components/ModalControls/ModalControls';
+import { Divider } from '../../../../../xguard-ui/components/Divider/Divider';
+import { IconKind } from '../../../../../xguard-ui/components/Icon';
+import { InfoBanner } from '../../../../../xguard-ui/components/InfoBanner/InfoBanner';
+import { ModalControls } from '../../../../../xguard-ui/components/ModalControls/ModalControls';
 import { useAddUserDeviceModal } from '../../store/useAddUserDeviceModal';
 import './style.scss';
-import { isPresent } from '../../../../../defguard-ui/utils/isPresent';
+import { isPresent } from '../../../../../xguard-ui/utils/isPresent';
 import { ModalDeviceConfigSection } from '../../../../ModalDeviceConfigSection/ModalDeviceConfigSection';
 
 export const AddDeviceModalManualDownloadStep = () => {

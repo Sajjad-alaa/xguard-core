@@ -1,10 +1,10 @@
 import { m } from '../../../../../paraglide/messages';
 import { LayoutGrid } from '../../../../../shared/components/LayoutGrid/LayoutGrid';
 import { AddAuthKeyModal } from '../../../../../shared/components/modals/AddAuthKeyModal/AddAuthKeyModal';
-import { Button } from '../../../../../shared/defguard-ui/components/Button/Button';
-import { EmptyStateFlexible } from '../../../../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
-import { SizedBox } from '../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSize } from '../../../../../shared/defguard-ui/types';
+import { Button } from '../../../../../shared/xguard-ui/components/Button/Button';
+import { EmptyStateFlexible } from '../../../../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import { SizedBox } from '../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSize } from '../../../../../shared/xguard-ui/types';
 import { openModal } from '../../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../../shared/hooks/modalControls/modalTypes';
 import { ProfileTabHeader } from '../../components/ProfileTabHeader/ProfileTabHeader';

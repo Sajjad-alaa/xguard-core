@@ -1,6 +1,6 @@
 import { m } from '../../../../paraglide/messages';
 import { Controls } from '../../../../shared/components/Controls/Controls';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
 import { useFormContext } from '../../../../shared/form';
 import { useAddExternalOpenIdStore } from '../../useAddExternalOpenIdStore';
 

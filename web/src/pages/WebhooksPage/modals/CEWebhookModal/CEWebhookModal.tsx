@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -15,10 +15,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import z from 'zod';
 import api from '../../../../shared/api/api';
 import { DescriptionBlock } from '../../../../shared/components/DescriptionBlock/DescriptionBlock';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 

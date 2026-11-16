@@ -1,0 +1,105 @@
+{% import "macros.mjml" as macros %}
+{% extends "base.mjml" %}
+{% block content %}
+
+{{ macros::email_header() }}
+
+<mj-section mj-class="s-4xl">
+  <mj-column css-class="s-2xl">
+    <mj-table css-class="dg-table">
+      <tr>
+        <td>
+          {{ label_url }}
+        </td>
+        <td>
+          {{ url }}
+        </td>
+      </tr>
+      <tr>
+        <td>
+          {{ label_token }}
+        </td>
+        <td>
+          {{ token }}
+        </td>
+      </tr>
+    </mj-table>
+  </mj-column>
+</mj-section>
+<mj-section mj-class="s-2xl">
+  <mj-column>
+    <mj-button href="{{ url }}/open-desktop?token={{ token }}" align="left" mj-class="dg-button">
+      {{ configure }}
+    </mj-button>
+  </mj-column>
+</mj-section>
+<mj-section>
+  <mj-column>
+    <mj-text mj-class="s-xs t-body-xs-400" css-class="fg-muted-c">
+      {{ click }}
+    </mj-text>
+    {{ macros::action_link(href="https://xguard.local/download", text="https://xguard.local/download") }}
+  </mj-column>
+</mj-section>
+{% if scan_qr %}
+<mj-section>
+  <mj-column>
+    <mj-divider mj-class="divider" padding="32px 0" />
+  </mj-column>
+</mj-section>
+<mj-section>
+  <mj-group>
+    <mj-column width="17.5%">
+      <mj-image src="cid:new_account_2" width="105px" height="101px" />
+    </mj-column>
+    <mj-column width="5.33%">
+    </mj-column>
+    <mj-column width="77.17%">
+      <mj-text mj-class="t-body-primary-600 s-md" css-class="fg-default-c">
+        {{ label_mobile }}
+      </mj-text>
+      <mj-text mj-class="t-body-sm-400 s-2xl" css-class="fg-default-c">
+        {{ scan_qr }}
+      </mj-text>
+      <mj-image src="cid:qr" width="200px" height="200px" alt="qr" padding="0 0 24px 0" align="left" />
+      <mj-text mj-class="t-body-xs-500 s-lg" css-class="fg-muted-c">
+        {{ mobile_install }}
+      </mj-text>
+      <mj-text align="left" padding="0">
+        <table align="left" border="0" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td style="vertical-align: middle; padding-right: 12px;">
+              <img width="20" height="20" src="cid:google_play" alt="Android store" style="display: block;" />
+            </td>
+            <td style="vertical-align: middle;">
+              <a mj-class="t-body-sm-400" css-class="fg-action-c link" href="https://play.google.com/store/apps/details?id=local.xguard.mobile" style="color: #3961DB; text-decoration: none; font-family: Geist, Arial, sans-serif; font-weight: 400; font-size: 14px; line-height: 20px;">
+                {{ download_google }}
+              </a>
+            </td>
+          </tr>
+        </table>
+      </mj-text>
+
+      <mj-divider mj-class="divider" padding="12px 0" />
+
+      <mj-text align="left" padding="0">
+        <table align="left" border="0" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td style="vertical-align: middle; padding-right: 12px;">
+              <img width="20" height="20" src="cid:apple" alt="Apple store" style="display: block;" />
+            </td>
+            <td style="vertical-align: middle;">
+              <a mj-class="t-body-sm-400" css-class="fg-action-c link" href="https://apps.apple.com/us/app/xguard-vpn-client/id6748068630" style="color: #3961DB; text-decoration: none; font-family: Geist, Arial, sans-serif; font-weight: 400; font-size: 14px; line-height: 20px;">
+                {{ download_apple }}
+              </a>
+            </td>
+          </tr>
+        </table>
+      </mj-text>
+    </mj-column>
+  </mj-group>
+</mj-section>
+{% endif %}
+{{ macros::footer_divider() }}
+
+{% endblock content %}

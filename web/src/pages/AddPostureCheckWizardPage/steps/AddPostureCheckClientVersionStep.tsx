@@ -1,11 +1,11 @@
 import { m } from '../../../paraglide/messages';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import {
-  PostureCheckDefguardSection,
+  PostureCheckXGuardSection,
   type PostureCheckEditorValues,
 } from '../../../shared/components/postureChecksEditor/PostureCheckEditorSections';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import type { PostureCheckVersionValues } from '../../PostureChecksPage/types';
 import { useAddPostureCheckWizardStore } from '../useAddPostureCheckWizardStore';
 
@@ -57,7 +57,7 @@ export const AddPostureCheckClientVersionStep = ({ versionValues }: Props) => {
   return (
     <WizardCard className="add-posture-check-client-version-step">
       <div className="client-version-track">
-        <PostureCheckDefguardSection
+        <PostureCheckXGuardSection
           values={values}
           versionValues={versionValues}
           updateValues={(updater) => {

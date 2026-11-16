@@ -4,14 +4,14 @@ import { useNavigate } from '@tanstack/react-router';
 import { Fragment, Suspense } from 'react';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { ButtonMenu } from '../../../shared/defguard-ui/components/ButtonMenu/MenuButton';
-import { Chip } from '../../../shared/defguard-ui/components/Chip/Chip';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { DrawerModal } from '../../../shared/defguard-ui/components/DrawerModal/DrawerModal';
-import { Icon } from '../../../shared/defguard-ui/components/Icon';
-import { IconKind } from '../../../shared/defguard-ui/components/Icon/icon-types';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { ButtonMenu } from '../../../shared/xguard-ui/components/ButtonMenu/MenuButton';
+import { Chip } from '../../../shared/xguard-ui/components/Chip/Chip';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { DrawerModal } from '../../../shared/xguard-ui/components/DrawerModal/DrawerModal';
+import { Icon } from '../../../shared/xguard-ui/components/Icon';
+import { IconKind } from '../../../shared/xguard-ui/components/Icon/icon-types';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import {
   getDevicePostureQueryOptions,
   getLocationsQueryOptions,

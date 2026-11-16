@@ -1,15 +1,15 @@
 import './style.scss';
 import { type PropsWithChildren, useState } from 'react';
-import { Badge } from '../../../../../../../../../shared/defguard-ui/components/Badge/Badge';
-import type { BadgeProps } from '../../../../../../../../../shared/defguard-ui/components/Badge/types';
-import { Icon } from '../../../../../../../../../shared/defguard-ui/components/Icon';
-import type { IconKindValue } from '../../../../../../../../../shared/defguard-ui/components/Icon/icon-types';
-import { IconButtonMenu } from '../../../../../../../../../shared/defguard-ui/components/IconButtonMenu/IconButtonMenu';
-import type { MenuProps } from '../../../../../../../../../shared/defguard-ui/components/Menu/types';
-import { TooltipContent } from '../../../../../../../../../shared/defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../../../../../../../../shared/defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../../../../../../../../shared/defguard-ui/providers/tooltip/TooltipTrigger';
-import { isPresent } from '../../../../../../../../../shared/defguard-ui/utils/isPresent';
+import { Badge } from '../../../../../../../../../shared/xguard-ui/components/Badge/Badge';
+import type { BadgeProps } from '../../../../../../../../../shared/xguard-ui/components/Badge/types';
+import { Icon } from '../../../../../../../../../shared/xguard-ui/components/Icon';
+import type { IconKindValue } from '../../../../../../../../../shared/xguard-ui/components/Icon/icon-types';
+import { IconButtonMenu } from '../../../../../../../../../shared/xguard-ui/components/IconButtonMenu/IconButtonMenu';
+import type { MenuProps } from '../../../../../../../../../shared/xguard-ui/components/Menu/types';
+import { TooltipContent } from '../../../../../../../../../shared/xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../../../../../../../../shared/xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../../../../../../../../shared/xguard-ui/providers/tooltip/TooltipTrigger';
+import { isPresent } from '../../../../../../../../../shared/xguard-ui/utils/isPresent';
 
 const titleTooltipDelayMs = 500;
 

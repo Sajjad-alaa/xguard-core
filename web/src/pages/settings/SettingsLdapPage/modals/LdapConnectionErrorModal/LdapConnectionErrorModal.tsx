@@ -1,8 +1,8 @@
 import { m } from '../../../../../paraglide/messages';
 import { Controls } from '../../../../../shared/components/Controls/Controls';
-import { Button } from '../../../../../shared/defguard-ui/components/Button/Button';
-import { CodeCard } from '../../../../../shared/defguard-ui/components/CodeCard/CodeCard';
-import { Modal } from '../../../../../shared/defguard-ui/components/Modal/Modal';
+import { Button } from '../../../../../shared/xguard-ui/components/Button/Button';
+import { CodeCard } from '../../../../../shared/xguard-ui/components/CodeCard/CodeCard';
+import { Modal } from '../../../../../shared/xguard-ui/components/Modal/Modal';
 
 type Props = {
   isOpen: boolean;

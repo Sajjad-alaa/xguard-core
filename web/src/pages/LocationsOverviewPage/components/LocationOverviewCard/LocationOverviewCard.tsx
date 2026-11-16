@@ -13,17 +13,17 @@ import api from '../../../../shared/api/api';
 import { GatewaysStatusBadge } from '../../../../shared/components/GatewaysStatusBadge/GatewaysStatusBadge';
 import { TransferChart } from '../../../../shared/components/TransferChart/TransferChart';
 import { TransferText } from '../../../../shared/components/TransferText/TransferText';
-import { Badge } from '../../../../shared/defguard-ui/components/Badge/Badge';
-import { BadgeVariant } from '../../../../shared/defguard-ui/components/Badge/types';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { EmptyState } from '../../../../shared/defguard-ui/components/EmptyState/EmptyState';
-import { Fold } from '../../../../shared/defguard-ui/components/Fold/Fold';
-import { Icon } from '../../../../shared/defguard-ui/components/Icon';
-import type { IconKindValue } from '../../../../shared/defguard-ui/components/Icon/icon-types';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Badge } from '../../../../shared/xguard-ui/components/Badge/Badge';
+import { BadgeVariant } from '../../../../shared/xguard-ui/components/Badge/types';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { EmptyState } from '../../../../shared/xguard-ui/components/EmptyState/EmptyState';
+import { Fold } from '../../../../shared/xguard-ui/components/Fold/Fold';
+import { Icon } from '../../../../shared/xguard-ui/components/Icon';
+import type { IconKindValue } from '../../../../shared/xguard-ui/components/Icon/icon-types';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { mapTransferToChart } from '../../../../shared/utils/stats';
 
 type Props = {

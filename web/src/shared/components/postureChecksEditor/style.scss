@@ -65,7 +65,7 @@
   }
 }
 
-.posture-check-defguard {
+.posture-check-xguard {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2xl);
@@ -91,7 +91,7 @@
 }
 
 @media (width <= 768px) {
-  .posture-check-defguard .client-version-selects {
+  .posture-check-xguard .client-version-selects {
     grid-template-columns: 1fr;
   }
 }

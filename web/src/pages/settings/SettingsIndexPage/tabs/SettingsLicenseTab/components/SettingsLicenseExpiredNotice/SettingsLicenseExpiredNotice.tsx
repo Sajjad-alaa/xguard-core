@@ -6,9 +6,9 @@ import {
   externalLink,
   licenseGracePeriodDays,
 } from '../../../../../../../shared/constants';
-import { Button } from '../../../../../../../shared/defguard-ui/components/Button/Button';
-import { SizedBox } from '../../../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../../../shared/defguard-ui/types';
+import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
+import { SizedBox } from '../../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../../../shared/xguard-ui/types';
 import expiredImage from '../../assets/expired.png';
 
 type Props = {
@@ -40,7 +40,7 @@ export const SettingsLicenseExpiredNotice = ({ licenseInfo, state }: Props) => {
           <p className="description">{description}</p>
           <SizedBox height={ThemeSpacing.Md} />
           <a
-            href={externalLink.defguard.pricing}
+            href={externalLink.xguard.pricing}
             rel="noreferrer noopener"
             target="_blank"
           >

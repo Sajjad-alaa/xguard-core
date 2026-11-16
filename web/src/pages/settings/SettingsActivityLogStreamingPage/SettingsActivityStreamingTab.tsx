@@ -10,11 +10,11 @@ import {
 } from '../../../shared/components/ContextualHelp';
 import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import type { ButtonProps } from '../../../shared/defguard-ui/components/Button/types';
-import { EmptyState } from '../../../shared/defguard-ui/components/EmptyState/EmptyState';
-import { TableTop } from '../../../shared/defguard-ui/components/table/TableTop/TableTop';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import type { ButtonProps } from '../../../shared/xguard-ui/components/Button/types';
+import { EmptyState } from '../../../shared/xguard-ui/components/EmptyState/EmptyState';
+import { TableTop } from '../../../shared/xguard-ui/components/table/TableTop/TableTop';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
 import {

@@ -5,11 +5,11 @@ import api from '../../../shared/api/api';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { LoadingStep } from '../../../shared/components/LoadingStep/LoadingStep';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { CodeCard } from '../../../shared/defguard-ui/components/CodeCard/CodeCard';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { CodeCard } from '../../../shared/xguard-ui/components/CodeCard/CodeCard';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { useSSEController } from '../../../shared/hooks/useSSEController';
 import { downloadFile } from '../../../shared/utils/download';
 import caIcon from '../../SetupPage/assets/ca.png';
@@ -73,7 +73,7 @@ export const MigrationWizardExternalUrlSslConfigStep = () => {
   const { data: sslInfoData } = useQuery({
     queryKey: ['migration', 'external_ssl_info'],
     queryFn: () => api.migration.getExternalSslInfo(),
-    enabled: sslType === 'defguard_ca',
+    enabled: sslType === 'xguard_ca',
     select: (response) => response.data,
   });
 
@@ -138,7 +138,7 @@ export const MigrationWizardExternalUrlSslConfigStep = () => {
     if (!sslInfoData?.ca_cert_pem) return;
     downloadFile(
       new Blob([sslInfoData.ca_cert_pem], { type: 'application/x-pem-file' }),
-      'defguard-ca',
+      'xguard-ca',
       'pem',
     );
   };
@@ -228,7 +228,7 @@ export const MigrationWizardExternalUrlSslConfigStep = () => {
       );
     }
 
-    if (sslType === 'defguard_ca') {
+    if (sslType === 'xguard_ca') {
       return (
         <div className="ssl-result-validated-card">
           <div className="ssl-result-validated-card-illustration">

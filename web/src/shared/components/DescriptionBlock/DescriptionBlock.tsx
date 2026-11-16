@@ -1,9 +1,9 @@
 import type { HTMLProps, PropsWithChildren } from 'react';
 import './style.scss';
 import clsx from 'clsx';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 
 type Props = HTMLProps<HTMLDivElement> &
   PropsWithChildren & {

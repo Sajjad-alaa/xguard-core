@@ -1,4 +1,4 @@
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { useContextualHelp } from '../hooks';
 import type { ContextualHelpKey } from '../types';
 import { ContextualHelpBestPractices } from './ContextualHelpBestPractices';

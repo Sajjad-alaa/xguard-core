@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import {
-  type PostureCheckDefguardVersionValue,
+  type PostureCheckXGuardVersionValue,
   PostureCheckOs,
   type PostureCheckOsValue,
   type PostureCheckOsVersionValue,
@@ -50,8 +50,8 @@ const emptyPostureCheckVersionValues: PostureCheckVersionValues = {
   linux: [],
   ios: [],
   android: [],
-  defguardDesktop: [],
-  defguardMobile: [],
+  xguardDesktop: [],
+  xguardMobile: [],
 };
 
 const createDefaultOperatingSystemState = (
@@ -94,8 +94,8 @@ const createDefaultState = (versionValues: PostureCheckVersionValues): StoreValu
   allowPrereleaseClient: false,
   configuredOperatingSystems: [],
   description: null,
-  minimumDesktopClientVersion: getCurrentVersionOrAny(versionValues.defguardDesktop),
-  minimumMobileClientVersion: getCurrentVersionOrAny(versionValues.defguardMobile),
+  minimumDesktopClientVersion: getCurrentVersionOrAny(versionValues.xguardDesktop),
+  minimumMobileClientVersion: getCurrentVersionOrAny(versionValues.xguardMobile),
   name: '',
   operatingSystemState: createDefaultOperatingSystemState(versionValues),
   availableVersionValues: versionValues,
@@ -106,8 +106,8 @@ interface StoreValues {
   configuredOperatingSystems: PostureCheckOsValue[];
   allowPrereleaseClient: boolean;
   description: string | null;
-  minimumDesktopClientVersion: PostureCheckDefguardVersionValue;
-  minimumMobileClientVersion: PostureCheckDefguardVersionValue;
+  minimumDesktopClientVersion: PostureCheckXGuardVersionValue;
+  minimumMobileClientVersion: PostureCheckXGuardVersionValue;
   name: string;
   operatingSystemState: Record<PostureCheckOsValue, OperatingSystemFormState>;
   availableVersionValues: PostureCheckVersionValues;
@@ -122,8 +122,8 @@ interface Store extends StoreValues {
   syncVersionValues: (versionValues: PostureCheckVersionValues) => void;
   setDescription: (value: string | null) => void;
   setAllowPrereleaseClient: (value: boolean) => void;
-  setMinimumDesktopClientVersion: (value: PostureCheckDefguardVersionValue) => void;
-  setMinimumMobileClientVersion: (value: PostureCheckDefguardVersionValue) => void;
+  setMinimumDesktopClientVersion: (value: PostureCheckXGuardVersionValue) => void;
+  setMinimumMobileClientVersion: (value: PostureCheckXGuardVersionValue) => void;
   setName: (value: string) => void;
   updateOperatingSystemDetails: (
     operatingSystem: PostureCheckOsValue,
@@ -138,11 +138,11 @@ export const useAddPostureCheckWizardStore = create<Store>()((set, get) => ({
     set((state) => ({
       availableVersionValues: versionValues,
       minimumDesktopClientVersion: getCurrentVersionOrAny(
-        versionValues.defguardDesktop,
+        versionValues.xguardDesktop,
         state.minimumDesktopClientVersion,
       ),
       minimumMobileClientVersion: getCurrentVersionOrAny(
-        versionValues.defguardMobile,
+        versionValues.xguardMobile,
         state.minimumMobileClientVersion,
       ),
       operatingSystemState: {

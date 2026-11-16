@@ -7,17 +7,17 @@ import { getApiErrorMessage } from '../../../../shared/api/apiErrorMessages';
 import type { ApiError } from '../../../../shared/api/types';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { Helper } from '../../../../shared/defguard-ui/components/Helper/Helper';
-import { Radio } from '../../../../shared/defguard-ui/components/Radio/Radio';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Helper } from '../../../../shared/xguard-ui/components/Helper/Helper';
+import { Radio } from '../../../../shared/xguard-ui/components/Radio/Radio';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
-import { ensureUrlScheme, getCorrectedUrl } from '../../../../shared/utils/defguardUrl';
-import { createDistinctUrlRefinement } from '../../../../shared/utils/defguardUrlValidation';
+import { ensureUrlScheme, getCorrectedUrl } from '../../../../shared/utils/xguardUrl';
+import { createDistinctUrlRefinement } from '../../../../shared/utils/xguardUrlValidation';
 import { AutoAdoptionSetupStep, type ExternalSslType } from '../types';
 import { useAutoAdoptionSetupWizardStore } from '../useAutoAdoptionSetupWizardStore';
 import './style.scss';
@@ -42,7 +42,7 @@ export const AutoAdoptionExternalUrlSettingsStep = () => {
     })
     .superRefine(
       createDistinctUrlRefinement(
-        () => useAutoAdoptionSetupWizardStore.getState().defguard_url,
+        () => useAutoAdoptionSetupWizardStore.getState().xguard_url,
         'public_proxy_url',
         m.initial_setup_general_config_error_urls_must_differ(),
       ),
@@ -153,12 +153,12 @@ export const AutoAdoptionExternalUrlSettingsStep = () => {
                 <SizedBox height={ThemeSpacing.Md} />
                 <div className="ssl-option-row">
                   <Radio
-                    text={m.initial_setup_auto_adoption_external_url_settings_ssl_option_defguard_ca()}
-                    active={sslType === 'defguard_ca'}
-                    onClick={() => form.setFieldValue('ssl_type', 'defguard_ca')}
+                    text={m.initial_setup_auto_adoption_external_url_settings_ssl_option_xguard_ca()}
+                    active={sslType === 'xguard_ca'}
+                    onClick={() => form.setFieldValue('ssl_type', 'xguard_ca')}
                   />
                   <Helper>
-                    {m.initial_setup_auto_adoption_external_url_settings_ssl_option_defguard_ca_help()}
+                    {m.initial_setup_auto_adoption_external_url_settings_ssl_option_xguard_ca_help()}
                   </Helper>
                 </div>
                 <SizedBox height={ThemeSpacing.Md} />

@@ -112,47 +112,47 @@ exceptions = [
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard" },
+    ], crate = "xguard" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_common" },
+    ], crate = "xguard_common" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_core" },
+    ], crate = "xguard_core" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_proto" },
+    ], crate = "xguard_proto" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_web_ui" },
+    ], crate = "xguard_web_ui" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_event_logger" },
+    ], crate = "xguard_event_logger" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_gateway_manager" },
+    ], crate = "xguard_gateway_manager" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_grpc_tls" },
+    ], crate = "xguard_grpc_tls" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_proxy_manager" },
+    ], crate = "xguard_proxy_manager" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_session_manager" },
+    ], crate = "xguard_session_manager" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_version" },
+    ], crate = "xguard_version" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
@@ -160,31 +160,31 @@ exceptions = [
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_certs" },
+    ], crate = "xguard_certs" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_generator" },
+    ], crate = "xguard_generator" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_load_generator" },
+    ], crate = "xguard_load_generator" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_vpn_stats_purge" },
+    ], crate = "xguard_vpn_stats_purge" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_setup" },
+    ], crate = "xguard_setup" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_static_ip" },
+    ], crate = "xguard_static_ip" },
     { allow = [
         "AGPL-3.0-only",
         "AGPL-3.0-or-later",
-    ], crate = "defguard_fido_mds" },
+    ], crate = "xguard_fido_mds" },
 ]
 
 # Some crates don't have (easily) machine readable licensing information,

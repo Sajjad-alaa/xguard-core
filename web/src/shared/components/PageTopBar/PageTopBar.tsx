@@ -1,8 +1,8 @@
-import { Divider } from '../../defguard-ui/components/Divider/Divider';
+import { Divider } from '../../xguard-ui/components/Divider/Divider';
 import './style.scss';
-import { IconButton } from '../../defguard-ui/components/IconButton/IconButton';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../defguard-ui/types';
+import { IconButton } from '../../xguard-ui/components/IconButton/IconButton';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../xguard-ui/types';
 import { useApp } from '../../hooks/useApp';
 import { useAuth } from '../../hooks/useAuth';
 import { TopBarLicense } from './components/TopBarLicense/TopBarLicense';

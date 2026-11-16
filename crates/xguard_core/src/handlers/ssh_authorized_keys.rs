@@ -1,0 +1,412 @@
+use axum::{
+    Json,
+    extract::{Path, Query, State},
+    http::StatusCode,
+};
+use xguard_common::db::{
+    Id,
+    models::{AuthenticationKey, AuthenticationKeyType, User, group::Group},
+};
+use sqlx::{PgExecutor, PgPool, query, query_as};
+use ssh_key::PublicKey;
+
+use super::{ApiResponse, ApiResult, user_for_admin_or_self};
+#[cfg(feature = "openapi")]
+use crate::handlers::ApiErrorResponse;
+use crate::{
+    appstate::AppState,
+    auth::SessionInfo,
+    error::WebError,
+    events::{ApiEvent, ApiEventType, ApiRequestContext},
+};
+
+#[derive(Deserialize, Serialize)]
+pub(crate) struct AuthenticationKeyInfo {
+    id: Id,
+    name: Option<String>,
+    key_type: AuthenticationKeyType,
+    key: String,
+    user_id: Id,
+    yubikey_serial: Option<String>,
+    yubikey_id: Option<Id>,
+    yubikey_name: Option<String>,
+}
+
+impl AuthenticationKeyInfo {
+    pub async fn find_by_user_id<'e, E>(executor: E, user_id: Id) -> sqlx::Result<Vec<Self>>
+    where
+        E: PgExecutor<'e>,
+    {
+        query_as!(
+            AuthenticationKeyInfo,
+            "SELECT k.id, k.name, k.key_type \"key_type: AuthenticationKeyType\", k.key, \
+            k.user_id, k.yubikey_id, y.name yubikey_name, y.serial yubikey_serial \
+            FROM \"authentication_key\" k \
+            LEFT JOIN \"yubikey\" y ON k.yubikey_id = y.id \
+            WHERE k.user_id = $1",
+            user_id
+        )
+        .fetch_all(executor)
+        .await
+    }
+}
+
+async fn add_user_ssh_keys_to_list(pool: &PgPool, user: &User<Id>, ssh_keys: &mut Vec<String>) {
+    let keys_result =
+        AuthenticationKey::find_by_user_id(pool, user.id, Some(AuthenticationKeyType::Ssh)).await;
+
+    if let Ok(authentication_keys) = keys_result {
+        let mut keys = authentication_keys
+            .into_iter()
+            .map(|item| item.key)
+            .collect::<Vec<_>>();
+        ssh_keys.append(&mut keys);
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SshKeysRequestParams {
+    username: Option<String>,
+    group: Option<String>,
+}
+
+/// Get SSH authorized keys in the `authorized_keys` file format
+///
+/// Meant to be used as an `AuthorizedKeysCommand` in `sshd`. Filter the users with the
+/// `username` or `group` query parameter.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/v1/ssh_authorized_keys",
+    tag = "SSH key",
+    params(
+        ("username" = Option<String>, Query, description = "Return the keys of this user."),
+        ("group" = Option<String>, Query, description = "Return the keys of all members of this group."),
+    ),
+    responses(
+        (status = 200, description = "Authorized keys, one per line.", body = String, example = json!("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ7Gd0DdLZQwQEwXQyLcVQ0hVBHnJcnGRfPtVJHqO1zQ jdoe@example.com")),
+        (status = 400, description = "Neither username nor group was provided.", body = ApiErrorResponse, example = json!({"msg": "Bad Request"})),
+        (status = 500, description = "Unable to get authorized keys.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+))]
+pub async fn get_authorized_keys(
+    params: Query<SshKeysRequestParams>,
+    State(appstate): State<AppState>,
+) -> Result<String, WebError> {
+    info!("Fetching public SSH keys for {:?}", params);
+    let mut ssh_keys: Vec<String> = Vec::new();
+
+    // check if group filter was specified
+    match &params.group {
+        Some(group_name) => {
+            // fetch group
+            if let Some(group) = Group::find_by_name(&appstate.pool, group_name).await? {
+                // check if user filter was specified
+                if let Some(username) = &params.username {
+                    debug!("Fetching SSH keys for user {username} in group {group_name}");
+                    // try fetch active user
+                    if let Some(user) =
+                        User::find_active_by_username(&appstate.pool, username).await?
+                    {
+                        // check if user belongs to specified group
+                        let active_members = group.active_member_usernames(&appstate.pool).await?;
+                        if active_members.contains(&user.username) {
+                            add_user_ssh_keys_to_list(&appstate.pool, &user, &mut ssh_keys).await;
+                        } else {
+                            debug!("User {username} is not a member of group {group_name}",);
+                        }
+                    } else {
+                        debug!("Specified user does not exist or is disabled");
+                    }
+                } else {
+                    debug!("Fetching SSH keys for all users in group {group_name}");
+                    // fetch all active users in group
+                    let active_users = group.active_members(&appstate.pool).await?;
+                    for user in active_users {
+                        add_user_ssh_keys_to_list(&appstate.pool, &user, &mut ssh_keys).await;
+                    }
+                }
+            } else {
+                debug!("Specified group does not exist");
+            }
+        }
+        None => {
+            // check if user filter was specified
+            if let Some(username) = &params.username {
+                debug!("Fetching SSH keys for user {username}");
+                // try fetch active user
+                if let Some(user) = User::find_active_by_username(&appstate.pool, username).await? {
+                    add_user_ssh_keys_to_list(&appstate.pool, &user, &mut ssh_keys).await;
+                } else {
+                    debug!("Specified user does not exist or is disabled");
+                }
+            }
+        }
+    }
+
+    // concatenate all keys into a response
+    Ok(ssh_keys.join("\n"))
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct AddAuthenticationKeyData {
+    key: String,
+    name: String,
+    key_type: AuthenticationKeyType,
+}
+
+/// Add an SSH or GPG authentication key to a user
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/user/{username}/auth_key",
+    tag = "SSH key",
+    request_body = AddAuthenticationKeyData,
+    params(
+        ("username" = String, Path, description = "Name of the user."),
+    ),
+    responses(
+        (status = 201, description = "Authentication key added."),
+        (status = 400, description = "Invalid key.", body = ApiErrorResponse, example = json!({"msg": "Invalid key"})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges or the request must target your own account.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "user not found"})),
+        (status = 500, description = "Unable to add authentication key.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn add_authentication_key(
+    State(appstate): State<AppState>,
+    session: SessionInfo,
+    context: ApiRequestContext,
+    Path(username): Path<String>,
+    Json(data): Json<AddAuthenticationKeyData>,
+) -> ApiResult {
+    debug!(
+        "Adding authentication key of type {:?} for user {username}",
+        data.key_type,
+    );
+
+    // authorize request
+    let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
+
+    let trimmed_key = data.key.trim_end_matches(['\n', '\r']);
+
+    // verify key
+    match data.key_type {
+        AuthenticationKeyType::Ssh => {
+            let parsed = trimmed_key.parse::<PublicKey>();
+            if parsed.is_err() {
+                error!("User {username} tried to insert invalid SSH key: {data:?}");
+                return Err(WebError::BadRequest("SSH key failed verification.".into()));
+            }
+        }
+        // FIXME: verify GPG key
+        AuthenticationKeyType::Gpg => {}
+    }
+
+    // check if exists
+    let exists_res = query!(
+        "SELECT COUNT(1) FROM \"authentication_key\" WHERE user_id = $1 AND key = $2",
+        user.id,
+        trimmed_key,
+    )
+    .fetch_one(&appstate.pool)
+    .await?;
+    if exists_res.count == Some(1) {
+        error!("User {username} tried to insert existing key: {data:?}");
+        return Err(WebError::BadRequest("Key already exists.".into()));
+    }
+
+    let key = AuthenticationKey::new(
+        user.id,
+        trimmed_key.to_owned(),
+        Some(data.name.clone()),
+        data.key_type.clone(),
+        None,
+    )
+    .save(&appstate.pool)
+    .await?;
+
+    info!(
+        "Added new key \"{}\" of type {:?} for user {username}",
+        data.name, data.key_type
+    );
+    appstate.emit_event(ApiEvent {
+        context,
+        event: Box::new(ApiEventType::AuthenticationKeyAdded { key }),
+    })?;
+
+    Ok(ApiResponse::with_status(StatusCode::CREATED))
+}
+
+// GET on user, returns AuthenticationKeyInfo vector in JSON
+/// List SSH and GPG authentication keys of a user
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/v1/user/{username}/auth_key",
+    tag = "SSH key",
+    params(
+        ("username" = String, Path, description = "Name of the user."),
+    ),
+    responses(
+        (status = 200, description = "All authentication keys of the user.", body = [Object], example = json!([{
+            "id": 1,
+            "name": "laptop",
+            "key_type": "ssh",
+            "key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...",
+            "user_id": 1,
+            "yubikey_serial": null,
+            "yubikey_id": null,
+            "yubikey_name": null
+        }])),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges or the request must target your own account.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "user not found"})),
+        (status = 500, description = "Unable to list authentication keys.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn fetch_authentication_keys(
+    State(appstate): State<AppState>,
+    Path(username): Path<String>,
+    session: SessionInfo,
+) -> ApiResult {
+    let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
+    let keys_info = AuthenticationKeyInfo::find_by_user_id(&appstate.pool, user.id).await?;
+
+    Ok(ApiResponse::json(keys_info, StatusCode::OK))
+}
+
+/// Delete an authentication key of a user
+#[cfg_attr(feature = "openapi", utoipa::path(
+    delete,
+    path = "/api/v1/user/{username}/auth_key/{key_id}",
+    tag = "SSH key",
+    params(
+        ("username" = String, Path, description = "Name of the user."),
+        ("key_id" = i64, Path, description = "ID of the authentication key."),
+    ),
+    responses(
+        (status = 200, description = "Authentication key deleted."),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges or the request must target your own account.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 400, description = "Key not found.", body = ApiErrorResponse, example = json!({"msg": "Key not found"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "user <username> not found"})),
+        (status = 500, description = "Unable to delete authentication key.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn delete_authentication_key(
+    State(appstate): State<AppState>,
+    session: SessionInfo,
+    context: ApiRequestContext,
+    Path((username, key_id)): Path<(String, i64)>,
+) -> ApiResult {
+    let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
+    if let Some(key) = AuthenticationKey::find_by_id(&appstate.pool, key_id).await? {
+        if !session.is_admin && user.id != key.user_id {
+            return Err(WebError::Forbidden(""));
+        }
+        key.clone().delete(&appstate.pool).await?;
+        info!(
+            "Removed key \"{:?}\"({}) of type {:?} for user {username}",
+            key.name, key.id, key.key_type
+        );
+        appstate.emit_event(ApiEvent {
+            context,
+            event: Box::new(ApiEventType::AuthenticationKeyRemoved { key }),
+        })?;
+    } else {
+        error!("Key with id {} not found", key_id);
+        return Err(WebError::BadRequest("Key not found".into()));
+    }
+
+    Ok(ApiResponse::with_status(StatusCode::OK))
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct RenameRequest {
+    name: String,
+}
+
+/// Rename an authentication key of a user
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/user/{username}/auth_key/{key_id}/rename",
+    tag = "SSH key",
+    request_body = RenameRequest,
+    params(
+        ("username" = String, Path, description = "Name of the user."),
+        ("key_id" = i64, Path, description = "ID of the authentication key."),
+    ),
+    responses(
+        (status = 200, description = "Authentication key renamed."),
+        (status = 400, description = "The key belongs to a YubiKey.", body = ApiErrorResponse, example = json!({"msg": "Rename yubikey instead."})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges or the request must target your own account.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 404, description = "User or key not found.", body = ApiErrorResponse, example = json!({"msg": "key not found"})),
+        (status = 500, description = "Unable to rename authentication key.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn rename_authentication_key(
+    State(appstate): State<AppState>,
+    session: SessionInfo,
+    context: ApiRequestContext,
+    Path((username, key_id)): Path<(String, i64)>,
+    Json(data): Json<RenameRequest>,
+) -> ApiResult {
+    let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
+    if let Some(mut key) = AuthenticationKey::find_by_id(&appstate.pool, key_id).await? {
+        if key.yubikey_id.is_some() {
+            warn!(
+                "User {} tried to rename authentication key instead of yubikey",
+                username
+            );
+            return Err(WebError::BadRequest("Rename yubikey instead.".into()));
+        }
+        if !session.is_admin && user.id != key.user_id {
+            warn!(
+                "User {} tried to rename key ({}) of another user with id {}",
+                username, key_id, key.user_id
+            );
+            return Err(WebError::Forbidden(""));
+        }
+        let old_name = key.name.clone();
+        key.name = Some(data.name);
+        key.save(&appstate.pool).await?;
+        info!(
+            "User {} renamed key {:?}({}) of user with id {}",
+            user.username, key.name, key.id, key.user_id
+        );
+        appstate.emit_event(ApiEvent {
+            context,
+            event: Box::new(ApiEventType::AuthenticationKeyRenamed {
+                old_name,
+                new_name: key.name.clone(),
+                key,
+            }),
+        })?;
+    } else {
+        error!(
+            "User {} tried to rename non-existing key with id {}",
+            username, key_id
+        );
+        return Err(WebError::ObjectNotFound(String::new()));
+    }
+
+    Ok(ApiResponse::with_status(StatusCode::OK))
+}

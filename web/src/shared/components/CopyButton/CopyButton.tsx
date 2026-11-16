@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { m } from '../../../paraglide/messages';
-import { Button } from '../../defguard-ui/components/Button/Button';
-import { useClipboard } from '../../defguard-ui/hooks/useClipboard';
-import { TooltipContent } from '../../defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../defguard-ui/providers/tooltip/TooltipTrigger';
+import { Button } from '../../xguard-ui/components/Button/Button';
+import { useClipboard } from '../../xguard-ui/hooks/useClipboard';
+import { TooltipContent } from '../../xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../xguard-ui/providers/tooltip/TooltipTrigger';
 
 type Props = {
   value: string;

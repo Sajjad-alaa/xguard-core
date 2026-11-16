@@ -26,7 +26,7 @@ permissions:
 jobs:
   lint:
     runs-on:
-      - codebuild-defguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-xguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:large
 
     container: public.ecr.aws/docker/library/rust:1
@@ -35,7 +35,7 @@ jobs:
       CARGO_TERM_COLOR: always
       SQLX_OFFLINE: true
       RUSTC_WRAPPER: sccache
-      SCCACHE_BUCKET: defguard-gh-build-cache
+      SCCACHE_BUCKET: xguard-gh-build-cache
       SCCACHE_REGION: eu-central-1
       AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_KEY }}
@@ -109,7 +109,7 @@ jobs:
 
   build:
     runs-on:
-      - codebuild-defguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-xguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:2xlarge
 
     container: public.ecr.aws/docker/library/rust:1
@@ -118,7 +118,7 @@ jobs:
       CARGO_TERM_COLOR: always
       SQLX_OFFLINE: true
       RUSTC_WRAPPER: sccache
-      SCCACHE_BUCKET: defguard-gh-build-cache
+      SCCACHE_BUCKET: xguard-gh-build-cache
       SCCACHE_REGION: eu-central-1
       AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_KEY }}
@@ -179,7 +179,7 @@ jobs:
     needs: build
 
     runs-on:
-      - codebuild-defguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-xguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:large
 
     container: public.ecr.aws/docker/library/rust:1
@@ -193,9 +193,9 @@ jobs:
       postgres:
         image: public.ecr.aws/docker/library/postgres:17-alpine
         env:
-          POSTGRES_DB: defguard
-          POSTGRES_USER: defguard
-          POSTGRES_PASSWORD: defguard
+          POSTGRES_DB: xguard
+          POSTGRES_USER: xguard
+          POSTGRES_PASSWORD: xguard
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -205,12 +205,12 @@ jobs:
 
     env:
       CARGO_TERM_COLOR: always
-      DEFGUARD_DB_HOST: postgres
-      DEFGUARD_DB_PORT: 5432
-      DEFGUARD_DB_NAME: defguard
-      DEFGUARD_DB_USER: defguard
-      DEFGUARD_DB_PASSWORD: defguard
-      DATABASE_URL: "postgresql://defguard:defguard@postgres/defguard"
+      XGUARD_DB_HOST: postgres
+      XGUARD_DB_PORT: 5432
+      XGUARD_DB_NAME: xguard
+      XGUARD_DB_USER: xguard
+      XGUARD_DB_PASSWORD: xguard
+      DATABASE_URL: "postgresql://xguard:xguard@postgres/xguard"
       SQLX_OFFLINE: true
 
     steps:
@@ -241,7 +241,7 @@ jobs:
     needs: build
 
     runs-on:
-      - codebuild-defguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-xguard-core-runner-${{ github.run_id }}-${{ github.run_attempt }}
       - instance-size:large
 
     steps:
@@ -267,17 +267,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Start Postgres and OpenLDAP
-        run: docker compose -p defguard-ldap -f docker-compose.ldap-test.yaml up -d --wait db openldap
+        run: docker compose -p xguard-ldap -f docker-compose.ldap-test.yaml up -d --wait db openldap
 
       - name: Run LDAP integration tests
         run: |
           docker run --rm \
-            --network defguard-ldap_default \
+            --network xguard-ldap_default \
             -v "$PWD:/src" -w /src \
             -v "$PWD/cargo-nextest:/usr/local/cargo/bin/cargo-nextest:ro" \
             -e CARGO_TERM_COLOR=always \
             -e SQLX_OFFLINE=true \
-            -e DATABASE_URL=postgres://defguard:defguard@db:5432/defguard \
+            -e DATABASE_URL=postgres://xguard:xguard@db:5432/xguard \
             -e LDAP_URL=ldap://openldap:1389 \
             -e LDAP_BIND_USERNAME=cn=admin,dc=example,dc=org \
             -e LDAP_BIND_PASSWORD=pass123 \
@@ -290,11 +290,11 @@ jobs:
             -e LDAP_MEMBER_ATTR=memberOf \
             -e LDAP_GROUP_MEMBER_ATTR=uniqueMember \
             public.ecr.aws/docker/library/rust:1 \
-            cargo nextest run --archive-file nextest-archive.tar.zst --workspace-remap . --run-ignored only -E 'package(defguard_core) and test(/^ldap::/)'
+            cargo nextest run --archive-file nextest-archive.tar.zst --workspace-remap . --run-ignored only -E 'package(xguard_core) and test(/^ldap::/)'
 
       - name: Stop compose
         if: always()
-        run: docker compose -p defguard-ldap -f docker-compose.ldap-test.yaml down -v
+        run: docker compose -p xguard-ldap -f docker-compose.ldap-test.yaml down -v
 
   cleanup:
     needs: [test, test-ldap]

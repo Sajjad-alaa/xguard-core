@@ -11,15 +11,15 @@ import type {
 } from '../../../../shared/api/types';
 import { IpAssignmentCard } from '../../../../shared/components/IpAssignmentCard/IpAssignmentCard';
 import { IpAssignmentDeviceSection } from '../../../../shared/components/IpAssignmentDeviceSection/IpAssignmentDeviceSection';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { SuggestedIpInput } from '../../../../shared/defguard-ui/components/SuggestedIPInput/SuggestedIPInput';
-import { Snackbar } from '../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SuggestedIpInput } from '../../../../shared/xguard-ui/components/SuggestedIPInput/SuggestedIPInput';
+import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   createZodIssue,
   zodIssueMessage,
-} from '../../../../shared/defguard-ui/utils/zod';
+} from '../../../../shared/xguard-ui/utils/zod';
 import { useAppForm } from '../../../../shared/form';
 import {
   closeModal,

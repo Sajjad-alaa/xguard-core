@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { cloneDeep } from 'lodash-es';
-import { isPresent } from '../defguard-ui/utils/isPresent';
+import { isPresent } from '../xguard-ui/utils/isPresent';
 import { narrowLicenseSupport } from '../utils/license';
 import { removeEmptyStrings } from '../utils/removeEmptyStrings';
 import { client } from './api-client';

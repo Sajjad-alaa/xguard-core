@@ -52,7 +52,7 @@ export const createNetworkCLIDevice = async (
     waitUntil: 'load',
   });
   await page.getByTestId('add-device').click();
-  await page.getByTestId('defguard-cli').click();
+  await page.getByTestId('xguard-cli').click();
   await page.getByTestId('field-name').fill(device.name);
   if (device.description) {
     await page.getByTestId('field-description').fill(device.description);

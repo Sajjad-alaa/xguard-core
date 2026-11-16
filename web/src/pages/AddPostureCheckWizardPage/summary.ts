@@ -1,11 +1,11 @@
 import { m } from '../../paraglide/messages';
-import type { IconKindValue } from '../../shared/defguard-ui/components/Icon';
+import type { IconKindValue } from '../../shared/xguard-ui/components/Icon';
 import {
   policyOsVariantToIcon,
   policyOsVariantToText,
 } from '../../shared/utils/policyPostures';
 import {
-  type PostureCheckDefguardVersionValue,
+  type PostureCheckXGuardVersionValue,
   PostureCheckOs,
   type PostureCheckOsValue,
   type PostureCheckOsVersionValue,
@@ -99,8 +99,8 @@ export const buildOperatingSystemSummarySection = (
 };
 
 export const buildClientSummarySection = (
-  minimumDesktopClientVersion: PostureCheckDefguardVersionValue,
-  minimumMobileClientVersion: PostureCheckDefguardVersionValue,
+  minimumDesktopClientVersion: PostureCheckXGuardVersionValue,
+  minimumMobileClientVersion: PostureCheckXGuardVersionValue,
   allowPrereleaseClient: boolean,
 ): SummarySection => {
   const lines: SummaryLine[] = [
@@ -109,7 +109,7 @@ export const buildClientSummarySection = (
         version:
           minimumDesktopClientVersion === null
             ? m.posture_checks_version_any()
-            : m.posture_checks_wizard_summary_defguard_version({
+            : m.posture_checks_wizard_summary_xguard_version({
                 version: minimumDesktopClientVersion,
               }),
       }),
@@ -120,7 +120,7 @@ export const buildClientSummarySection = (
         version:
           minimumMobileClientVersion === null
             ? m.posture_checks_version_any()
-            : m.posture_checks_wizard_summary_defguard_version({
+            : m.posture_checks_wizard_summary_xguard_version({
                 version: minimumMobileClientVersion,
               }),
       }),
@@ -133,8 +133,8 @@ export const buildClientSummarySection = (
   }
 
   return {
-    icon: 'defguard',
-    label: m.posture_checks_wizard_summary_defguard_label(),
+    icon: 'xguard',
+    label: m.posture_checks_wizard_summary_xguard_label(),
     lines,
   };
 };

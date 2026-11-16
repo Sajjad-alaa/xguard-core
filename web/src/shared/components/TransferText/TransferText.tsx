@@ -1,7 +1,7 @@
 import byteSize from 'byte-size';
 import clsx from 'clsx';
 import './style.scss';
-import { Icon } from '../../defguard-ui/components/Icon';
+import { Icon } from '../../xguard-ui/components/Icon';
 
 type Props = {
   variant?: 'upload' | 'download';

@@ -5,13 +5,13 @@ import type {
   AvailableLocationIP,
   StartEnrollmentResponse,
 } from '../../../../shared/api/types';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { SectionSelect } from '../../../../shared/defguard-ui/components/SectionSelect/SectionSelect';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
 import type {
   SelectOption,
   SelectSingleValue,
-} from '../../../../shared/defguard-ui/components/Select/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+} from '../../../../shared/xguard-ui/components/Select/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -24,21 +24,21 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
 import { DescriptionBlock } from '../../../../shared/components/DescriptionBlock/DescriptionBlock';
-import { AppText } from '../../../../shared/defguard-ui/components/AppText/AppText';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { CodeBox } from '../../../../shared/defguard-ui/components/CodeBox/CodeBox';
-import { CopyField } from '../../../../shared/defguard-ui/components/CopyField/CopyField';
-import { IconKind } from '../../../../shared/defguard-ui/components/Icon';
-import { InfoBanner } from '../../../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { Select } from '../../../../shared/defguard-ui/components/Select/Select';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { useClipboard } from '../../../../shared/defguard-ui/hooks/useClipboard';
+import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { CodeBox } from '../../../../shared/xguard-ui/components/CodeBox/CodeBox';
+import { CopyField } from '../../../../shared/xguard-ui/components/CopyField/CopyField';
+import { IconKind } from '../../../../shared/xguard-ui/components/Icon';
+import { InfoBanner } from '../../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { Select } from '../../../../shared/xguard-ui/components/Select/Select';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { useClipboard } from '../../../../shared/xguard-ui/hooks/useClipboard';
 import {
   TextStyle,
   ThemeSpacing,
   ThemeVariable,
-} from '../../../../shared/defguard-ui/types';
+} from '../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import { patternValidWireguardKey } from '../../../../shared/patterns';
@@ -249,7 +249,7 @@ const ChoiceStep = ({ setModalState }: StepProps) => {
       <SectionSelect
         image="device-clc"
         title={m.modal_add_network_device_choice_cli_title()}
-        data-testid="defguard-cli"
+        data-testid="xguard-cli"
         content={m.modal_add_network_device_choice_cli_content()}
         onClick={() => {
           handleSelect(true);

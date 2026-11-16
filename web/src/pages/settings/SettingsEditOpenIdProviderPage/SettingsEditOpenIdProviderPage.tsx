@@ -5,8 +5,8 @@ import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
 import { type AddOpenIdProvider, OpenIdProviderKind } from '../../../shared/api/types';
 import { EditPage } from '../../../shared/components/EditPage/EditPage';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
 import {

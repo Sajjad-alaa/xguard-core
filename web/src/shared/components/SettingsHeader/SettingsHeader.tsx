@@ -1,9 +1,9 @@
-import { Badge } from '../../defguard-ui/components/Badge/Badge';
-import type { BadgeProps } from '../../defguard-ui/components/Badge/types';
-import { Icon } from '../../defguard-ui/components/Icon';
-import type { IconKindValue } from '../../defguard-ui/components/Icon/icon-types';
-import { ThemeVariable } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Badge } from '../../xguard-ui/components/Badge/Badge';
+import type { BadgeProps } from '../../xguard-ui/components/Badge/types';
+import { Icon } from '../../xguard-ui/components/Icon';
+import type { IconKindValue } from '../../xguard-ui/components/Icon/icon-types';
+import { ThemeVariable } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import './style.scss';
 
 interface SettingsHeaderProps {

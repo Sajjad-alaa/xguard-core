@@ -1,7 +1,7 @@
 import './VideoTutorialsModal.scss';
 import { useEffect, useState } from 'react';
-import { ModalFoundation } from '../defguard-ui/components/ModalFoundation/ModalFoundation';
-import { isPresent } from '../defguard-ui/utils/isPresent';
+import { ModalFoundation } from '../xguard-ui/components/ModalFoundation/ModalFoundation';
+import { isPresent } from '../xguard-ui/utils/isPresent';
 import { ModalContent } from './components/modal/ModalContent/ModalContent';
 import { useVideoTutorialsRouteKey, useVideoTutorialsSections } from './resolved';
 import { useVideoTutorialsModal } from './store';

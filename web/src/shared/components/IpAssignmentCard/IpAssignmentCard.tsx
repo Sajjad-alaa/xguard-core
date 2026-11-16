@@ -1,9 +1,9 @@
 import './style.scss';
 import type { PropsWithChildren } from 'react';
-import { Fold } from '../../defguard-ui/components/Fold/Fold';
-import { Icon, IconKind } from '../../defguard-ui/components/Icon';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { Direction, ThemeSpacing } from '../../defguard-ui/types';
+import { Fold } from '../../xguard-ui/components/Fold/Fold';
+import { Icon, IconKind } from '../../xguard-ui/components/Icon';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { Direction, ThemeSpacing } from '../../xguard-ui/types';
 
 interface Props extends PropsWithChildren {
   title: string;

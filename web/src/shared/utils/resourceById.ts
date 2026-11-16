@@ -1,6 +1,6 @@
 import { objectify } from 'radashi';
 import type { Resource, ResourceById, ResourceDisplay } from '../api/types';
-import { isPresent } from '../defguard-ui/utils/isPresent';
+import { isPresent } from '../xguard-ui/utils/isPresent';
 
 export const resourceById = <T extends Resource>(values?: T[]): ResourceById<T> | null =>
   isPresent(values)

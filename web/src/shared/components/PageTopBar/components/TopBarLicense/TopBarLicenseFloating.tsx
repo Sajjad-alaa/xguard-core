@@ -2,9 +2,9 @@ import { type HTMLProps, useMemo } from 'react';
 import { m } from '../../../../../paraglide/messages';
 import type { LicenseInfo } from '../../../../api/types';
 import { externalLink } from '../../../../constants';
-import { Button } from '../../../../defguard-ui/components/Button/Button';
-import { IconKind } from '../../../../defguard-ui/components/Icon';
-import { isPresent } from '../../../../defguard-ui/utils/isPresent';
+import { Button } from '../../../../xguard-ui/components/Button/Button';
+import { IconKind } from '../../../../xguard-ui/components/Icon';
+import { isPresent } from '../../../../xguard-ui/utils/isPresent';
 import { TopBarLicenseProgress } from './components/TopBarLicenseProgress';
 
 type Props = {
@@ -71,7 +71,7 @@ export const TopBarLicenseFloating = ({ license, ...props }: Props) => {
       {!isPresent(license) && (
         <p className="no-license">{m.license_open_source_message()}</p>
       )}
-      <a href={externalLink.defguard.pricing} rel="noopener noreferrer" target="_blank">
+      <a href={externalLink.xguard.pricing} rel="noopener noreferrer" target="_blank">
         <Button
           variant="primary"
           iconRight="open-in-new-window"

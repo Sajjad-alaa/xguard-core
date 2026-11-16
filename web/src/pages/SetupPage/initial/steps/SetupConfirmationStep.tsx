@@ -5,21 +5,21 @@ import api from '../../../../shared/api/api';
 import { ActionCard } from '../../../../shared/components/ActionCard/ActionCard';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { Icon } from '../../../../shared/defguard-ui/components/Icon';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Icon } from '../../../../shared/xguard-ui/components/Icon';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import location from '../../assets/location.png';
 import { useSetupWizardStore } from '../useSetupWizardStore';
 
 export const SetupConfirmationStep = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const defguardUrl = useSetupWizardStore((s) => s.defguard_url);
+  const xguardUrl = useSetupWizardStore((s) => s.xguard_url);
 
   const redirectAfterFinish = (path: string) => {
-    const base = defguardUrl ? defguardUrl.replace(/\/$/, '') : window.location.origin;
+    const base = xguardUrl ? xguardUrl.replace(/\/$/, '') : window.location.origin;
     window.onbeforeunload = null;
     useSetupWizardStore.getState().reset();
     window.location.replace(`${base}${path}`);

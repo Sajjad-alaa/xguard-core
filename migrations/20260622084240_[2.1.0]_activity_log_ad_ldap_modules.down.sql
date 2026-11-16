@@ -1,9 +1,9 @@
 UPDATE activity_log_event
-SET module = 'defguard'::activity_log_module
+SET module = 'xguard'::activity_log_module
 WHERE module IN ('active_directory', 'ldap');
 
 CREATE TYPE activity_log_module_new AS ENUM (
-    'defguard',
+    'xguard',
     'client',
     'vpn',
     'enrollment',

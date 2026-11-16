@@ -5,11 +5,11 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../api/api';
-import { Modal } from '../../../defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../defguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../defguard-ui/types';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../xguard-ui/types';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../form';
 import { formChangeLogic } from '../../../formLogic';
 import {

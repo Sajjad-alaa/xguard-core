@@ -3,9 +3,9 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { Suspense, useMemo } from 'react';
 import { externalLink } from '../../../../constants';
-import { Icon, IconKind } from '../../../../defguard-ui/components/Icon';
-import { ThemeVariable } from '../../../../defguard-ui/types';
-import { isPresent } from '../../../../defguard-ui/utils/isPresent';
+import { Icon, IconKind } from '../../../../xguard-ui/components/Icon';
+import { ThemeVariable } from '../../../../xguard-ui/types';
+import { isPresent } from '../../../../xguard-ui/utils/isPresent';
 import { getLicenseInfoQueryOptions } from '../../../../query';
 import { getLicenseState } from '../../../../utils/license';
 import { TopBarElementSkeleton } from '../../TopBarElementSkeleton';
@@ -103,7 +103,7 @@ const UpdateLink = () => {
   return (
     <a
       target="_blank"
-      href={externalLink.defguard.pricing}
+      href={externalLink.xguard.pricing}
       rel="noopener noreferrer"
     >{`Update`}</a>
   );

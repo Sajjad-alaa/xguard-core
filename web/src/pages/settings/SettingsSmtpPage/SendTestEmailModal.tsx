@@ -3,16 +3,16 @@ import { useEffect, useState } from 'react';
 import z from 'zod';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
-import { AppText } from '../../../shared/defguard-ui/components/AppText/AppText';
-import { Modal } from '../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
+import { AppText } from '../../../shared/xguard-ui/components/AppText/AppText';
+import { Modal } from '../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import {
   TextStyle,
   ThemeSpacing,
   ThemeVariable,
-} from '../../../shared/defguard-ui/types';
+} from '../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import {

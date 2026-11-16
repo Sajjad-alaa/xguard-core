@@ -1,31 +1,31 @@
 import { OpenIdProviderKind, type OpenIdProviderKindValue } from './api/types';
 
 export const externalLink = {
-  defguard: {
-    docs: 'https://docs.defguard.net',
-    pricing: 'https://defguard.net/pricing',
-    download: 'https://defguard.net/download',
-    sales: 'https://defguard.net/contact/',
+  xguard: {
+    docs: 'https://docs.xguard.local',
+    pricing: 'https://xguard.local/pricing',
+    download: 'https://xguard.local/download',
+    sales: 'https://xguard.local/contact/',
     scheduleCall:
       'https://docs.google.com/forms/d/e/1FAIpQLSdKr1NXH1DlQuAF5oQWvT7Zri5yPQ3txvwz3qgtb1n9FtKTgw/viewform',
-    openTicket: 'https://support.defguard.net/support/auth/login/customer/?customer_id=',
-    supportPortal: 'https://support.defguard.net',
-    supportPortalGuide: 'https://docs.defguard.net/support-1/using-the-support-portal',
+    openTicket: 'https://support.xguard.local/support/auth/login/customer/?customer_id=',
+    supportPortal: 'https://support.xguard.local',
+    supportPortalGuide: 'https://docs.xguard.local/support-1/using-the-support-portal',
   },
   github: {
-    bugReport: 'https://github.com/DefGuard/defguard/issues/new?template=02-bug.yml',
+    bugReport: 'https://github.com/Sajjad-alaa/xguard-core/issues/new?template=02-bug.yml',
     featureRequest:
-      'https://github.com/DefGuard/defguard/issues/new?template=01-feature-request.yml',
+      'https://github.com/Sajjad-alaa/xguard-core/issues/new?template=01-feature-request.yml',
   },
   client: {
     desktop: {
       linux: {
-        arch: 'https://aur.archlinux.org/packages/defguard-client',
+        arch: 'https://aur.archlinux.org/packages/xguard-client',
       },
     },
     mobile: {
-      apple: 'https://apps.apple.com/us/app/defguard-vpn-client/id6748068630',
-      google: 'https://play.google.com/store/apps/details?id=net.defguard.mobile',
+      apple: 'https://apps.apple.com/us/app/xguard-vpn-client/id6748068630',
+      google: 'https://play.google.com/store/apps/details?id=local.xguard.mobile',
     },
   },
 } as const;

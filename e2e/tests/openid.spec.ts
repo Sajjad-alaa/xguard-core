@@ -15,7 +15,7 @@ import { waitForRoute } from '../utils/waitForRoute';
 
 // FIXME containerize test client so tests can run without external testing client
 
-//TODO: Enable this when https://github.com/DefGuard/defguard/issues/2405 is fixes
+//TODO: Enable this when https://github.com/Sajjad-alaa/xguard-core/issues/2405 is fixes
 test.describe('Authorize OpenID client.', () => {
   const testUser: User = { ...testUserTemplate, username: 'test' };
 

@@ -1,5 +1,5 @@
 import type { PolicyOsVariant } from '../components/SystemSelector/types';
-import type { IconKindValue } from '../defguard-ui/components/Icon';
+import type { IconKindValue } from '../xguard-ui/components/Icon';
 
 export const policyOsVariantToText = (variant: PolicyOsVariant): string => {
   switch (variant) {

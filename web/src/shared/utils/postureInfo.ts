@@ -1,6 +1,6 @@
 import { m } from '../../paraglide/messages';
 import type { ApiDevicePosture } from '../api/types';
-import { IconKind } from '../defguard-ui/components/Icon';
+import { IconKind } from '../xguard-ui/components/Icon';
 
 type OsDetailRow = {
   label: string;
@@ -127,7 +127,7 @@ export const getAndroidSection = (
   return { icon: IconKind.Android, name: 'Android', rows };
 };
 
-export const getDefguardSection = (posture: ApiDevicePosture): OsSection | null => {
+export const getXGuardSection = (posture: ApiDevicePosture): OsSection | null => {
   const rows: OsDetailRow[] = [];
   rows.push({
     label: 'Desktop',
@@ -147,7 +147,7 @@ export const getDefguardSection = (posture: ApiDevicePosture): OsSection | null 
     rows.push({ label: 'Other', value: 'Pre-release allowed' });
   }
 
-  return { icon: IconKind.Defguard, name: 'Defguard', rows };
+  return { icon: IconKind.XGuard, name: 'XGuard', rows };
 };
 
 export const buildOsSections = (posture: ApiDevicePosture): OsSection[] => {
@@ -173,8 +173,8 @@ export const buildOsSections = (posture: ApiDevicePosture): OsSection[] => {
     }
   }
 
-  const defguardSection = getDefguardSection(posture);
-  if (defguardSection) sections.push(defguardSection);
+  const xguardSection = getXGuardSection(posture);
+  if (xguardSection) sections.push(xguardSection);
 
   return sections;
 };

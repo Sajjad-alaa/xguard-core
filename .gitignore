@@ -1,5 +1,5 @@
 target/
-defguard.db*
+xguard.db*
 .volumes*
 node_modules/
 .DS_Store
@@ -13,7 +13,7 @@ ladle-build
 .envrc
 .direnv/
 *.pem
-!tools/defguard_fido_mds/globalsign_root_r3.pem
+!tools/xguard_fido_mds/globalsign_root_r3.pem
 result/
 .aider*
 .env

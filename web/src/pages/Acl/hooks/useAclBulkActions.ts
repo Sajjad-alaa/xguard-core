@@ -6,8 +6,8 @@ import type { LicenseInfo } from '../../../shared/api/types';
 import type {
   MenuItemProps,
   MenuItemsGroup,
-} from '../../../shared/defguard-ui/components/Menu/types';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
+} from '../../../shared/xguard-ui/components/Menu/types';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
 import type { OpenConfirmActionModal } from '../../../shared/hooks/modalControls/types';

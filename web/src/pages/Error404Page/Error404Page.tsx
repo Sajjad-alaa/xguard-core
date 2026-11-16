@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { m } from '../../paraglide/messages';
 import { FlowEndImageVariant } from '../../shared/components/FlowEndLayout/components/FlowEndImage/types';
 import { FlowEndLayout } from '../../shared/components/FlowEndLayout/FlowEndLayout';
-import type { ButtonProps } from '../../shared/defguard-ui/components/Button/types';
+import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 
 export const Error404Page = () => {
   const navigate = useNavigate();

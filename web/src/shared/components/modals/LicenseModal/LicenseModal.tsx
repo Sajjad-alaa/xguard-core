@@ -1,8 +1,8 @@
 import './style.scss';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { ModalFoundation } from '../../../defguard-ui/components/ModalFoundation/ModalFoundation';
-import type { ModalBase } from '../../../defguard-ui/components/ModalFoundation/types';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { ModalFoundation } from '../../../xguard-ui/components/ModalFoundation/ModalFoundation';
+import type { ModalBase } from '../../../xguard-ui/components/ModalFoundation/types';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import gridImage from './grid.png?url';
 
 type Props = Omit<ModalBase, 'title'> & {

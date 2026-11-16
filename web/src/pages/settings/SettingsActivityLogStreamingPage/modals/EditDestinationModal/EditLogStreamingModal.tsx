@@ -8,11 +8,11 @@ import {
   ActivityLogStreamType,
   type CreateActivityLogStreamRequest,
 } from '../../../../../shared/api/types';
-import { Modal } from '../../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../../../shared/form';
 import { formChangeLogic } from '../../../../../shared/formLogic';
 import {

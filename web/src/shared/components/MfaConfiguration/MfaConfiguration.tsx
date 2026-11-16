@@ -8,9 +8,9 @@ import {
   MfaMethodAvailabilityReason,
   type MfaMethodAvailabilityReasonValue,
 } from '../../api/types';
-import type { ButtonProps } from '../../defguard-ui/components/Button/types';
-import { FieldError } from '../../defguard-ui/components/FieldError/FieldError';
-import { InfoBanner } from '../../defguard-ui/components/InfoBanner/InfoBanner';
+import type { ButtonProps } from '../../xguard-ui/components/Button/types';
+import { FieldError } from '../../xguard-ui/components/FieldError/FieldError';
+import { InfoBanner } from '../../xguard-ui/components/InfoBanner/InfoBanner';
 import {
   getLicenseInfoQueryOptions,
   getMfaMethodAvailabilityQueryOptions,

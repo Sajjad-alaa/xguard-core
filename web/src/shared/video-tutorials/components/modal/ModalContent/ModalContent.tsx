@@ -1,9 +1,9 @@
 import { Link } from '@tanstack/react-router';
 import { m } from '../../../../../paraglide/messages';
-import { Icon } from '../../../../defguard-ui/components/Icon/Icon';
-import { IconButton } from '../../../../defguard-ui/components/IconButton/IconButton';
-import { Direction } from '../../../../defguard-ui/types';
-import { isPresent } from '../../../../defguard-ui/utils/isPresent';
+import { Icon } from '../../../../xguard-ui/components/Icon/Icon';
+import { IconButton } from '../../../../xguard-ui/components/IconButton/IconButton';
+import { Direction } from '../../../../xguard-ui/types';
+import { isPresent } from '../../../../xguard-ui/utils/isPresent';
 import { getNavRoot } from '../../../route-key';
 import { getRouteLabel } from '../../../route-label';
 import { useVideoTutorialsModal } from '../../../store';

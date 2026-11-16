@@ -3,13 +3,13 @@ import { cloneDeep } from 'lodash-es';
 import { useCallback, useMemo } from 'react';
 import type { AddOpenIdProvider } from '../../../../shared/api/types';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
-import { AppText } from '../../../../shared/defguard-ui/components/AppText/AppText';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
+import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import {
   TextStyle,
   ThemeSpacing,
   ThemeVariable,
-} from '../../../../shared/defguard-ui/types';
+} from '../../../../shared/xguard-ui/types';
 import { mfaAvailabilityInvalidateKey } from '../../../../shared/query';
 import { validateExternalProviderWizard } from '../../consts';
 import { useAddExternalOpenIdStore } from '../../useAddExternalOpenIdStore';

@@ -2,7 +2,7 @@ version: "3"
 
 vars:
   IMAGE_TAG: release-2.1
-  LDAP_COMPOSE: docker compose -p defguard-ldap -f docker-compose.ldap-test.yaml
+  LDAP_COMPOSE: docker compose -p xguard-ldap -f docker-compose.ldap-test.yaml
 
 tasks:
   default:
@@ -36,8 +36,8 @@ tasks:
   fido-mds:
     desc: Regenerate the trusted FIDO2 authenticator list from the FIDO Metadata Service blob
     cmds:
-      - cargo run --locked --release -p defguard_fido_mds -- crates/defguard_core/src/enterprise/fido2/trusted_authenticators.json
-      - SQLX_OFFLINE=true cargo test --locked -p defguard_core --lib fido2::attestation
+      - cargo run --locked --release -p xguard_fido_mds -- crates/xguard_core/src/enterprise/fido2/trusted_authenticators.json
+      - SQLX_OFFLINE=true cargo test --locked -p xguard_core --lib fido2::attestation
 
   move-tag:
     desc: "Move tag to current commit (task move-tag -- <TAG>)"
@@ -146,7 +146,7 @@ tasks:
     cmds:
       - defer: "{{.LDAP_COMPOSE}} down"
       - "{{.LDAP_COMPOSE}} up -d --wait openldap"
-      - cargo nextest run --run-ignored only -E 'package(defguard_core) and test(/^ldap::/)' {{.CLI_ARGS}}
+      - cargo nextest run --run-ignored only -E 'package(xguard_core) and test(/^ldap::/)' {{.CLI_ARGS}}
 
   e2e-test:
     desc: "Run e2e tests, requires Docker (task e2e-test [IMAGE_TAG=<tag>] -- <ARGS>)"

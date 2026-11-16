@@ -1,10 +1,10 @@
 import { m } from '../../../paraglide/messages';
-import { Divider } from '../../defguard-ui/components/Divider/Divider';
-import { Modal } from '../../defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../defguard-ui/components/ModalControls/ModalControls';
-import { Search } from '../../defguard-ui/components/Search/Search';
-import { ThemeSpacing } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Divider } from '../../xguard-ui/components/Divider/Divider';
+import { Modal } from '../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../xguard-ui/components/ModalControls/ModalControls';
+import { Search } from '../../xguard-ui/components/Search/Search';
+import { ThemeSpacing } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,

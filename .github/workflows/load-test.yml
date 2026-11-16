@@ -51,7 +51,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: defguard-load-tests
+  group: xguard-load-tests
   cancel-in-progress: false
 
 jobs:
@@ -103,8 +103,8 @@ jobs:
           set -euo pipefail
           for service in edge core; do
             case "$service" in
-              edge) instance_id=$EDGE_INSTANCE_ID; compose=/opt/defguard-edge/docker-compose.yaml ;;
-              core) instance_id=$CORE_INSTANCE_ID; compose=/opt/defguard-core/docker-compose.yaml ;;
+              edge) instance_id=$EDGE_INSTANCE_ID; compose=/opt/xguard-edge/docker-compose.yaml ;;
+              core) instance_id=$CORE_INSTANCE_ID; compose=/opt/xguard-core/docker-compose.yaml ;;
             esac
             parameters=$(jq -nc --arg c "$compose" --arg s "$service" '{commands: ["set -e", "docker compose -f \($c) pull \($s)", "docker compose -f \($c) up -d --no-deps \($s)"], executionTimeout: ["600"]}')
             command_id=$(aws ssm send-command --instance-ids "$instance_id" --document-name AWS-RunShellScript --parameters "$parameters" --timeout-seconds 60 --query 'Command.CommandId' --output text)

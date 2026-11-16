@@ -4,9 +4,9 @@ import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
 import { SelectionSection } from '../../../../shared/components/SelectionSection/SelectionSection';
 import type { SelectionOption } from '../../../../shared/components/SelectionSection/type';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,

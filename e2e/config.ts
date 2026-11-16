@@ -91,23 +91,23 @@ export const defaultUserAdmin: User = {
   username: 'admin',
   password: 'DefaultPass123@',
   firstName: 'Administrator',
-  lastName: 'Defguard',
-  mail: 'admin@defguard.com',
+  lastName: 'XGuard',
+  mail: 'admin@xguard.local',
   phone: '',
 };
 
 export const testUserTemplate = {
   firstName: 'test first name',
   lastName: 'test last name',
-  password: 'defguarD123!',
+  password: 'xGuard123!',
   mail: 'test@test.com',
   phone: '123456789',
 };
 
 export const dbCred = {
-  username: 'defguard',
-  password: 'defguard',
-  database: 'defguard',
+  username: 'xguard',
+  password: 'xguard',
+  database: 'xguard',
   port: process.env.E2E_DB_PORT ? Number.parseInt(process.env.E2E_DB_PORT) : 5432,
   host: 'localhost',
 };

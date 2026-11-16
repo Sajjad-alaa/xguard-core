@@ -6,8 +6,8 @@ import type {
   NetworkLocation,
 } from '../../shared/api/types';
 import type { SelectionOption } from '../../shared/components/SelectionSection/type';
-import type { TableFilterMessages } from '../../shared/defguard-ui/components/table/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import type { TableFilterMessages } from '../../shared/xguard-ui/components/table/types';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import type { OpenConfirmActionModal } from '../../shared/hooks/modalControls/types';
 import {
   type PostureCheckFilterValue,
@@ -32,10 +32,10 @@ export type PostureCheckRow = {
   iosFilters: PostureCheckFilterValue[];
   android: string;
   androidFilters: PostureCheckFilterValue[];
-  defguardDesktop: string;
-  defguardDesktopFilters: PostureCheckFilterValue[];
-  defguardMobile: string;
-  defguardMobileFilters: PostureCheckFilterValue[];
+  xguardDesktop: string;
+  xguardDesktopFilters: PostureCheckFilterValue[];
+  xguardMobile: string;
+  xguardMobileFilters: PostureCheckFilterValue[];
 };
 
 const emptyRequirement = '-';
@@ -50,8 +50,8 @@ export type PostureCheckColumnFilterOptions = {
   linux: SelectionOption<PostureCheckFilterValue>[];
   ios: SelectionOption<PostureCheckFilterValue>[];
   android: SelectionOption<PostureCheckFilterValue>[];
-  defguard_desktop: SelectionOption<PostureCheckFilterValue>[];
-  defguard_mobile: SelectionOption<PostureCheckFilterValue>[];
+  xguard_desktop: SelectionOption<PostureCheckFilterValue>[];
+  xguard_mobile: SelectionOption<PostureCheckFilterValue>[];
 };
 
 const requirementFilterDefinitions = {
@@ -124,12 +124,12 @@ export const getPostureCheckColumnFilterOptions = (
     ...toSelectionOptions(versionValues.android, (value) => `Android ${value}+`),
     ...toRequirementSelectionOptions([PostureCheckRequirement.DeviceIntegrity]),
   ],
-  defguard_desktop: toSelectionOptions(
-    versionValues.defguardDesktop,
+  xguard_desktop: toSelectionOptions(
+    versionValues.xguardDesktop,
     (value) => `${value}+`,
   ),
-  defguard_mobile: toSelectionOptions(
-    versionValues.defguardMobile,
+  xguard_mobile: toSelectionOptions(
+    versionValues.xguardMobile,
     (value) => `${value}+`,
   ),
 });
@@ -271,18 +271,18 @@ export const mapApiDevicePostureToRow = (posture: ApiDevicePosture): PostureChec
   iosFilters: getOsRuleFilters(getDevicePostureRule(posture, PostureCheckOs.Ios)),
   android: getOsRuleSummary(getDevicePostureRule(posture, PostureCheckOs.Android)),
   androidFilters: getOsRuleFilters(getDevicePostureRule(posture, PostureCheckOs.Android)),
-  defguardDesktop:
+  xguardDesktop:
     posture.min_desktop_client_version === null
       ? m.posture_checks_version_any()
       : `Desktop ${posture.min_desktop_client_version}+`,
-  defguardDesktopFilters: joinFilters([
+  xguardDesktopFilters: joinFilters([
     mapVersionFilterValue(posture.min_desktop_client_version),
   ]),
-  defguardMobile:
+  xguardMobile:
     posture.min_mobile_client_version === null
       ? m.posture_checks_version_any()
-      : `Defguard ${posture.min_mobile_client_version}+`,
-  defguardMobileFilters: joinFilters([
+      : `XGuard ${posture.min_mobile_client_version}+`,
+  xguardMobileFilters: joinFilters([
     mapVersionFilterValue(posture.min_mobile_client_version),
   ]),
 });
@@ -355,8 +355,8 @@ export const filterPostureChecks = (rows: PostureCheckRow[], search: string) => 
       row.linux,
       row.ios,
       row.android,
-      row.defguardDesktop,
-      row.defguardMobile,
+      row.xguardDesktop,
+      row.xguardMobile,
     ];
 
     return searchableValues.some((value) => value.toLowerCase().includes(query));

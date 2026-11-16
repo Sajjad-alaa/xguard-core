@@ -1,7 +1,7 @@
-import { Button } from '../../../defguard-ui/components/Button/Button';
-import { Divider } from '../../../defguard-ui/components/Divider/Divider';
-import { SizedBox } from '../../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../defguard-ui/types';
+import { Button } from '../../../xguard-ui/components/Button/Button';
+import { Divider } from '../../../xguard-ui/components/Divider/Divider';
+import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../xguard-ui/types';
 import { Controls } from '../../Controls/Controls';
 import { WizardCard } from '../../wizard/WizardCard/WizardCard';
 import './style.scss';

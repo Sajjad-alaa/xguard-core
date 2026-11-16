@@ -1,10 +1,10 @@
 import type { PropsWithChildren } from 'react';
 import { m } from '../../../../paraglide/messages';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { Fold } from '../../../../shared/defguard-ui/components/Fold/Fold';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Toggle } from '../../../../shared/defguard-ui/components/Toggle/Toggle';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Fold } from '../../../../shared/xguard-ui/components/Fold/Fold';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Toggle } from '../../../../shared/xguard-ui/components/Toggle/Toggle';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { useAddExternalOpenIdStore } from '../../useAddExternalOpenIdStore';
 
 export const ProviderSyncToggle = ({ children }: PropsWithChildren) => {

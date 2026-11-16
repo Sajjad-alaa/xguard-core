@@ -8,12 +8,12 @@ import { Controls } from '../../../shared/components/Controls/Controls';
 import { DescriptionBlock } from '../../../shared/components/DescriptionBlock/DescriptionBlock';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
 import { externalLink } from '../../../shared/constants';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Helper } from '../../../shared/defguard-ui/components/Helper/Helper';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Helper } from '../../../shared/xguard-ui/components/Helper/Helper';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { getLicenseInfoQueryOptions } from '../../../shared/query';
@@ -165,7 +165,7 @@ export const AddLocationInternalVpnStep = () => {
           {isPresent(canUseEnterprise) && !canUseEnterprise && (
             <>
               <p className="acl-upsell-text">
-                <a href={externalLink.defguard.pricing} target="_blank" rel="noreferrer">
+                <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
                   {m.add_location_internal_vpn_allowed_ips_from_firewall_rules_upsell_link()}
                 </a>
                 <span>

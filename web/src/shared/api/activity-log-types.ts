@@ -1,7 +1,7 @@
 import { m } from '../../paraglide/messages';
 
 export const ActivityLogModule = {
-  Defguard: 'defguard',
+  XGuard: 'xguard',
   Client: 'client',
   Vpn: 'vpn',
   Enrollment: 'enrollment',

@@ -3,16 +3,16 @@ import './style.scss';
 import { ZipArchive } from '@shortercode/webzip';
 import { useCallback, useMemo, useState } from 'react';
 import { m } from '../../../paraglide/messages';
-import { Button } from '../../defguard-ui/components/Button/Button';
-import { ButtonMenu } from '../../defguard-ui/components/ButtonMenu/MenuButton';
-import type { MenuItemsGroup } from '../../defguard-ui/components/Menu/types';
-import { QrCard } from '../../defguard-ui/components/QrCard/QrCard';
-import { Select } from '../../defguard-ui/components/Select/Select';
-import type { SelectOption } from '../../defguard-ui/components/Select/types';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { useClipboard } from '../../defguard-ui/hooks/useClipboard';
-import { ThemeSpacing } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Button } from '../../xguard-ui/components/Button/Button';
+import { ButtonMenu } from '../../xguard-ui/components/ButtonMenu/MenuButton';
+import type { MenuItemsGroup } from '../../xguard-ui/components/Menu/types';
+import { QrCard } from '../../xguard-ui/components/QrCard/QrCard';
+import { Select } from '../../xguard-ui/components/Select/Select';
+import type { SelectOption } from '../../xguard-ui/components/Select/types';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { useClipboard } from '../../xguard-ui/hooks/useClipboard';
+import { ThemeSpacing } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { downloadFile, downloadText } from '../../utils/download';
 
 const configToOption = (

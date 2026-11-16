@@ -1,8 +1,8 @@
 import './style.scss';
 import clsx from 'clsx';
 import type { PropsWithChildren } from 'react';
-import { Icon } from '../../../defguard-ui/components/Icon';
-import { IconButton } from '../../../defguard-ui/components/IconButton/IconButton';
+import { Icon } from '../../../xguard-ui/components/Icon';
+import { IconButton } from '../../../xguard-ui/components/IconButton/IconButton';
 import {
   policyOsVariantToIcon,
   policyOsVariantToText,

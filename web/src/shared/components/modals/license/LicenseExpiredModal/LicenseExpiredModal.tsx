@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { LicenseTierValue } from '../../../../api/types';
-import { AppText } from '../../../../defguard-ui/components/AppText/AppText';
-import { Divider } from '../../../../defguard-ui/components/Divider/Divider';
-import { SizedBox } from '../../../../defguard-ui/components/SizedBox/SizedBox';
-import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../../defguard-ui/types';
-import { isPresent } from '../../../../defguard-ui/utils/isPresent';
+import { AppText } from '../../../../xguard-ui/components/AppText/AppText';
+import { Divider } from '../../../../xguard-ui/components/Divider/Divider';
+import { SizedBox } from '../../../../xguard-ui/components/SizedBox/SizedBox';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../../xguard-ui/types';
+import { isPresent } from '../../../../xguard-ui/utils/isPresent';
 import {
   subscribeCloseModal,
   subscribeOpenModal,
@@ -79,8 +79,8 @@ support team at `}
           font={TextStyle.TBodySm400}
           color={ThemeVariable.FgAction}
           style={{ textDecoration: 'none' }}
-          href="mailto:support@defguard.net"
-        >{`support@defguard.net`}</AppText>
+          href="mailto:support@xguard.local"
+        >{`support@xguard.local`}</AppText>
       </AppText>
       <LicenseModalControls linkText={`Renew license`} modalName={modalNameKey} />
     </>

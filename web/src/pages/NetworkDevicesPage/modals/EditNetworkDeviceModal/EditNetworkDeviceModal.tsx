@@ -1,8 +1,8 @@
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,
@@ -15,8 +15,8 @@ import { useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../../../shared/api/api';
-import { Select } from '../../../../shared/defguard-ui/components/Select/Select';
-import type { SelectSingleValue } from '../../../../shared/defguard-ui/components/Select/types';
+import { Select } from '../../../../shared/xguard-ui/components/Select/Select';
+import type { SelectSingleValue } from '../../../../shared/xguard-ui/components/Select/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 

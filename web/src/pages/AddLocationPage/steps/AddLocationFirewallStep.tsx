@@ -8,13 +8,13 @@ import { ActionCard } from '../../../shared/components/ActionCard/ActionCard';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
 import { externalLink } from '../../../shared/constants';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Checkbox } from '../../../shared/defguard-ui/components/Checkbox/Checkbox';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { Radio } from '../../../shared/defguard-ui/components/Radio/Radio';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Checkbox } from '../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { Radio } from '../../../shared/xguard-ui/components/Radio/Radio';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { getLicenseInfoQueryOptions } from '../../../shared/query';
 import { canUseBusinessFeature } from '../../../shared/utils/license';
 import { useGatewayWizardStore } from '../../GatewaySetupPage/useGatewayWizardStore';
@@ -91,7 +91,7 @@ export const AddLocationFirewallStep = () => {
             title=""
             subtitle={m.add_location_firewall_no_license_subtitle()}
           >
-            <a href={externalLink.defguard.pricing} target="_blank" rel="noreferrer">
+            <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
               <Button
                 variant="outlined"
                 text={m.license_see_other_plans()}

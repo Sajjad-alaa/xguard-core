@@ -7,15 +7,15 @@ import api from '../../../shared/api/api';
 import type { ApiError } from '../../../shared/api/types';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Checkbox } from '../../../shared/defguard-ui/components/Checkbox/Checkbox';
-import { CodeCard } from '../../../shared/defguard-ui/components/CodeCard/CodeCard';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { Helper } from '../../../shared/defguard-ui/components/Helper/Helper';
-import { Icon, IconKind } from '../../../shared/defguard-ui/components/Icon';
-import { LoaderSpinner } from '../../../shared/defguard-ui/components/LoaderSpinner/LoaderSpinner';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing, ThemeVariable } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Checkbox } from '../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { CodeCard } from '../../../shared/xguard-ui/components/CodeCard/CodeCard';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { Helper } from '../../../shared/xguard-ui/components/Helper/Helper';
+import { Icon, IconKind } from '../../../shared/xguard-ui/components/Icon';
+import { LoaderSpinner } from '../../../shared/xguard-ui/components/LoaderSpinner/LoaderSpinner';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
 import { useMigrationWizardStore } from '../store/useMigrationWizardStore';
 
 export const MigrationWizardLdapMigrationStep = () => {

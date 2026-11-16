@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import type { MfaFlowMethodValue } from '../../api/types';
-import type { MenuItemProps } from '../../defguard-ui/components/Menu/types';
+import type { MenuItemProps } from '../../xguard-ui/components/Menu/types';
 
 /** One ordered MFA step in the form state. */
 export interface MfaConfigurationStepData {

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { timer } from 'rxjs';
-import { TableCell } from '../../../shared/defguard-ui/components/table/TableCell/TableCell';
+import { TableCell } from '../../../shared/xguard-ui/components/table/TableCell/TableCell';
 import { formatConnectionTime } from '../../../shared/utils/formatConnectionTime';
 
 type Props = {

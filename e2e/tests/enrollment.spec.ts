@@ -18,7 +18,7 @@ const testNetwork: NetworkForm = {
   port: '5055',
 };
 
-// TODO: Enable when https://github.com/DefGuard/defguard/issues/2424 is fixed.
+// TODO: Enable when https://github.com/Sajjad-alaa/xguard-core/issues/2424 is fixed.
 
 test.describe('Create user and enroll him', () => {
   let token: string;

@@ -1,5 +1,5 @@
 import './style.scss';
-import { IconKind } from '../../../../shared/defguard-ui/components/Icon';
+import { IconKind } from '../../../../shared/xguard-ui/components/Icon';
 import { PlaygroundIconCard } from './components/PlaygroundIconCard/PlaygroundIconCard';
 
 const data = Object.values(IconKind);

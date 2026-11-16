@@ -8,12 +8,12 @@ import type z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../api/api';
 import type { ApiError, User } from '../../../api/types';
-import { Icon } from '../../../defguard-ui/components/Icon';
-import type { IconKindValue } from '../../../defguard-ui/components/Icon/icon-types';
-import { Modal } from '../../../defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../defguard-ui/components/ModalControls/ModalControls';
-import { Snackbar } from '../../../defguard-ui/providers/snackbar/snackbar';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { Icon } from '../../../xguard-ui/components/Icon';
+import type { IconKindValue } from '../../../xguard-ui/components/Icon/icon-types';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
+import { Snackbar } from '../../../xguard-ui/providers/snackbar/snackbar';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { useAppForm, withForm } from '../../../form';
 import { formChangeLogic } from '../../../formLogic';
 import {

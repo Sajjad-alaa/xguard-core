@@ -10,9 +10,9 @@ import {
 } from '../../shared/aclTabs';
 import { Page } from '../../shared/components/Page/Page';
 import { TableSkeleton } from '../../shared/components/skeleton/TableSkeleton/TableSkeleton';
-import { IconKind } from '../../shared/defguard-ui/components/Icon';
-import { Tabs } from '../../shared/defguard-ui/components/Tabs/Tabs';
-import type { TabsItem } from '../../shared/defguard-ui/components/Tabs/types';
+import { IconKind } from '../../shared/xguard-ui/components/Icon';
+import { Tabs } from '../../shared/xguard-ui/components/Tabs/Tabs';
+import type { TabsItem } from '../../shared/xguard-ui/components/Tabs/types';
 import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
 import { getAliasesCountQueryOptions } from '../../shared/query';
 import { DeleteAliasDestinationConfirmModal } from '../Acl/components/DeleteAliasDestinationConfirmModal/DeleteAliasDestinationConfirmModal';

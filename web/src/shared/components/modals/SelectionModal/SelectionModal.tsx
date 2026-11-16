@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../defguard-ui/components/ModalControls/ModalControls';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
 import { SelectionSection } from '../../SelectionSection/SelectionSection';
 import type { SelectionKey } from '../../SelectionSection/type';
 import { useSelectionModal } from './useSelectionModal';

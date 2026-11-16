@@ -7,14 +7,14 @@ import {
 import { useMemo, useState } from 'react';
 import { m } from '../../../../../paraglide/messages';
 import type { LdapDryRunUser } from '../../../../../shared/api/types';
-import { Badge } from '../../../../../shared/defguard-ui/components/Badge/Badge';
-import { BadgeVariant } from '../../../../../shared/defguard-ui/components/Badge/types';
-import { EmptyState } from '../../../../../shared/defguard-ui/components/EmptyState/EmptyState';
-import { Search } from '../../../../../shared/defguard-ui/components/Search/Search';
-import { SizedBox } from '../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { TableBody } from '../../../../../shared/defguard-ui/components/table/TableBody/TableBody';
-import { TableCell } from '../../../../../shared/defguard-ui/components/table/TableCell/TableCell';
-import { ThemeSpacing } from '../../../../../shared/defguard-ui/types';
+import { Badge } from '../../../../../shared/xguard-ui/components/Badge/Badge';
+import { BadgeVariant } from '../../../../../shared/xguard-ui/components/Badge/types';
+import { EmptyState } from '../../../../../shared/xguard-ui/components/EmptyState/EmptyState';
+import { Search } from '../../../../../shared/xguard-ui/components/Search/Search';
+import { SizedBox } from '../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { TableBody } from '../../../../../shared/xguard-ui/components/table/TableBody/TableBody';
+import { TableCell } from '../../../../../shared/xguard-ui/components/table/TableCell/TableCell';
+import { ThemeSpacing } from '../../../../../shared/xguard-ui/types';
 
 const columnHelper = createColumnHelper<LdapDryRunUser>();
 

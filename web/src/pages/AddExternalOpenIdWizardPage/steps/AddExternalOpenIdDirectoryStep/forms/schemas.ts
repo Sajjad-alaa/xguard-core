@@ -5,7 +5,7 @@ import {
   DirectorySyncTarget,
   OpenIdProviderUsernameHandling,
 } from '../../../../../shared/api/types';
-import { isPresent } from '../../../../../shared/defguard-ui/utils/isPresent';
+import { isPresent } from '../../../../../shared/xguard-ui/utils/isPresent';
 
 export const baseExternalProviderConfigSchema = z.object({
   base_url: z.url(m.form_error_invalid()).trim().min(1, m.form_error_required()),

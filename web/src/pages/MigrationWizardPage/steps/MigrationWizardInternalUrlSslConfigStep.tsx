@@ -5,10 +5,10 @@ import api from '../../../shared/api/api';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { InternalSslResult } from '../../../shared/components/certificates/InternalSslResult/InternalSslResult';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { downloadFile } from '../../../shared/utils/download';
 import caIcon from '../../SetupPage/assets/ca.png';
 import { useMigrationWizardStore } from '../store/useMigrationWizardStore';
@@ -30,7 +30,7 @@ export const MigrationWizardInternalUrlSslConfigStep = () => {
   const { data: sslInfoData } = useQuery({
     queryKey: ['migration', 'internal_ssl_info'],
     queryFn: () => api.migration.getInternalSslInfo(),
-    enabled: sslType === 'defguard_ca',
+    enabled: sslType === 'xguard_ca',
     select: (response) => response.data,
   });
 
@@ -38,7 +38,7 @@ export const MigrationWizardInternalUrlSslConfigStep = () => {
     if (!sslInfoData?.ca_cert_pem) return;
     downloadFile(
       new Blob([sslInfoData.ca_cert_pem], { type: 'application/x-pem-file' }),
-      'defguard-ca',
+      'xguard-ca',
       'pem',
     );
   };

@@ -7,21 +7,21 @@ import type {
   LicenseInfo,
   LicenseLimitsInfo,
 } from '../../../../../../../shared/api/types';
-import { Badge } from '../../../../../../../shared/defguard-ui/components/Badge/Badge';
-import { Divider } from '../../../../../../../shared/defguard-ui/components/Divider/Divider';
+import { Badge } from '../../../../../../../shared/xguard-ui/components/Badge/Badge';
+import { Divider } from '../../../../../../../shared/xguard-ui/components/Divider/Divider';
 import {
   Icon,
   IconKind,
   type IconKindValue,
-} from '../../../../../../../shared/defguard-ui/components/Icon';
-import { InfoBanner } from '../../../../../../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { ProgressionBar } from '../../../../../../../shared/defguard-ui/components/ProgressionBar/ProgressionBar';
-import { SizedBox } from '../../../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
+} from '../../../../../../../shared/xguard-ui/components/Icon';
+import { InfoBanner } from '../../../../../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { ProgressionBar } from '../../../../../../../shared/xguard-ui/components/ProgressionBar/ProgressionBar';
+import { SizedBox } from '../../../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import {
   ThemeSpacing,
   ThemeVariable,
-} from '../../../../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../../../../shared/defguard-ui/utils/isPresent';
+} from '../../../../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../../../../shared/xguard-ui/utils/isPresent';
 import {
   getAdditiveFeatures,
   getLicenseFeatureLabel,

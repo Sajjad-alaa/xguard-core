@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import './style.scss';
 import { m } from '../../paraglide/messages';
-import { Input } from '../../shared/defguard-ui/components/Input/Input';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../shared/defguard-ui/providers/snackbar/snackbar';
-import { SnackbarVariant } from '../../shared/defguard-ui/providers/snackbar/types';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
+import { Input } from '../../shared/xguard-ui/components/Input/Input';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
+import { SnackbarVariant } from '../../shared/xguard-ui/providers/snackbar/types';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 
 const initialText = m.test_placeholder();
 

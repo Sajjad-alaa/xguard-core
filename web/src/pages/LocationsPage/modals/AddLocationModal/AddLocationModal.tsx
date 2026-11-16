@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
 import { LocationServiceMode } from '../../../../shared/api/types';
 import { enterpriseBadgeProps } from '../../../../shared/components/badges/EnterpriseBadge';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { SectionSelect } from '../../../../shared/defguard-ui/components/SectionSelect/SectionSelect';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   subscribeCloseModal,
   subscribeOpenModal,

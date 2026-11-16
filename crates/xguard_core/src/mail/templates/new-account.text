@@ -1,0 +1,14 @@
+{{ title }}
+{% if subtitle %}{{ subtitle }}{% endif %}
+
+Desktop client
+{{ download }}
+https://xguard.local/download/
+
+{{ after_install }}
+{{ label_url }}: {{ url }}
+{{ label_token }}: {{ token }}
+
+{{ token_info }}
+
+{{ label_enroll }}: {{ link_url }}

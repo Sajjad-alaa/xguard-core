@@ -24,7 +24,7 @@ const fieldChips = (page: Page, field: string) =>
 
 test.describe('ACL duplicate', () => {
   test.beforeEach(() => {
-    test.skip(!process.env.DEFGUARD_LICENSE_KEY, 'ACL is a business feature');
+    test.skip(!process.env.XGUARD_LICENSE_KEY, 'ACL is a business feature');
     dockerRestart();
   });
 

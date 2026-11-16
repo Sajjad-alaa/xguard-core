@@ -1,6 +1,6 @@
 -- add new enum type without posture module
 CREATE TYPE activity_log_module_new AS ENUM (
-    'defguard',
+    'xguard',
     'client',
     'vpn',
     'enrollment'
@@ -11,7 +11,7 @@ UPDATE activity_log_event
 SET module = CASE
     WHEN event IN ('device_posture_check_passed', 'device_posture_check_failed')
         THEN 'vpn'::activity_log_module
-    ELSE 'defguard'::activity_log_module
+    ELSE 'xguard'::activity_log_module
 END
 WHERE module = 'posture';
 

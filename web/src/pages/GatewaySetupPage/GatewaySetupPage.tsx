@@ -6,10 +6,10 @@ import type { WizardPageStep } from '../../shared/components/wizard/types';
 import { WizardCover } from '../../shared/components/wizard/WizardCoverImage/types';
 import { WizardCoverImage } from '../../shared/components/wizard/WizardCoverImage/WizardCoverImage';
 import { WizardPage } from '../../shared/components/wizard/WizardPage/WizardPage';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../shared/defguard-ui/components/Divider/Divider';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../shared/xguard-ui/components/Divider/Divider';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { SetupConfirmationStep } from './steps/SetupConfirmationStep';
 import { SetupDeployGatewayStep } from './steps/SetupDeployGatewayStep';
 import { SetupGatewayAdoptionStep } from './steps/SetupGatewayAdaptationStep';
@@ -101,7 +101,7 @@ export const GatewaySetupPage = () => {
         title: m.gateway_setup_welcome_title(),
         subtitle: m.gateway_setup_welcome_subtitle(),
         content: <WelcomePageContent />,
-        docsLink: 'https://docs.defguard.net/edge-component/deployment',
+        docsLink: 'https://docs.xguard.local/edge-component/deployment',
         docsText: m.gateway_setup_welcome_docs_text(),
         media: <WizardCoverImage variant={WizardCover.Gateway} />,
         onClose,

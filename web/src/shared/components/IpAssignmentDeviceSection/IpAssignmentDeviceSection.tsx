@@ -3,9 +3,9 @@ import './style.scss';
 import clsx from 'clsx';
 import { range, sum } from 'lodash-es';
 import React from 'react';
-import { SectionMarker } from '../../defguard-ui/components/SectionMarker/SectionMarker';
-import { ThemeVariable } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { SectionMarker } from '../../xguard-ui/components/SectionMarker/SectionMarker';
+import { ThemeVariable } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 
 interface Props {
   name?: string;

@@ -13,16 +13,16 @@ import { SettingsHeader } from '../../shared/components/SettingsHeader/SettingsH
 import { SettingsLayout } from '../../shared/components/SettingsLayout/SettingsLayout';
 import { SettingsCardSkeleton } from '../../shared/components/skeleton/SettingsCardSkeleton/SettingsCardSkeleton';
 import { externalLink } from '../../shared/constants';
-import { AppText } from '../../shared/defguard-ui/components/AppText/AppText';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import { ButtonMenu } from '../../shared/defguard-ui/components/ButtonMenu/MenuButton';
-import { ButtonsGroup } from '../../shared/defguard-ui/components/ButtonsGroup/ButtonsGroup';
-import { Divider } from '../../shared/defguard-ui/components/Divider/Divider';
-import { MarkedSection } from '../../shared/defguard-ui/components/MarkedSection/MarkedSection';
-import { MarkedSectionHeader } from '../../shared/defguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
-import docIllustration from '../../shared/defguard-ui/components/SectionSelect/assets/manual-user.png';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { TextStyle, ThemeSpacing, ThemeVariable } from '../../shared/defguard-ui/types';
+import { AppText } from '../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import { ButtonMenu } from '../../shared/xguard-ui/components/ButtonMenu/MenuButton';
+import { ButtonsGroup } from '../../shared/xguard-ui/components/ButtonsGroup/ButtonsGroup';
+import { Divider } from '../../shared/xguard-ui/components/Divider/Divider';
+import { MarkedSection } from '../../shared/xguard-ui/components/MarkedSection/MarkedSection';
+import { MarkedSectionHeader } from '../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
+import docIllustration from '../../shared/xguard-ui/components/SectionSelect/assets/manual-user.png';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../shared/xguard-ui/types';
 import { getLicenseInfoQueryOptions } from '../../shared/query';
 import { downloadFile } from '../../shared/utils/download';
 
@@ -72,7 +72,7 @@ const PageContent = () => {
               text={m.support_page_docs_btn()}
               iconRight="open-in-new-window"
               onClick={() =>
-                window.open(externalLink.defguard.docs, '_blank', 'noopener,noreferrer')
+                window.open(externalLink.xguard.docs, '_blank', 'noopener,noreferrer')
               }
             />
           </div>
@@ -117,7 +117,7 @@ const PageContent = () => {
                         type: 'application/json',
                       });
                       const now = new Date().toISOString().replace(/[:.]/g, '-');
-                      downloadFile(blob, `defguard-support-data-${now}`, 'json');
+                      downloadFile(blob, `xguard-support-data-${now}`, 'json');
                     },
                   },
                 ],
@@ -158,7 +158,7 @@ const PageContent = () => {
             <AppText font={TextStyle.TBodySm400} color={ThemeVariable.FgMuted}>
               {m.support_page_portal_desc_before()}
               <a
-                href={externalLink.defguard.supportPortalGuide}
+                href={externalLink.xguard.supportPortalGuide}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -174,7 +174,7 @@ const PageContent = () => {
                 iconRight="open-in-new-window"
                 onClick={() =>
                   window.open(
-                    externalLink.defguard.supportPortal,
+                    externalLink.xguard.supportPortal,
                     '_blank',
                     'noopener,noreferrer',
                   )
@@ -190,7 +190,7 @@ const PageContent = () => {
             <SizedBox height={ThemeSpacing.Xl} />
             <AppText font={TextStyle.TBodySm400} color={ThemeVariable.FgDefault}>
               {m.support_page_email_desc()}{' '}
-              <a href="mailto:support@defguard.net">support@defguard.net</a>
+              <a href="mailto:support@xguard.local">support@xguard.local</a>
             </AppText>
           </MarkedSection>
         </>
@@ -210,7 +210,7 @@ const PageContent = () => {
                 iconRight="calendar"
                 onClick={() =>
                   window.open(
-                    externalLink.defguard.scheduleCall,
+                    externalLink.xguard.scheduleCall,
                     '_blank',
                     'noopener,noreferrer',
                   )

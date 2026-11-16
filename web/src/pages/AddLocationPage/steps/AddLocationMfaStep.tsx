@@ -12,14 +12,14 @@ import {
 } from '../../../shared/components/MfaFlowSelectionItem/MfaFlowSelectionItem';
 import type { SelectionOption } from '../../../shared/components/SelectionSection/type';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { FieldError } from '../../../shared/defguard-ui/components/FieldError/FieldError';
-import { Fold } from '../../../shared/defguard-ui/components/Fold/Fold';
-import { InfoBanner } from '../../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { Radio } from '../../../shared/defguard-ui/components/Radio/Radio';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { FieldError } from '../../../shared/xguard-ui/components/FieldError/FieldError';
+import { Fold } from '../../../shared/xguard-ui/components/Fold/Fold';
+import { InfoBanner } from '../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { Radio } from '../../../shared/xguard-ui/components/Radio/Radio';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import {
   getMfaFlowsQueryOptions,
   getMfaMethodAvailabilityQueryOptions,

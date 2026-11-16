@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { defaultUserAdmin, testsConfig } from '../../../config';
 
 // Run the full auto adoption wizard happy path.
-// Assumes core is in auto-adoption mode (DEFGUARD_ADOPT_EDGE + DEFGUARD_ADOPT_GATEWAY
+// Assumes core is in auto-adoption mode (XGUARD_ADOPT_EDGE + XGUARD_ADOPT_GATEWAY
 // are set) and the adoption API has already reported success for all components.
 export const runAutoAdoptionWizard = async (page: Page) => {
   page.setDefaultTimeout(testsConfig.TEST_TIMEOUT * 1000);
@@ -11,9 +11,9 @@ export const runAutoAdoptionWizard = async (page: Page) => {
   await page.goto(testsConfig.BASE_URL);
 
   await page
-    .getByRole('button', { name: 'Start Defguard configuration' })
+    .getByRole('button', { name: 'Start XGuard configuration' })
     .waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Start Defguard configuration' }).click();
+  await page.getByRole('button', { name: 'Start XGuard configuration' }).click();
 
   // Admin user step.
   await page.getByTestId('field-first_name').waitFor({ state: 'visible' });
@@ -29,9 +29,9 @@ export const runAutoAdoptionWizard = async (page: Page) => {
   await adminResp;
 
   // Internal URL settings.
-  await page.getByTestId('field-defguard_url').waitFor({ state: 'visible' });
+  await page.getByTestId('field-xguard_url').waitFor({ state: 'visible' });
   await page
-    .getByTestId('field-defguard_url')
+    .getByTestId('field-xguard_url')
     .fill(testsConfig.CORE_BASE_URL.replace('/api/v1', ''));
   await page.getByRole('button', { name: 'Continue' }).click();
 
@@ -73,9 +73,9 @@ export const runAutoAdoptionWizard = async (page: Page) => {
 
   // Summary
   await page
-    .getByRole('button', { name: 'Go to Defguard' })
+    .getByRole('button', { name: 'Go to XGuard' })
     .waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Go to Defguard' }).click();
+  await page.getByRole('button', { name: 'Go to XGuard' }).click();
 
   await page.waitForURL('**/auth/login', { timeout: testsConfig.TEST_TIMEOUT * 1000 });
 };

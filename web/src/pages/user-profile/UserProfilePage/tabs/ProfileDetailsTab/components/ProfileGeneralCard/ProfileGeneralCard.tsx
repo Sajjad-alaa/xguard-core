@@ -7,8 +7,8 @@ import z from 'zod';
 import { useShallow } from 'zustand/react/shallow';
 import { m } from '../../../../../../../paraglide/messages';
 import api from '../../../../../../../shared/api/api';
-import { Button } from '../../../../../../../shared/defguard-ui/components/Button/Button';
-import { EvenSplit } from '../../../../../../../shared/defguard-ui/components/EvenSplit/EvenSplit';
+import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
+import { EvenSplit } from '../../../../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
 import { useAppForm } from '../../../../../../../shared/form';
 import { useAuth } from '../../../../../../../shared/hooks/useAuth';
 import {

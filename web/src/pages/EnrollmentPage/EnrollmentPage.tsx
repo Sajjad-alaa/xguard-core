@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import './style.scss';
 import { m } from '../../paraglide/messages';
 import { Page } from '../../shared/components/Page/Page';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Tabs } from '../../shared/defguard-ui/components/Tabs/Tabs';
-import type { TabsItem } from '../../shared/defguard-ui/components/Tabs/types';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Tabs } from '../../shared/xguard-ui/components/Tabs/Tabs';
+import type { TabsItem } from '../../shared/xguard-ui/components/Tabs/types';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { GeneralTab } from './tabs/GeneralTab';
 import { MessageTemplatesTab } from './tabs/MessageTemplatesTab';
 

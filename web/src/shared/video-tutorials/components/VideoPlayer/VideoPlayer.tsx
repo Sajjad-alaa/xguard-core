@@ -2,7 +2,7 @@ import './style.scss';
 import { useEffect, useRef, useState } from 'react';
 import Skeleton from 'react-loading-skeleton';
 import { m } from '../../../../paraglide/messages';
-import { Icon } from '../../../defguard-ui/components/Icon/Icon';
+import { Icon } from '../../../xguard-ui/components/Icon/Icon';
 import type { PlayableVideo } from '../../types';
 
 const LOAD_TIMEOUT_MS = 8_000;

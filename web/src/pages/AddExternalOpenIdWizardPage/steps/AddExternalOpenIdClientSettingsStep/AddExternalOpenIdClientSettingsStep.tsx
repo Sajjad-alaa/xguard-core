@@ -14,9 +14,9 @@ import {
   jumpcloudBaseUrls,
   supportedSyncProviders,
 } from '../../../../shared/constants';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import { mfaAvailabilityInvalidateKey } from '../../../../shared/query';

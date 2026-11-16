@@ -1,5 +1,5 @@
-import { IconButton } from '../../../defguard-ui/components/IconButton/IconButton';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { IconButton } from '../../../xguard-ui/components/IconButton/IconButton';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { NavLogo } from '../../Navigation/assets/NavLogo';
 import './style.scss';
 

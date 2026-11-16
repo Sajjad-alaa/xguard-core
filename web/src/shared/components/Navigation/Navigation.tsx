@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { m } from '../../../paraglide/messages';
-import { CounterLabel } from '../../defguard-ui/components/CounterLabel/CounterLabel';
-import { Icon, IconKind } from '../../defguard-ui/components/Icon';
-import type { IconKindValue } from '../../defguard-ui/components/Icon/icon-types';
-import { IconButton } from '../../defguard-ui/components/IconButton/IconButton';
+import { CounterLabel } from '../../xguard-ui/components/CounterLabel/CounterLabel';
+import { Icon, IconKind } from '../../xguard-ui/components/Icon';
+import type { IconKindValue } from '../../xguard-ui/components/Icon/icon-types';
+import { IconButton } from '../../xguard-ui/components/IconButton/IconButton';
 import { useApp } from '../../hooks/useApp';
 import { useAuth } from '../../hooks/useAuth';
 import { NavLogo } from './assets/NavLogo';
@@ -17,11 +17,11 @@ import {
   LicenseTier,
   type LicenseTierValue,
 } from '../../api/types';
-import { Fold } from '../../defguard-ui/components/Fold/Fold';
-import { TooltipContent } from '../../defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../defguard-ui/providers/tooltip/TooltipTrigger';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Fold } from '../../xguard-ui/components/Fold/Fold';
+import { TooltipContent } from '../../xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../xguard-ui/providers/tooltip/TooltipTrigger';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import {
   getAliasesCountQueryOptions,
   getDestinationsCountQueryOptions,

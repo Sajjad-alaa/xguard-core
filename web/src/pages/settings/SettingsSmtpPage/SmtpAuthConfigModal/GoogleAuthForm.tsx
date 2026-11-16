@@ -1,11 +1,11 @@
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import { SmtpAuthentication, SmtpEncryption } from '../../../../shared/api/types';
-import { EvenSplit } from '../../../../shared/defguard-ui/components/EvenSplit/EvenSplit';
-import { FieldError } from '../../../../shared/defguard-ui/components/FieldError/FieldError';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { EvenSplit } from '../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
+import { FieldError } from '../../../../shared/xguard-ui/components/FieldError/FieldError';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import { patternValidEmail } from '../../../../shared/patterns';

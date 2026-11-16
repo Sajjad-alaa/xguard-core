@@ -24,7 +24,7 @@ const testNetwork: NetworkForm = {
 
 test.describe.skip('Add user device', () => {
   // Skipped: devices field missing from user profile API response.
-  // https://github.com/DefGuard/defguard/issues/2606
+  // https://github.com/Sajjad-alaa/xguard-core/issues/2606
   const testUser: User = { ...testUserTemplate, username: 'test' };
   const device_name = 'test';
   test.beforeEach(async ({ browser }) => {

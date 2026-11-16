@@ -17,8 +17,8 @@ export const LoginPage = ({ children, id }: PropsWithChildren & { id?: string })
           <footer>
             <p>
               Copyright © {dayjs().year()}{' '}
-              <a href="https://defguard.net" target="_blank" rel="noopener">
-                Defguard
+              <a href="https://xguard.local" target="_blank" rel="noopener">
+                XGuard
               </a>{' '}
               Sp. z o.o.
             </p>

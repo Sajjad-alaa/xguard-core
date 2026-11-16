@@ -1,6 +1,6 @@
 import { ActionCard } from '../../../../shared/components/ActionCard/ActionCard';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 
 type Props = {
   title: string;

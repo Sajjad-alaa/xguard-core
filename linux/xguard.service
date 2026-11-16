@@ -1,0 +1,24 @@
+[Unit]
+Description=XGuard Core service
+Documentation=https://docs.xguard.local/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=xguard
+Group=xguard
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+EnvironmentFile=/etc/xguard/core.conf
+ExecStart=/usr/bin/xguard
+KillMode=process
+KillSignal=SIGINT
+LimitNOFILE=65536
+LimitNPROC=infinity
+Restart=on-failure
+RestartSec=3
+TasksMax=infinity
+OOMScoreAdjust=-1000
+
+[Install]
+WantedBy=multi-user.target

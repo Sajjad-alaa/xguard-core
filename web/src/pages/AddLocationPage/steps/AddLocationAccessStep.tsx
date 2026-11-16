@@ -6,12 +6,12 @@ import { Controls } from '../../../shared/components/Controls/Controls';
 import { SelectionSection } from '../../../shared/components/SelectionSection/SelectionSection';
 import type { SelectionOption } from '../../../shared/components/SelectionSection/type';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { FieldError } from '../../../shared/defguard-ui/components/FieldError/FieldError';
-import { Fold } from '../../../shared/defguard-ui/components/Fold/Fold';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Toggle } from '../../../shared/defguard-ui/components/Toggle/Toggle';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { FieldError } from '../../../shared/xguard-ui/components/FieldError/FieldError';
+import { Fold } from '../../../shared/xguard-ui/components/Fold/Fold';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Toggle } from '../../../shared/xguard-ui/components/Toggle/Toggle';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { AddLocationPageStep } from '../types';
 import { useAddLocationStore } from '../useAddLocationStore';
 

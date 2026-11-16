@@ -33,27 +33,27 @@ import {
 import { useSelectionModal } from '../../shared/components/modals/SelectionModal/useSelectionModal';
 import type { SelectionOption } from '../../shared/components/SelectionSection/type';
 import { TableValuesListCell } from '../../shared/components/TableValuesListCell/TableValuesListCell';
-import { Avatar } from '../../shared/defguard-ui/components/Avatar/Avatar';
-import { Badge } from '../../shared/defguard-ui/components/Badge/Badge';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import type { ButtonProps } from '../../shared/defguard-ui/components/Button/types';
-import { ButtonMenu } from '../../shared/defguard-ui/components/ButtonMenu/MenuButton';
-import { EmptyStateFlexible } from '../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
-import { Icon, IconKind } from '../../shared/defguard-ui/components/Icon';
+import { Avatar } from '../../shared/xguard-ui/components/Avatar/Avatar';
+import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
+import { ButtonMenu } from '../../shared/xguard-ui/components/ButtonMenu/MenuButton';
+import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import { Icon, IconKind } from '../../shared/xguard-ui/components/Icon';
 import type {
   MenuItemProps,
   MenuItemsGroup,
-} from '../../shared/defguard-ui/components/Menu/types';
-import { Search } from '../../shared/defguard-ui/components/Search/Search';
-import { tableEditColumnSize } from '../../shared/defguard-ui/components/table/consts';
-import { TableBody } from '../../shared/defguard-ui/components/table/TableBody/TableBody';
-import { TableCell } from '../../shared/defguard-ui/components/table/TableCell/TableCell';
-import { TableEditCell } from '../../shared/defguard-ui/components/table/TableEditCell/TableEditCell';
-import { TableRowContainer } from '../../shared/defguard-ui/components/table/TableRowContainer/TableRowContainer';
-import { TableTop } from '../../shared/defguard-ui/components/table/TableTop/TableTop';
-import { Snackbar } from '../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeVariable } from '../../shared/defguard-ui/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+} from '../../shared/xguard-ui/components/Menu/types';
+import { Search } from '../../shared/xguard-ui/components/Search/Search';
+import { tableEditColumnSize } from '../../shared/xguard-ui/components/table/consts';
+import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/TableBody';
+import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
+import { TableEditCell } from '../../shared/xguard-ui/components/table/TableEditCell/TableEditCell';
+import { TableRowContainer } from '../../shared/xguard-ui/components/table/TableRowContainer/TableRowContainer';
+import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
+import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeVariable } from '../../shared/xguard-ui/types';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import { useApp } from '../../shared/hooks/useApp';

@@ -13,19 +13,19 @@ import type { MigrationWizardApiState } from '../../../../shared/api/types';
 import { Controls } from '../../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
 import { externalLink } from '../../../../shared/constants';
-import { ActionableSection } from '../../../../shared/defguard-ui/components/ActionableSection/ActionableSection';
-import { AppText } from '../../../../shared/defguard-ui/components/AppText/AppText';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Checkbox } from '../../../../shared/defguard-ui/components/Checkbox/Checkbox';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { RenderMarkdown } from '../../../../shared/defguard-ui/components/RenderMarkdown/RenderMarkdown';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Snackbar } from '../../../../shared/defguard-ui/providers/snackbar/snackbar';
+import { ActionableSection } from '../../../../shared/xguard-ui/components/ActionableSection/ActionableSection';
+import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Checkbox } from '../../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { RenderMarkdown } from '../../../../shared/xguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import {
   TextStyle,
   ThemeSpacing,
   ThemeVariable,
-} from '../../../../shared/defguard-ui/types';
+} from '../../../../shared/xguard-ui/types';
 import {
   getMigrationStateQueryOptions,
   getSessionInfoQueryOptions,
@@ -45,7 +45,7 @@ export const MigrationWizardConfirmationStep = () => {
   const queryClient = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const navigate = useNavigate();
-  const defguardUrl = useMigrationWizardStore((s) => s.defguard_url);
+  const xguardUrl = useMigrationWizardStore((s) => s.xguard_url);
 
   const { data: locationsDisplay } = useSuspenseQuery(qOptions);
 
@@ -55,7 +55,7 @@ export const MigrationWizardConfirmationStep = () => {
     mutationFn: migrationWizardFinishPromise,
     onSuccess: () => {
       Snackbar.default(m.migration_wizard_finish_success_snackbar());
-      const base = defguardUrl ? defguardUrl.replace(/\/$/, '') : window.location.origin;
+      const base = xguardUrl ? xguardUrl.replace(/\/$/, '') : window.location.origin;
       window.onbeforeunload = null;
       setTimeout(() => {
         useMigrationWizardStore.getState().resetState();
@@ -129,7 +129,7 @@ export const MigrationWizardConfirmationStep = () => {
               id: 'confirm-improve-notice',
             }}
             content={m.migration_wizard_confirmation_security_notice_markdown({
-              link: externalLink.defguard.docs,
+              link: externalLink.xguard.docs,
             })}
           />
           <SizedBox height={ThemeSpacing.Xl2} />

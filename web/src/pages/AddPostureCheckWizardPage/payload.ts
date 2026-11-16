@@ -3,7 +3,7 @@ import type {
   EditDevicePostureRequest,
 } from '../../shared/api/types';
 import {
-  type PostureCheckDefguardVersionValue,
+  type PostureCheckXGuardVersionValue,
   PostureCheckOs,
   type PostureCheckOsValue,
 } from '../PostureChecksPage/types';
@@ -16,8 +16,8 @@ type BuildAddPostureCheckRequestInput = {
   allowPrereleaseClient: boolean;
   configuredOperatingSystems: PostureCheckOsValue[];
   description: string | null;
-  minimumDesktopClientVersion: PostureCheckDefguardVersionValue;
-  minimumMobileClientVersion: PostureCheckDefguardVersionValue;
+  minimumDesktopClientVersion: PostureCheckXGuardVersionValue;
+  minimumMobileClientVersion: PostureCheckXGuardVersionValue;
   name: string;
   operatingSystemState: Record<PostureCheckOsValue, OperatingSystemFormState>;
 };

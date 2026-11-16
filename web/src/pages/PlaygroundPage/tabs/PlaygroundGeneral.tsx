@@ -19,31 +19,31 @@ import type {
   SelectionOption,
   SelectionSectionCustomRender,
 } from '../../../shared/components/SelectionSection/type';
-import { ActionableSection } from '../../../shared/defguard-ui/components/ActionableSection/ActionableSection';
-import { ActionableSectionVariant } from '../../../shared/defguard-ui/components/ActionableSection/types';
-import { Badge } from '../../../shared/defguard-ui/components/Badge/Badge';
+import { ActionableSection } from '../../../shared/xguard-ui/components/ActionableSection/ActionableSection';
+import { ActionableSectionVariant } from '../../../shared/xguard-ui/components/ActionableSection/types';
+import { Badge } from '../../../shared/xguard-ui/components/Badge/Badge';
 import {
   type BadgeProps,
   BadgeVariant,
-} from '../../../shared/defguard-ui/components/Badge/types';
-import { Button } from '../../../shared/defguard-ui/components/Button/Button';
-import { Checkbox } from '../../../shared/defguard-ui/components/Checkbox/Checkbox';
-import { CheckboxIndicator } from '../../../shared/defguard-ui/components/CheckboxIndicator/CheckboxIndicator';
-import { Chip } from '../../../shared/defguard-ui/components/Chip/Chip';
-import { CodeCard } from '../../../shared/defguard-ui/components/CodeCard/CodeCard';
-import { Divider } from '../../../shared/defguard-ui/components/Divider/Divider';
-import { Helper } from '../../../shared/defguard-ui/components/Helper/Helper';
-import { Modal } from '../../../shared/defguard-ui/components/Modal/Modal';
-import { Radio } from '../../../shared/defguard-ui/components/Radio/Radio';
-import { RadioIndicator } from '../../../shared/defguard-ui/components/RadioIndicator/RadioIndicator';
-import { RenderMarkdown } from '../../../shared/defguard-ui/components/RenderMarkdown/RenderMarkdown';
-import { SectionSelect } from '../../../shared/defguard-ui/components/SectionSelect/SectionSelect';
-import { SizedBox } from '../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { SuggestedIpInput } from '../../../shared/defguard-ui/components/SuggestedIPInput/SuggestedIPInput';
-import { Toggle } from '../../../shared/defguard-ui/components/Toggle/Toggle';
-import { Snackbar } from '../../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../../shared/defguard-ui/types';
-import { isPresent } from '../../../shared/defguard-ui/utils/isPresent';
+} from '../../../shared/xguard-ui/components/Badge/types';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Checkbox } from '../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { CheckboxIndicator } from '../../../shared/xguard-ui/components/CheckboxIndicator/CheckboxIndicator';
+import { Chip } from '../../../shared/xguard-ui/components/Chip/Chip';
+import { CodeCard } from '../../../shared/xguard-ui/components/CodeCard/CodeCard';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { Helper } from '../../../shared/xguard-ui/components/Helper/Helper';
+import { Modal } from '../../../shared/xguard-ui/components/Modal/Modal';
+import { Radio } from '../../../shared/xguard-ui/components/Radio/Radio';
+import { RadioIndicator } from '../../../shared/xguard-ui/components/RadioIndicator/RadioIndicator';
+import { RenderMarkdown } from '../../../shared/xguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { SectionSelect } from '../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { SuggestedIpInput } from '../../../shared/xguard-ui/components/SuggestedIPInput/SuggestedIPInput';
+import { Toggle } from '../../../shared/xguard-ui/components/Toggle/Toggle';
+import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
@@ -125,11 +125,11 @@ export const PlaygroundGeneralTab = () => {
         <CodeSnippet
           value={`services:
   gateway:
-    image: ghcr.io/defguard/gateway:latest
+    image: ghcr.io/sajjad-alaa/xguard-gateway:latest
     cap_add:
       - NET_ADMIN
     volumes:
-      - ./.volumes/certs/gateway:/etc/defguard/certs`}
+      - ./.volumes/certs/gateway:/etc/xguard/certs`}
         />
       </Card>
       <Divider spacing={ThemeSpacing.Sm} />
@@ -443,8 +443,8 @@ const FoldSectionTest = () => {
     <Card>
       <FoldableRadioSection
         active={selected === true}
-        title="Create a certificate authority & configure all Defguard components"
-        subtitle={`By choosing this option, Defguard will create its own certificate authority and automatically configure all components to use its certificates — no manual setup required.`}
+        title="Create a certificate authority & configure all XGuard components"
+        subtitle={`By choosing this option, XGuard will create its own certificate authority and automatically configure all components to use its certificates — no manual setup required.`}
         badge={{
           variant: BadgeVariant.Success,
           text: 'Recommended',
@@ -459,7 +459,7 @@ const FoldSectionTest = () => {
       <FoldableRadioSection
         active={selected === false}
         title="Use my own certificate authority"
-        subtitle={`If you choose this option, you'll need to manually configure all Defguard components to use your own certificate authority by providing the required certificates and keys during deployment. Use this only if you already manage a private CA — though we still recommend the option above for better security and a dedicated CA for Defguard.`}
+        subtitle={`If you choose this option, you'll need to manually configure all XGuard components to use your own certificate authority by providing the required certificates and keys during deployment. Use this only if you already manage a private CA — though we still recommend the option above for better security and a dedicated CA for XGuard.`}
         onClick={() => {
           setSelected(false);
         }}

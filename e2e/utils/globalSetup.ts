@@ -11,7 +11,7 @@ import {
 import { loadEnv } from './loadEnv';
 
 const setLicense = async () => {
-  const license = process.env.DEFGUARD_LICENSE_KEY;
+  const license = process.env.XGUARD_LICENSE_KEY;
   if (!license) return;
 
   const ctx = await request.newContext({ baseURL: testsConfig.BASE_URL });
@@ -70,9 +70,9 @@ export const runWizard = async () => {
   await page.goto(testsConfig.BASE_URL);
 
   await page
-    .getByRole('button', { name: 'Configure Defguard' })
+    .getByRole('button', { name: 'Configure XGuard' })
     .waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Configure Defguard' }).click();
+  await page.getByRole('button', { name: 'Configure XGuard' }).click();
 
   await page.getByTestId('field-first_name').waitFor({ state: 'visible' });
   await page.getByTestId('field-first_name').fill(defaultUserAdmin.firstName);
@@ -96,8 +96,8 @@ export const runWizard = async () => {
   await generalConfigResp;
 
   await page.getByTestId('field-ca_common_name').waitFor({ state: 'visible' });
-  await page.getByTestId('field-ca_common_name').fill('Defguard Test CA');
-  await page.getByTestId('field-ca_email').fill('ca@defguard.test');
+  await page.getByTestId('field-ca_common_name').fill('XGuard Test CA');
+  await page.getByTestId('field-ca_email').fill('ca@xguard.test');
   const caResp = page.waitForResponse(
     (r) => r.url().includes('/initial_setup/ca') && r.request().method() === 'POST',
   );
@@ -121,9 +121,9 @@ export const runWizard = async () => {
   await page.getByRole('button', { name: 'Continue' }).waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  await page.getByTestId('field-defguard_url').waitFor({ state: 'visible' });
+  await page.getByTestId('field-xguard_url').waitFor({ state: 'visible' });
   await page
-    .getByTestId('field-defguard_url')
+    .getByTestId('field-xguard_url')
     .fill(testsConfig.CORE_BASE_URL.replace('/api/v1', ''));
   await page.getByRole('button', { name: 'Continue' }).click();
 
@@ -163,7 +163,7 @@ export default async function globalSetup() {
     return;
   }
 
-  console.log('Waiting for Defguard Core to be ready...');
+  console.log('Waiting for XGuard Core to be ready...');
   await waitForCore();
   console.log('Core is ready. Running setup wizard...');
 

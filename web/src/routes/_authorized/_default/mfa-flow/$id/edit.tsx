@@ -4,7 +4,7 @@ import Skeleton from 'react-loading-skeleton';
 import { MfaFormPage } from '../../../../../pages/MfaPage/MfaFormPage';
 import { m } from '../../../../../paraglide/messages';
 import api from '../../../../../shared/api/api';
-import { Snackbar } from '../../../../../shared/defguard-ui/providers/snackbar/snackbar';
+import { Snackbar } from '../../../../../shared/xguard-ui/providers/snackbar/snackbar';
 
 export const Route = createFileRoute('/_authorized/_default/mfa-flow/$id/edit')({
   loader: async ({ params }) => {

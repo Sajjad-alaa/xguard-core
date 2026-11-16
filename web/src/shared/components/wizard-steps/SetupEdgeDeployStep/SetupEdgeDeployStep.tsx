@@ -1,19 +1,19 @@
 import './style.scss';
 import { type ReactNode, useMemo, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
-import { AppText } from '../../../defguard-ui/components/AppText/AppText';
-import { Button } from '../../../defguard-ui/components/Button/Button';
-import { Checkbox } from '../../../defguard-ui/components/Checkbox/Checkbox';
-import { Icon, IconKind } from '../../../defguard-ui/components/Icon';
-import { RenderMarkdown } from '../../../defguard-ui/components/RenderMarkdown/RenderMarkdown';
-import { SizedBox } from '../../../defguard-ui/components/SizedBox/SizedBox';
-import { Tabs } from '../../../defguard-ui/components/Tabs/Tabs';
-import type { TabsItem } from '../../../defguard-ui/components/Tabs/types';
-import { TooltipContent } from '../../../defguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../../defguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../../defguard-ui/providers/tooltip/TooltipTrigger';
-import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../defguard-ui/types';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { AppText } from '../../../xguard-ui/components/AppText/AppText';
+import { Button } from '../../../xguard-ui/components/Button/Button';
+import { Checkbox } from '../../../xguard-ui/components/Checkbox/Checkbox';
+import { Icon, IconKind } from '../../../xguard-ui/components/Icon';
+import { RenderMarkdown } from '../../../xguard-ui/components/RenderMarkdown/RenderMarkdown';
+import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
+import { Tabs } from '../../../xguard-ui/components/Tabs/Tabs';
+import type { TabsItem } from '../../../xguard-ui/components/Tabs/types';
+import { TooltipContent } from '../../../xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../../xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../../xguard-ui/providers/tooltip/TooltipTrigger';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../xguard-ui/types';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { Card } from '../../Card/Card';
 import { CodeSnippet } from '../../CodeSnippet/CodeSnippet';
 import { Controls } from '../../Controls/Controls';
@@ -130,19 +130,19 @@ const DockerComposeTab = () => {
       <CodeSnippet
         value={`services:
   edge:
-    image: ghcr.io/defguard/defguard-proxy:latest
+    image: ghcr.io/sajjad-alaa/xguard-proxy:latest
     restart: unless-stopped
     ports:
       - "8080:8080"
       - "50051:50051"
       - "443:443"
-    # Uncomment if you'd like Defguard to provision a certificate using Let's Encrypt.
+    # Uncomment if you'd like XGuard to provision a certificate using Let's Encrypt.
     #  - "80:80"
     # Uncomment the following if you are running on Debian 13 or later or have apparmor or SELinux setup
     #security_opt:
     #  - apparmor:unconfined
     volumes:
-      - ./.volumes/certs/edge:/etc/defguard/certs`}
+      - ./.volumes/certs/edge:/etc/xguard/certs`}
       />
       <SizedBox height={ThemeSpacing.Xl2} />
       <AppText font={TextStyle.TBodySm400}>
@@ -162,7 +162,7 @@ const DockerTab = () => {
         subtitle={m.edge_setup_step_deploy_tabs_docker_subtitle()}
       />
       <CodeSnippet
-        value={`docker run --restart unless-stopped --security-opt apparmor:unconfined -p 8080:8080 -p 50051:50051 -p 443:443 -p 80:80 -v ./.volumes/certs/edge:/etc/defguard/certs ghcr.io/defguard/defguard-proxy:latest`}
+        value={`docker run --restart unless-stopped --security-opt apparmor:unconfined -p 8080:8080 -p 50051:50051 -p 443:443 -p 80:80 -v ./.volumes/certs/edge:/etc/xguard/certs ghcr.io/sajjad-alaa/xguard-proxy:latest`}
       />
     </>
   );
@@ -178,17 +178,17 @@ const PackageTab = () => {
       <CodeSnippet
         value={`sudo apt update
 sudo apt install -y ca-certificates curl
-#Add official Defguard public GPG key
+#Add official XGuard public GPG key
 sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://apt.defguard.net/defguard.asc -o /etc/apt/keyrings/defguard.asc
-sudo chmod a+r /etc/apt/keyrings/defguard.asc
+sudo curl -fsSL https://apt.xguard.local/xguard.asc -o /etc/apt/keyrings/xguard.asc
+sudo chmod a+r /etc/apt/keyrings/xguard.asc
 
 #Add APT repository
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/defguard.asc] https://apt.defguard.net/ trixie release-2.0 " | \
-   sudo tee /etc/apt/sources.list.d/defguard.list > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/xguard.asc] https://apt.xguard.local/ trixie release-2.0 " | \
+   sudo tee /etc/apt/sources.list.d/xguard.list > /dev/null
 
 sudo apt update
-sudo apt install defguard-proxy`}
+sudo apt install xguard-proxy`}
       />
     </>
   );
@@ -200,14 +200,14 @@ const VirtualImageTab = () => {
       <TabContentHeader
         title={m.edge_setup_step_deploy_tabs_virtual_title()}
         subtitle={m.edge_setup_step_deploy_tabs_virtual_subtitle({
-          url: `https://defguard-downloads.s3.eu-central-1.amazonaws.com/ova/defguard-latest.ova`,
-          filename: `defguard-data.yaml`,
+          url: `https://xguard-downloads.s3.eu-central-1.amazonaws.com/ova/xguard-latest.ova`,
+          filename: `xguard-data.yaml`,
         })}
       />
       <CodeSnippet
         value={`#cloud-config
 write_files:
-  - path: /opt/stacks/defguard/active-profiles
+  - path: /opt/stacks/xguard/active-profiles
     permissions: '0644'
     content: |
       edge
@@ -254,17 +254,17 @@ const OthersTab = () => {
       <div id="other-deployment-methods">
         <OtherDeploymentMethod
           name={`Kubernetes`}
-          link={`https://docs.defguard.net/deployment-strategies/kubernetes#deployment`}
+          link={`https://docs.xguard.local/deployment-strategies/kubernetes#deployment`}
           image={kubernetesImage}
         />
         <OtherDeploymentMethod
           name={`Amazon Machine Image`}
-          link={`https://docs.defguard.net/deployment-strategies/amis-and-aws-cloudformation`}
+          link={`https://docs.xguard.local/deployment-strategies/amis-and-aws-cloudformation`}
           image={amazonImage}
         />
         <OtherDeploymentMethod
           name={`Terraform`}
-          link={`https://docs.defguard.net/deployment-strategies/terraform`}
+          link={`https://docs.xguard.local/deployment-strategies/terraform`}
           image={teraImage}
         />
       </div>

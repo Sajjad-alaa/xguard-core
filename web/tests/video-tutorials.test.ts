@@ -95,7 +95,7 @@ const makeVideo = (
   id: string,
   appRoute: string,
   contextAppRoutes?: string[],
-  docsUrl = 'https://docs.defguard.net/test',
+  docsUrl = 'https://docs.xguard.local/test',
 ) => ({
   youtubeVideoId: id,
   title: `Video ${id}`,
@@ -135,7 +135,7 @@ const makeMappings = (): VideoTutorialsMappings => ({
           docs: [
             {
               docsTitle: 'Migration wizard documentation',
-              docsUrl: 'https://docs.defguard.net/migration',
+              docsUrl: 'https://docs.xguard.local/migration',
             },
           ],
         },
@@ -148,7 +148,7 @@ const makeMappings = (): VideoTutorialsMappings => ({
             docs: [
               {
                 docsTitle: 'Certificate authority documentation',
-                docsUrl: 'https://docs.defguard.net/migration/ca',
+                docsUrl: 'https://docs.xguard.local/migration/ca',
               },
             ],
           },
@@ -163,7 +163,7 @@ const makeMappings = (): VideoTutorialsMappings => ({
           docs: [
             {
               docsTitle: 'Initial setup documentation',
-              docsUrl: 'https://docs.defguard.net/setup',
+              docsUrl: 'https://docs.xguard.local/setup',
             },
           ],
         },
@@ -176,7 +176,7 @@ const makeMappings = (): VideoTutorialsMappings => ({
             docs: [
               {
                 docsTitle: 'Admin user documentation',
-                docsUrl: 'https://docs.defguard.net/setup/admin-user',
+                docsUrl: 'https://docs.xguard.local/setup/admin-user',
               },
             ],
           },
@@ -191,7 +191,7 @@ const makeMappings = (): VideoTutorialsMappings => ({
           docs: [
             {
               docsTitle: 'Auto adoption documentation',
-              docsUrl: 'https://docs.defguard.net/auto-adoption',
+              docsUrl: 'https://docs.xguard.local/auto-adoption',
             },
           ],
         },
@@ -204,7 +204,7 @@ const makeMappings = (): VideoTutorialsMappings => ({
             docs: [
               {
                 docsTitle: 'VPN settings documentation',
-                docsUrl: 'https://docs.defguard.net/auto-adoption/vpn-settings',
+                docsUrl: 'https://docs.xguard.local/auto-adoption/vpn-settings',
               },
             ],
           },
@@ -344,7 +344,7 @@ describe('resolveVideoGuidePlacement', () => {
               docs: [
                 {
                   docsTitle: 'Migration wizard documentation',
-                  docsUrl: 'https://docs.defguard.net/migration',
+                  docsUrl: 'https://docs.xguard.local/migration',
                 },
               ],
             },
@@ -443,7 +443,7 @@ describe('resolveVideoGuidePlacement', () => {
               docs: [
                 {
                   docsTitle: 'Migration wizard documentation',
-                  docsUrl: 'https://docs.defguard.net/migration',
+                  docsUrl: 'https://docs.xguard.local/migration',
                 },
               ],
             },
@@ -452,7 +452,7 @@ describe('resolveVideoGuidePlacement', () => {
                 docs: [
                   {
                     docsTitle: 'Certificate authority documentation',
-                    docsUrl: 'https://docs.defguard.net/migration/ca',
+                    docsUrl: 'https://docs.xguard.local/migration/ca',
                   },
                 ],
               },
@@ -468,7 +468,7 @@ describe('resolveVideoGuidePlacement', () => {
     expect(result?.docs).toEqual([
       {
         docsTitle: 'Certificate authority documentation',
-        docsUrl: 'https://docs.defguard.net/migration/ca',
+        docsUrl: 'https://docs.xguard.local/migration/ca',
       },
     ]);
   });
@@ -490,7 +490,7 @@ const validRaw = {
               title: 'Test video',
               description: 'A test description',
               appRoute: '/users',
-              docsUrl: 'https://docs.defguard.net/users',
+              docsUrl: 'https://docs.xguard.local/users',
             },
           ],
         },
@@ -504,8 +504,8 @@ const validRaw = {
             },
             docs: [
               {
-                docsTitle: 'Defguard Configuration Guide',
-                docsUrl: 'https://docs.defguard.net/migration',
+                docsTitle: 'XGuard Configuration Guide',
+                docsUrl: 'https://docs.xguard.local/migration',
               },
             ],
           },
@@ -518,7 +518,7 @@ const validRaw = {
               docs: [
                 {
                   docsTitle: 'General configuration documentation',
-                  docsUrl: 'https://docs.defguard.net/migration/general',
+                  docsUrl: 'https://docs.xguard.local/migration/general',
                 },
               ],
             },
@@ -533,7 +533,7 @@ const validRaw = {
             docs: [
               {
                 docsTitle: 'Setup docs',
-                docsUrl: 'https://docs.defguard.net/setup',
+                docsUrl: 'https://docs.xguard.local/setup',
               },
             ],
           },
@@ -554,7 +554,7 @@ describe('parseVideoTutorials', () => {
       result['2.2'].placements?.migrationWizard?.default?.video?.youtubeVideoId,
     ).toBe('xyz987GHI12');
     expect(result['2.2'].placements?.migrationWizard?.default?.docs?.[0]?.docsTitle).toBe(
-      'Defguard Configuration Guide',
+      'XGuard Configuration Guide',
     );
     expect(
       result['2.2'].placements?.migrationWizard?.steps?.general?.video?.youtubeVideoId,
@@ -604,7 +604,7 @@ describe('parseVideoTutorials', () => {
                   description: 'A test description',
                   appRoute: '/users',
                   contextAppRoutes: ['/groups', '/settings/'],
-                  docsUrl: 'https://docs.defguard.net/users',
+                  docsUrl: 'https://docs.xguard.local/users',
                 },
               ],
             },
@@ -634,7 +634,7 @@ describe('parseVideoTutorials', () => {
                   title: 'Test',
                   description: 'Desc',
                   appRoute: '/users',
-                  docsUrl: 'https://docs.defguard.net',
+                  docsUrl: 'https://docs.xguard.local',
                 },
               ],
             },
@@ -658,7 +658,7 @@ describe('parseVideoTutorials', () => {
                   title: '',
                   description: 'Desc',
                   appRoute: '/users',
-                  docsUrl: 'https://docs.defguard.net',
+                  docsUrl: 'https://docs.xguard.local',
                 },
               ],
             },
@@ -682,7 +682,7 @@ describe('parseVideoTutorials', () => {
                   title: 'Title',
                   description: '',
                   appRoute: '/users',
-                  docsUrl: 'https://docs.defguard.net',
+                  docsUrl: 'https://docs.xguard.local',
                 },
               ],
             },
@@ -706,7 +706,7 @@ describe('parseVideoTutorials', () => {
                   title: 'Title',
                   description: 'Desc',
                   appRoute: 'users',
-                  docsUrl: 'https://docs.defguard.net',
+                  docsUrl: 'https://docs.xguard.local',
                 },
               ],
             },
@@ -731,7 +731,7 @@ describe('parseVideoTutorials', () => {
                   description: 'Desc',
                   appRoute: '/users',
                   contextAppRoutes: ['groups'],
-                  docsUrl: 'https://docs.defguard.net',
+                  docsUrl: 'https://docs.xguard.local',
                 },
               ],
             },
@@ -757,7 +757,7 @@ describe('parseVideoTutorials', () => {
                   description: 'Desc',
                   appRoute: '/users',
                   contextAppRoutes: [],
-                  docsUrl: 'https://docs.defguard.net',
+                  docsUrl: 'https://docs.xguard.local',
                 },
               ],
             },
@@ -833,7 +833,7 @@ describe('parseVideoTutorials', () => {
                   title: 'Test',
                   description: 'Desc',
                   appRoute: '/users',
-                  docsUrl: 'https://docs.defguard.net',
+                  docsUrl: 'https://docs.xguard.local',
                   unknownField: 'ignored',
                 },
               ],
@@ -862,7 +862,7 @@ describe('parseVideoTutorials', () => {
                   description: 'Desc',
                   appRoute: '/users',
                   contextAppRoutes: ['/groups'],
-                  docsUrl: 'https://docs.defguard.net',
+                  docsUrl: 'https://docs.xguard.local',
                   unknownField: 'ignored',
                 },
               ],
@@ -983,8 +983,8 @@ describe('parseVideoTutorials', () => {
                 },
                 docs: [
                   {
-                    docsTitle: 'Defguard Configuration Guide',
-                    docsUrl: 'https://docs.defguard.net/migration',
+                    docsTitle: 'XGuard Configuration Guide',
+                    docsUrl: 'https://docs.xguard.local/migration',
                     ignoredDocsField: 'ignored',
                   },
                 ],
@@ -1023,7 +1023,7 @@ describe('parseVideoTutorials', () => {
                 docs: [
                   {
                     docsTitle: '',
-                    docsUrl: 'https://docs.defguard.net/auto-adoption',
+                    docsUrl: 'https://docs.xguard.local/auto-adoption',
                   },
                 ],
               },
@@ -1077,7 +1077,7 @@ describe('parseVideoTutorials', () => {
                 docs: [
                   {
                     docsTitle: 'Generic docs',
-                    docsUrl: 'https://docs.defguard.net/generic',
+                    docsUrl: 'https://docs.xguard.local/generic',
                   },
                 ],
               },
@@ -1134,7 +1134,7 @@ describe('parseVideoTutorials', () => {
                 docs: [
                   {
                     docsTitle: 'Generic docs',
-                    docsUrl: 'https://docs.defguard.net/generic',
+                    docsUrl: 'https://docs.xguard.local/generic',
                   },
                 ],
               },
@@ -1150,7 +1150,7 @@ describe('parseVideoTutorials', () => {
       docs: [
         {
           docsTitle: 'Generic docs',
-          docsUrl: 'https://docs.defguard.net/generic',
+          docsUrl: 'https://docs.xguard.local/generic',
         },
       ],
     });
@@ -1167,11 +1167,11 @@ describe('parseVideoTutorials', () => {
                 docs: [
                   {
                     docsTitle: 'Generic docs',
-                    docsUrl: 'https://docs.defguard.net/generic',
+                    docsUrl: 'https://docs.xguard.local/generic',
                   },
                   {
                     docsTitle: 'More docs',
-                    docsUrl: 'https://docs.defguard.net/generic/more',
+                    docsUrl: 'https://docs.xguard.local/generic/more',
                   },
                 ],
               },

@@ -1,6 +1,6 @@
 import './style.scss';
-import { IconButton } from '../../../../defguard-ui/components/IconButton/IconButton';
-import { ModalFoundation } from '../../../../defguard-ui/components/ModalFoundation/ModalFoundation';
+import { IconButton } from '../../../../xguard-ui/components/IconButton/IconButton';
+import { ModalFoundation } from '../../../../xguard-ui/components/ModalFoundation/ModalFoundation';
 import type { PlayableVideo } from '../../../types';
 import { VideoPlayer } from '../../VideoPlayer/VideoPlayer';
 

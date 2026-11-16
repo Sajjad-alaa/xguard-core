@@ -29,7 +29,7 @@ describe('activity log details', () => {
       },
       after: {
         smtp_server: 'new_test.email.com',
-        smtp_sender: 'no-reply@defguard.net',
+        smtp_sender: 'no-reply@xguard.local',
         smtp_port: 587,
       },
     });
@@ -46,7 +46,7 @@ describe('activity log details', () => {
         field: 'smtp_sender',
         label: 'Sender email address',
         from: 'no-reply@mailing.example',
-        to: 'no-reply@defguard.net',
+        to: 'no-reply@xguard.local',
         changed: true,
       },
       {

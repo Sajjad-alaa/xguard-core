@@ -1,6 +1,6 @@
 import z from 'zod';
 import { m } from '../../../paraglide/messages';
-import type { BadgeProps } from '../../../shared/defguard-ui/components/Badge/types';
+import type { BadgeProps } from '../../../shared/xguard-ui/components/Badge/types';
 
 export const settingsTabsSchema = z.enum([
   'general',

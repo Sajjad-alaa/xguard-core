@@ -1,18 +1,18 @@
 services:
   core:
-    image: ghcr.io/defguard/defguard:${CORE_IMAGE_TAG:-${IMAGE_TAG}}
+    image: ghcr.io/sajjad-alaa/xguard-core:${CORE_IMAGE_TAG:-${IMAGE_TAG}}
     environment:
-      DEFGUARD_COOKIE_INSECURE: true
-      DEFGUARD_COOKIE_DOMAIN: localhost
-      DEFGUARD_LOG_LEVEL: debug
-      DEFGUARD_DB_HOST: db
-      DEFGUARD_DB_PORT: 5432
-      DEFGUARD_DB_USER: defguard
-      DEFGUARD_DB_PASSWORD: defguard
-      DEFGUARD_DB_NAME: defguard
-      DEFGUARD_GRPC_PORT: 50055
-      DEFGUARD_ADOPT_EDGE: "edge:50051"
-      DEFGUARD_ADOPT_GATEWAY: "gateway:50066"
+      XGUARD_COOKIE_INSECURE: true
+      XGUARD_COOKIE_DOMAIN: localhost
+      XGUARD_LOG_LEVEL: debug
+      XGUARD_DB_HOST: db
+      XGUARD_DB_PORT: 5432
+      XGUARD_DB_USER: xguard
+      XGUARD_DB_PASSWORD: xguard
+      XGUARD_DB_NAME: xguard
+      XGUARD_GRPC_PORT: 50055
+      XGUARD_ADOPT_EDGE: "edge:50051"
+      XGUARD_ADOPT_GATEWAY: "gateway:50066"
       RUST_BACKTRACE: 1
     ports:
       - "8000:8000"
@@ -23,33 +23,33 @@ services:
   db:
     image: public.ecr.aws/docker/library/postgres:17-alpine
     environment:
-      POSTGRES_DB: defguard
-      POSTGRES_USER: defguard
-      POSTGRES_PASSWORD: defguard
+      POSTGRES_DB: xguard
+      POSTGRES_USER: xguard
+      POSTGRES_PASSWORD: xguard
     ports:
       - "${E2E_DB_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U defguard -d defguard"]
+      test: ["CMD-SHELL", "pg_isready -U xguard -d xguard"]
       interval: 5s
       timeout: 3s
       retries: 5
       start_period: 5s
 
   edge:
-    image: ghcr.io/defguard/defguard-proxy:${EDGE_IMAGE_TAG:-${IMAGE_TAG}}
+    image: ghcr.io/sajjad-alaa/xguard-proxy:${EDGE_IMAGE_TAG:-${IMAGE_TAG}}
     ports:
       - "8080:8080"
       - "50051:50051"
     environment:
-      DEFGUARD_PROXY_GRPC_PORT: 50051
+      XGUARD_PROXY_GRPC_PORT: 50051
       RUST_BACKTRACE: 1
 
   gateway:
-    image: ghcr.io/defguard/gateway:${GATEWAY_IMAGE_TAG:-${IMAGE_TAG}}
+    image: ghcr.io/sajjad-alaa/xguard-gateway:${GATEWAY_IMAGE_TAG:-${IMAGE_TAG}}
     ports:
       - "50066:50066"
     environment:
-      DEFGUARD_GATEWAY_GRPC_PORT: 50066
+      XGUARD_GATEWAY_GRPC_PORT: 50066
       RUST_BACKTRACE: 1
     cap_add:
       - NET_ADMIN

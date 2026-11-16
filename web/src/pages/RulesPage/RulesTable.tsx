@@ -24,23 +24,23 @@ import {
   type ResourceById,
 } from '../../shared/api/types';
 import { TableValuesListCell } from '../../shared/components/TableValuesListCell/TableValuesListCell';
-import { Badge } from '../../shared/defguard-ui/components/Badge/Badge';
-import { BadgeVariant } from '../../shared/defguard-ui/components/Badge/types';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import type { ButtonProps } from '../../shared/defguard-ui/components/Button/types';
-import { ButtonMenu } from '../../shared/defguard-ui/components/ButtonMenu/MenuButton';
-import { EmptyStateFlexible } from '../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
+import { BadgeVariant } from '../../shared/xguard-ui/components/Badge/types';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
+import { ButtonMenu } from '../../shared/xguard-ui/components/ButtonMenu/MenuButton';
+import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
 import type {
   MenuItemProps,
   MenuItemsGroup,
-} from '../../shared/defguard-ui/components/Menu/types';
-import { Search } from '../../shared/defguard-ui/components/Search/Search';
-import { tableEditColumnSize } from '../../shared/defguard-ui/components/table/consts';
-import { TableBody } from '../../shared/defguard-ui/components/table/TableBody/TableBody';
-import { TableCell } from '../../shared/defguard-ui/components/table/TableCell/TableCell';
-import { TableEditCell } from '../../shared/defguard-ui/components/table/TableEditCell/TableEditCell';
-import { TableTop } from '../../shared/defguard-ui/components/table/TableTop/TableTop';
-import { Snackbar } from '../../shared/defguard-ui/providers/snackbar/snackbar';
+} from '../../shared/xguard-ui/components/Menu/types';
+import { Search } from '../../shared/xguard-ui/components/Search/Search';
+import { tableEditColumnSize } from '../../shared/xguard-ui/components/table/consts';
+import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/TableBody';
+import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
+import { TableEditCell } from '../../shared/xguard-ui/components/table/TableEditCell/TableEditCell';
+import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
+import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
 import { tableSortingFns } from '../../shared/utils/dateSortingFn';
 import { displayDate } from '../../shared/utils/displayDate';
 import { canUseBusinessFeature, licenseActionCheck } from '../../shared/utils/license';

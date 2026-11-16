@@ -7,7 +7,7 @@ update service. It now powers two kinds of UI:
 - placement-specific help content in wizard sidebars
 
 The configuration is fetched as static JSON from
-`https://pkgs.defguard.net/api/content/video-tutorials` by default.
+`https://pkgs.xguard.local/api/content/video-tutorials` by default.
 
 Route-based tutorials are mounted in `src/routes/_authorized/_default.tsx` and
 remain available across the authenticated layout. Placement-based content is
@@ -72,10 +72,10 @@ In production the module fetches its mapping via the shared update-service axios
 client. The default URL is:
 
 ```text
-https://pkgs.defguard.net/api/content/video-tutorials
+https://pkgs.xguard.local/api/content/video-tutorials
 ```
 
-This is composed from the client's base URL (`https://pkgs.defguard.net/api`,
+This is composed from the client's base URL (`https://pkgs.xguard.local/api`,
 overridable via `VITE_UPDATE_BASE_URL`) and the default path
 (`/content/video-tutorials`, overridable via `VITE_VIDEO_TUTORIALS_URL`).
 
@@ -136,7 +136,7 @@ VITE_VIDEO_TUTORIALS_URL=/content/my-test-config
 ```
 
 The path is still resolved against `VITE_UPDATE_BASE_URL` (or the default
-`https://pkgs.defguard.net/api`), so this is most useful when you have a test
+`https://pkgs.xguard.local/api`), so this is most useful when you have a test
 endpoint on the same server.
 
 ---
@@ -153,14 +153,14 @@ endpoint on the same server.
           "videos": [
             {
               "youtubeVideoId": "abc123DEF45",
-              "title": "Defguard overview",
-              "description": "A high-level walkthrough of Defguard.",
+              "title": "XGuard overview",
+              "description": "A high-level walkthrough of XGuard.",
               "appRoute": "/vpn-overview",
               "contextAppRoutes": [
                 "/vpn-overview/$locationId",
                 "/settings/"
               ],
-              "docsUrl": "https://docs.defguard.net/introduction"
+              "docsUrl": "https://docs.xguard.local/introduction"
             }
           ]
         }
@@ -174,8 +174,8 @@ endpoint on the same server.
               },
               "docs": [
                 {
-                  "docsTitle": "Defguard Configuration Guide",
-                  "docsUrl": "https://docs.defguard.net/migration"
+                  "docsTitle": "XGuard Configuration Guide",
+                  "docsUrl": "https://docs.xguard.local/migration"
                 }
               ]
             },
@@ -188,11 +188,11 @@ endpoint on the same server.
                 "docs": [
                   {
                     "docsTitle": "Certificate authority documentation",
-                    "docsUrl": "https://docs.defguard.net/migration/ca"
+                    "docsUrl": "https://docs.xguard.local/migration/ca"
                   },
                   {
                     "docsTitle": "Certificate authority troubleshooting",
-                    "docsUrl": "https://docs.defguard.net/migration/ca/troubleshooting"
+                    "docsUrl": "https://docs.xguard.local/migration/ca/troubleshooting"
                   }
                 ]
               }
@@ -207,7 +207,7 @@ endpoint on the same server.
               "docs": [
                 {
                   "docsTitle": "Initial setup documentation",
-                  "docsUrl": "https://docs.defguard.net/setup"
+                  "docsUrl": "https://docs.xguard.local/setup"
                 }
               ]
             },
@@ -216,7 +216,7 @@ endpoint on the same server.
                 "docs": [
                   {
                     "docsTitle": "Admin user documentation",
-                    "docsUrl": "https://docs.defguard.net/setup/admin-user"
+                    "docsUrl": "https://docs.xguard.local/setup/admin-user"
                   }
                 ]
               }
@@ -227,7 +227,7 @@ endpoint on the same server.
               "docs": [
                 {
                   "docsTitle": "Auto adoption documentation",
-                  "docsUrl": "https://docs.defguard.net/auto-adoption"
+                  "docsUrl": "https://docs.xguard.local/auto-adoption"
                 }
               ]
             },

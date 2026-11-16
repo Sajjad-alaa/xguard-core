@@ -51,7 +51,7 @@ test.describe('External OIDC.', () => {
     await context.close();
   });
 
-  // TODO: Finish when https://github.com/DefGuard/defguard/issues/1817 is resolved
+  // TODO: Finish when https://github.com/Sajjad-alaa/xguard-core/issues/1817 is resolved
   test.skip('Login through external oidc.', async ({ page }) => {
     expect(client.clientID).toBeDefined();
     expect(client.clientSecret).toBeDefined();
@@ -72,7 +72,7 @@ test.describe('External OIDC.', () => {
     expect(authorizedApps).toContain(client.name);
   });
 
-  // TODO: enable when https://github.com/DefGuard/defguard/issues/2426 is fixed
+  // TODO: enable when https://github.com/Sajjad-alaa/xguard-core/issues/2426 is fixed
   test.skip('Sign in with external SSO', async ({ page }) => {
     await waitForBase(page);
     await page.goto(testsConfig.ENROLLMENT_URL);

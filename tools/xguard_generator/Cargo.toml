@@ -1,0 +1,28 @@
+[package]
+name = "xguard_generator"
+version = "0.0.0"
+edition = "2024"
+license-file = "../../LICENSE.md"
+homepage = "https://xguard.local/"
+repository = "https://github.com/Sajjad-alaa/xguard-core"
+rust-version = "1.87.0"
+
+[dependencies]
+anyhow.workspace = true
+dotenvy = "0.15"
+chrono.workspace = true
+clap = { workspace = true, features = ["derive"] }
+xguard_common.workspace = true
+xguard_core.workspace = true
+xguard_event_logger.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+sqlx = { workspace = true, features = [
+    "postgres",
+    "runtime-tokio",
+    "tls-native-tls",
+    "chrono",
+] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

@@ -1,8 +1,8 @@
 import { m } from '../../../../paraglide/messages';
 import type { CertInfo, InternalSslType } from '../../../api/types';
-import { Button } from '../../../defguard-ui/components/Button/Button';
-import { Divider } from '../../../defguard-ui/components/Divider/Divider';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { Button } from '../../../xguard-ui/components/Button/Button';
+import { Divider } from '../../../xguard-ui/components/Divider/Divider';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 
 type Props = {
   sslType: InternalSslType | null;
@@ -36,7 +36,7 @@ export const InternalSslResult = ({
     );
   }
 
-  if (sslType === 'defguard_ca') {
+  if (sslType === 'xguard_ca') {
     return (
       <div className="ssl-result-validated-card">
         <div className="ssl-result-validated-card-illustration">

@@ -1,0 +1,123 @@
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::{Arc, Mutex},
+};
+
+use anyhow::anyhow;
+use axum::{
+    Extension, Router,
+    routing::{get, post},
+    serve,
+};
+use xguard_common::VERSION;
+use xguard_core::{
+    handle_404,
+    handlers::{
+        component_setup::{setup_proxy_tls_stream, stream_proxy_acme},
+        resource_display::get_locations_display,
+        settings::get_settings_essentials,
+    },
+    health_check,
+};
+use xguard_web_ui::{index, svg, web_asset};
+use semver::Version;
+use sqlx::PgPool;
+use tokio::{net::TcpListener, sync::oneshot::Sender as OneshotSender};
+use tracing::{info, instrument};
+
+use crate::handlers::{
+    auto_wizard::{
+        get_auto_adoption_result, get_external_ssl_info, get_internal_ssl_info,
+        set_external_url_settings, set_internal_url_settings, set_mfa_settings, set_vpn_settings,
+    },
+    initial_wizard::{
+        create_admin, create_ca, finish_setup, get_ca, get_wizard_state, proxy_list,
+        set_general_config, setup_login, setup_session, upload_ca,
+    },
+    session_info::get_session_info,
+    version::get_version,
+};
+
+pub fn build_setup_webapp(
+    pool: PgPool,
+    version: Version,
+    setup_shutdown_tx: OneshotSender<()>,
+) -> Router {
+    Router::<()>::new()
+        .route("/", get(index))
+        .route("/{*path}", get(index))
+        .route("/fonts/{*path}", get(web_asset))
+        .route("/assets/{*path}", get(web_asset))
+        .route("/svg/{*path}", get(svg))
+        .nest(
+            "/api/v1",
+            Router::<()>::new()
+                .route("/health", get(health_check))
+                .route("/version", get(get_version))
+                .route("/settings_essentials", get(get_settings_essentials))
+                .route("/session-info", get(get_session_info))
+                .route("/network/display", get(get_locations_display))
+                .route("/wizard", get(get_wizard_state))
+                .route("/proxy", get(proxy_list))
+                .route("/proxy/setup/stream", post(setup_proxy_tls_stream))
+                .route("/proxy/acme/stream", post(stream_proxy_acme))
+                .nest(
+                    "/initial_setup",
+                    Router::<()>::new()
+                        .route("/ca", post(create_ca).get(get_ca))
+                        .route("/ca/upload", post(upload_ca))
+                        .route("/general_config", post(set_general_config))
+                        .route("/admin", post(create_admin))
+                        .route("/login", post(setup_login))
+                        .route("/session", get(setup_session))
+                        // .route("/step", post(advance_setup_step))
+                        .route("/auto_adoption", get(get_auto_adoption_result))
+                        .route(
+                            "/auto_wizard/internal_url_settings",
+                            post(set_internal_url_settings).get(get_internal_ssl_info),
+                        )
+                        .route(
+                            "/auto_wizard/external_url_settings",
+                            post(set_external_url_settings).get(get_external_ssl_info),
+                        )
+                        .route("/auto_wizard/vpn_settings", post(set_vpn_settings))
+                        .route("/auto_wizard/mfa_settings", post(set_mfa_settings))
+                        .route("/finish", post(finish_setup)),
+                ),
+        )
+        .fallback_service(get(handle_404))
+        .layer(Extension(pool))
+        .layer(Extension(version))
+        .layer(Extension(Arc::new(Mutex::new(Some(setup_shutdown_tx)))))
+}
+
+#[instrument(skip_all)]
+pub async fn run_setup_web_server(
+    pool: PgPool,
+    http_bind_address: Option<IpAddr>,
+    http_port: u16,
+) -> Result<(), anyhow::Error> {
+    let (setup_shutdown_tx, setup_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let setup_webapp = build_setup_webapp(
+        pool.clone(),
+        xguard_version::Version::parse(VERSION)?,
+        setup_shutdown_tx,
+    );
+
+    info!("Starting initial setup web server on port {http_port}");
+    let addr = SocketAddr::new(
+        http_bind_address.unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+        http_port,
+    );
+    let listener = TcpListener::bind(&addr).await?;
+    serve(
+        listener,
+        setup_webapp.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move {
+        setup_shutdown_rx.await.ok();
+        info!("Shutting down initial setup web server");
+    })
+    .await
+    .map_err(|err| anyhow!("Web server can't be started {err}"))
+}

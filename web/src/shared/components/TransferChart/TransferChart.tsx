@@ -2,7 +2,7 @@ import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import type { TransferChartData } from '../../utils/stats';
 import './style.scss';
 import dayjs from 'dayjs';
-import { ThemeVariable } from '../../defguard-ui/types';
+import { ThemeVariable } from '../../xguard-ui/types';
 
 type Props = {
   data: TransferChartData[];

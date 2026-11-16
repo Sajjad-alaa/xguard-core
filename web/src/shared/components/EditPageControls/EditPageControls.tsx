@@ -1,7 +1,7 @@
 import { m } from '../../../paraglide/messages';
-import { Button } from '../../defguard-ui/components/Button/Button';
-import type { ButtonProps } from '../../defguard-ui/components/Button/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Button } from '../../xguard-ui/components/Button/Button';
+import type { ButtonProps } from '../../xguard-ui/components/Button/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import './style.scss';
 
 type Props = {

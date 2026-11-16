@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { titleCase } from 'text-case';
 import { m } from '../../../paraglide/messages';
 import { Page } from '../../../shared/components/Page/Page';
-import { Tabs } from '../../../shared/defguard-ui/components/Tabs/Tabs';
-import type { TabsItem } from '../../../shared/defguard-ui/components/Tabs/types';
+import { Tabs } from '../../../shared/xguard-ui/components/Tabs/Tabs';
+import type { TabsItem } from '../../../shared/xguard-ui/components/Tabs/types';
 import { useAuth } from '../../../shared/hooks/useAuth';
 import {
   getLicenseInfoQueryOptions,

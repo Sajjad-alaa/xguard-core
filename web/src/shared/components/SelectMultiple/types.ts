@@ -1,4 +1,4 @@
-import type { IconKindValue } from '../../defguard-ui/components/Icon';
+import type { IconKindValue } from '../../xguard-ui/components/Icon';
 import type {
   SelectionKey,
   SelectionOption,

@@ -1,11 +1,11 @@
 import { m } from '../../../../paraglide/messages';
 import type { AddDeviceResponse } from '../../../api/types';
-import { Divider } from '../../../defguard-ui/components/Divider/Divider';
-import { IconKind } from '../../../defguard-ui/components/Icon';
-import { InfoBanner } from '../../../defguard-ui/components/InfoBanner/InfoBanner';
-import { Modal } from '../../../defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../defguard-ui/components/ModalControls/ModalControls';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { Divider } from '../../../xguard-ui/components/Divider/Divider';
+import { IconKind } from '../../../xguard-ui/components/Icon';
+import { InfoBanner } from '../../../xguard-ui/components/InfoBanner/InfoBanner';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,

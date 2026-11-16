@@ -19,8 +19,8 @@ import { waitForBase } from '../utils/waitForBase';
 test.describe('Edge UI controls', () => {
   test.beforeEach(() => {
     test.skip(
-      !process.env.DEFGUARD_LICENSE_KEY,
-      'Edge UI controls require an active business license (DEFGUARD_LICENSE_KEY)',
+      !process.env.XGUARD_LICENSE_KEY,
+      'Edge UI controls require an active business license (XGUARD_LICENSE_KEY)',
     );
     dockerRestart();
   });

@@ -1,8 +1,8 @@
 import './style.scss';
 
 import { useMemo, useState } from 'react';
-import { Tabs } from '../../shared/defguard-ui/components/Tabs/Tabs';
-import type { TabsItem } from '../../shared/defguard-ui/components/Tabs/types';
+import { Tabs } from '../../shared/xguard-ui/components/Tabs/Tabs';
+import type { TabsItem } from '../../shared/xguard-ui/components/Tabs/types';
 import { PlaygroundGeneralTab } from './tabs/PlaygroundGeneral';
 import { PlaygroundIcons } from './tabs/PlaygroundIcons.tsx/PlaygroundIcons';
 import { PlaygroundMfa } from './tabs/PlaygroundMfa/PlaygroundMfa';

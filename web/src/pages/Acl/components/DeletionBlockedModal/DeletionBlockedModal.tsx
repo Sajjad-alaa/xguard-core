@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
 import { Controls } from '../../../../shared/components/Controls/Controls';
-import { AppText } from '../../../../shared/defguard-ui/components/AppText/AppText';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { TextStyle } from '../../../../shared/defguard-ui/types';
+import { AppText } from '../../../../shared/xguard-ui/components/AppText/AppText';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { TextStyle } from '../../../../shared/xguard-ui/types';
 import {
   subscribeCloseModal,
   subscribeOpenModal,

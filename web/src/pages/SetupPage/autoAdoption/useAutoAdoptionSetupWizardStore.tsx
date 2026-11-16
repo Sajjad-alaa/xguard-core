@@ -18,7 +18,7 @@ type StoreValues = {
   admin_username: string;
   admin_email: string;
   admin_password: string;
-  defguard_url: string;
+  xguard_url: string;
   default_admin_group_name: string;
   default_authentication_period_days: number;
   default_mfa_code_timeout_seconds: number;
@@ -52,7 +52,7 @@ const defaults: StoreValues = {
   admin_username: '',
   admin_email: '',
   admin_password: '',
-  defguard_url: '',
+  xguard_url: '',
   default_admin_group_name: 'admin',
   default_authentication_period_days: 30,
   default_mfa_code_timeout_seconds: 300,

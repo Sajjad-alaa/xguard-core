@@ -165,7 +165,7 @@ export const getPostureCheckAssignmentSummarySections = (
             postureCheck.min_desktop_client_version === null
               ? String(m.posture_checks_version_any())
               : String(
-                  m.posture_checks_wizard_summary_defguard_version({
+                  m.posture_checks_wizard_summary_xguard_version({
                     version: postureCheck.min_desktop_client_version,
                   }),
                 ),
@@ -179,7 +179,7 @@ export const getPostureCheckAssignmentSummarySections = (
             postureCheck.min_mobile_client_version === null
               ? String(m.posture_checks_version_any())
               : String(
-                  m.posture_checks_wizard_summary_defguard_version({
+                  m.posture_checks_wizard_summary_xguard_version({
                     version: postureCheck.min_mobile_client_version,
                   }),
                 ),
@@ -193,7 +193,7 @@ export const getPostureCheckAssignmentSummarySections = (
 
   if (clientLines.length > 0) {
     sections.push({
-      label: String(m.posture_checks_wizard_summary_defguard_label()),
+      label: String(m.posture_checks_wizard_summary_xguard_label()),
       lines: clientLines,
     });
   }

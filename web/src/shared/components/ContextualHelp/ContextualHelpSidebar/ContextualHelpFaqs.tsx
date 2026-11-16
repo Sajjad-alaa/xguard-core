@@ -1,9 +1,9 @@
 import clsx from 'clsx';
 import { useState } from 'react';
 import { m } from '../../../../paraglide/messages';
-import { Fold } from '../../../defguard-ui/components/Fold/Fold';
-import { Icon, IconKind } from '../../../defguard-ui/components/Icon';
-import { ThemeVariable } from '../../../defguard-ui/types';
+import { Fold } from '../../../xguard-ui/components/Fold/Fold';
+import { Icon, IconKind } from '../../../xguard-ui/components/Icon';
+import { ThemeVariable } from '../../../xguard-ui/types';
 import type { ContextualHelpFaq } from '../types';
 
 type FaqItemProps = {

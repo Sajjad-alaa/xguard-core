@@ -25,14 +25,14 @@ describe('add posture check summary helpers', () => {
     });
   });
 
-  it('builds the defguard summary section from the client-version settings', () => {
+  it('builds the xguard summary section from the client-version settings', () => {
     expect(buildClientSummarySection('2.0', '1.7.0', true)).toEqual({
-      icon: 'defguard',
-      label: 'Defguard',
+      icon: 'xguard',
+      label: 'XGuard',
       lines: [
         { emphasized: true, text: 'Desktop client: 2.0 and higher' },
         { emphasized: true, text: 'Mobile app: 1.7.0 and higher' },
-        { text: 'Allow pre-release versions of the Defguard client.' },
+        { text: 'Allow pre-release versions of the XGuard client.' },
       ],
     });
   });
@@ -55,8 +55,8 @@ describe('add posture check summary helpers', () => {
     });
 
     expect(buildClientSummarySection(null, null, false)).toEqual({
-      icon: 'defguard',
-      label: 'Defguard',
+      icon: 'xguard',
+      label: 'XGuard',
       lines: [
         { emphasized: true, text: 'Desktop client: Any version' },
         { emphasized: true, text: 'Mobile app: Any version' },

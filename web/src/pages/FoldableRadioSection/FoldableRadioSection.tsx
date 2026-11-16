@@ -1,12 +1,12 @@
 import './style.scss';
 import type { MouseEventHandler, PropsWithChildren } from 'react';
-import { Badge } from '../../shared/defguard-ui/components/Badge/Badge';
-import type { BadgeProps } from '../../shared/defguard-ui/components/Badge/types';
-import { Fold } from '../../shared/defguard-ui/components/Fold/Fold';
-import { RadioIndicator } from '../../shared/defguard-ui/components/RadioIndicator/RadioIndicator';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
+import type { BadgeProps } from '../../shared/xguard-ui/components/Badge/types';
+import { Fold } from '../../shared/xguard-ui/components/Fold/Fold';
+import { RadioIndicator } from '../../shared/xguard-ui/components/RadioIndicator/RadioIndicator';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 
 type Props = {
   title: string;

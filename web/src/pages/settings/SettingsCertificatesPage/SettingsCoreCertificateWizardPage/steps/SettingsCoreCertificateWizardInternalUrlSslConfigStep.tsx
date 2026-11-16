@@ -5,9 +5,9 @@ import api from '../../../../../shared/api/api';
 import { Controls } from '../../../../../shared/components/Controls/Controls';
 import { InternalSslResult } from '../../../../../shared/components/certificates/InternalSslResult/InternalSslResult';
 import { WizardCard } from '../../../../../shared/components/wizard/WizardCard/WizardCard';
-import { Button } from '../../../../../shared/defguard-ui/components/Button/Button';
-import { SizedBox } from '../../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../../shared/defguard-ui/types';
+import { Button } from '../../../../../shared/xguard-ui/components/Button/Button';
+import { SizedBox } from '../../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../../shared/xguard-ui/types';
 import { downloadFile } from '../../../../../shared/utils/download';
 import '../../../../SetupPage/autoAdoption/steps/style.scss';
 import { SettingsCoreCertificateWizardStep } from '../types';
@@ -28,7 +28,7 @@ export const SettingsCoreCertificateWizardInternalUrlSslConfigStep = () => {
   const { data: caData } = useQuery({
     queryKey: ['core', 'cert', 'ca'],
     queryFn: api.core.getCA,
-    enabled: sslType === 'defguard_ca',
+    enabled: sslType === 'xguard_ca',
     select: (response) => response.data,
   });
 
@@ -36,7 +36,7 @@ export const SettingsCoreCertificateWizardInternalUrlSslConfigStep = () => {
     if (!caData?.ca_cert_pem) return;
     downloadFile(
       new Blob([caData.ca_cert_pem], { type: 'application/x-pem-file' }),
-      'defguard-ca',
+      'xguard-ca',
       'pem',
     );
   };

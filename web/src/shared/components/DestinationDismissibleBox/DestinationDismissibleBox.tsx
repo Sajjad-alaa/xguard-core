@@ -1,6 +1,6 @@
 import './style.scss';
 import type { MouseEventHandler } from 'react';
-import { IconButton } from '../../defguard-ui/components/IconButton/IconButton';
+import { IconButton } from '../../xguard-ui/components/IconButton/IconButton';
 import { DestinationLabel } from '../DestinationLabel/DestinationLabel';
 import type { DestinationLabelProps } from '../DestinationLabel/types';
 

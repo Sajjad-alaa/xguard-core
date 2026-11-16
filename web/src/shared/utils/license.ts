@@ -11,7 +11,7 @@ import {
   type SupportTypeNarrowValue,
   type SupportTypeValue,
 } from '../api/types';
-import { isPresent } from '../defguard-ui/utils/isPresent';
+import { isPresent } from '../xguard-ui/utils/isPresent';
 import { openModal } from '../hooks/modalControls/modalsSubjects';
 import { ModalName } from '../hooks/modalControls/modalTypes';
 

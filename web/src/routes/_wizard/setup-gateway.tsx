@@ -3,7 +3,7 @@ import { GatewaySetupPage } from '../../pages/GatewaySetupPage/GatewaySetupPage'
 import { useGatewayWizardStore } from '../../pages/GatewaySetupPage/useGatewayWizardStore';
 import { MigrationWizardStep } from '../../pages/MigrationWizardPage/types';
 import { ActiveWizard } from '../../shared/api/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import {
   getMigrationStateQueryOptions,
   getSessionInfoQueryOptions,

@@ -2,8 +2,8 @@ import { Suspense } from 'react';
 import { m } from '../../paraglide/messages';
 import { Page } from '../../shared/components/Page/Page';
 import { TableSkeleton } from '../../shared/components/skeleton/TableSkeleton/TableSkeleton';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { CeOpenIdClientModal } from './modals/CEOpenIdClientModal/CEOpenIdClientModal';
 import { OpenIdClientTable } from './OpenIdTable';
 

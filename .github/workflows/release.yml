@@ -46,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INPUT_VERSION: ${{ inputs.version }}
           DRAFT: ${{ inputs.draft }}
-          VERSION_FILE: crates/defguard_common/Cargo.toml
+          VERSION_FILE: crates/xguard_common/Cargo.toml
         run: |
           set -euo pipefail
           FILE_VERSION=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$VERSION_FILE" | head -n 1)
@@ -211,7 +211,7 @@ jobs:
     timeout-minutes: 120
     env:
       VERSION: ${{ needs.precheck.outputs.version }}
-      DEFGUARD_BUILD_VERSION: ${{ needs.precheck.outputs.version }}
+      XGUARD_BUILD_VERSION: ${{ needs.precheck.outputs.version }}
       SQLX_OFFLINE: "1"
       # Force the installed stable toolchain. RUSTUP_TOOLCHAIN takes precedence
       # over any stale rustup directory override left on the self-hosted runner.
@@ -248,10 +248,10 @@ jobs:
 
       - name: Start FreeBSD build
         run: |
-          rsync -rlptxzH -e 'ssh -l root' --del ./ freebsd:work/defguard/
+          rsync -rlptxzH -e 'ssh -l root' --del ./ freebsd:work/xguard/
           (
             rc=0
-            ssh root@freebsd "cd work/defguard && env DEFGUARD_BUILD_VERSION='${DEFGUARD_BUILD_VERSION}' cargo build --locked --release" || rc=$?
+            ssh root@freebsd "cd work/xguard && env XGUARD_BUILD_VERSION='${XGUARD_BUILD_VERSION}' cargo build --locked --release" || rc=$?
             # The rename keeps the wait loop from reading a half-written file.
             echo "$rc" > "$RUNNER_TEMP/freebsd.rc.tmp"
             mv "$RUNNER_TEMP/freebsd.rc.tmp" "$RUNNER_TEMP/freebsd.rc"
@@ -259,13 +259,13 @@ jobs:
           echo $! > "$RUNNER_TEMP/freebsd.pid"
 
       - name: Build source code archive
-        run: tar --exclude='.github' --exclude-vcs --exclude-vcs-ignores --xform='s|^\./|defguard-${{ env.VERSION }}/|' --xz -cf ${{ runner.temp }}/defguard-${{ env.VERSION }}.tar.xz .
+        run: tar --exclude='.github' --exclude-vcs --exclude-vcs-ignores --xform='s|^\./|xguard-${{ env.VERSION }}/|' --xz -cf ${{ runner.temp }}/xguard-${{ env.VERSION }}.tar.xz .
 
       - name: Upload source code archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: source
-          path: ${{ runner.temp }}/defguard-${{ env.VERSION }}.tar.xz
+          path: ${{ runner.temp }}/xguard-${{ env.VERSION }}.tar.xz
           if-no-files-found: error
           overwrite: true
           retention-days: 7
@@ -288,8 +288,8 @@ jobs:
         run: |
           cargo build --locked --release --target x86_64-unknown-linux-gnu --target aarch64-unknown-linux-gnu
           for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
-            mv "target/$target/release/defguard" "defguard-${{ env.VERSION }}-$target"
-            tar -zcf "defguard-${{ env.VERSION }}-$target.tar.gz" "defguard-${{ env.VERSION }}-$target"
+            mv "target/$target/release/xguard" "xguard-${{ env.VERSION }}-$target"
+            tar -zcf "xguard-${{ env.VERSION }}-$target.tar.gz" "xguard-${{ env.VERSION }}-$target"
           done
 
       - name: Wait for FreeBSD build
@@ -303,85 +303,85 @@ jobs:
             echo "::error::The FreeBSD build failed. Its output is above."
             exit 1
           fi
-          scp root@freebsd:work/defguard/target/release/defguard defguard-${{ env.VERSION }}-x86_64-unknown-freebsd
-          tar -zcf defguard-${{ env.VERSION }}-x86_64-unknown-freebsd.tar.gz \
-            defguard-${{ env.VERSION }}-x86_64-unknown-freebsd
+          scp root@freebsd:work/xguard/target/release/xguard xguard-${{ env.VERSION }}-x86_64-unknown-freebsd
+          tar -zcf xguard-${{ env.VERSION }}-x86_64-unknown-freebsd.tar.gz \
+            xguard-${{ env.VERSION }}-x86_64-unknown-freebsd
 
       - name: Build x86_64 DEB package
-        uses: defGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
+        uses: xGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
         with:
           fpm_args:
-            "defguard-${{ env.VERSION }}-x86_64-unknown-linux-gnu=/usr/bin/defguard
-            linux/defguard.service=/usr/lib/systemd/system/defguard.service
-            .env.example=/etc/defguard/core.conf"
+            "xguard-${{ env.VERSION }}-x86_64-unknown-linux-gnu=/usr/bin/xguard
+            linux/xguard.service=/usr/lib/systemd/system/xguard.service
+            .env.example=/etc/xguard/core.conf"
           fpm_opts: "--architecture amd64
             --output-type deb
             --version ${{ env.VERSION }}
-            --package defguard-${{ env.VERSION }}-x86_64-unknown-linux-gnu.deb
+            --package xguard-${{ env.VERSION }}-x86_64-unknown-linux-gnu.deb
             --before-install linux/preinst
             --after-install linux/postinst
             --before-remove linux/prerm
             --after-remove linux/postrm"
 
       - name: Build aarch64 DEB package
-        uses: defGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
+        uses: xGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
         with:
           fpm_args:
-            "defguard-${{ env.VERSION }}-aarch64-unknown-linux-gnu=/usr/bin/defguard
-            linux/defguard.service=/usr/lib/systemd/system/defguard.service
-            .env.example=/etc/defguard/core.conf"
+            "xguard-${{ env.VERSION }}-aarch64-unknown-linux-gnu=/usr/bin/xguard
+            linux/xguard.service=/usr/lib/systemd/system/xguard.service
+            .env.example=/etc/xguard/core.conf"
           fpm_opts: "--architecture arm64
             --output-type deb
             --version ${{ env.VERSION }}
-            --package defguard-${{ env.VERSION }}-aarch64-unknown-linux-gnu.deb
+            --package xguard-${{ env.VERSION }}-aarch64-unknown-linux-gnu.deb
             --before-install linux/preinst
             --after-install linux/postinst
             --before-remove linux/prerm
             --after-remove linux/postrm"
 
       - name: Build x86_64 RPM package
-        uses: defGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
+        uses: xGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
         with:
           fpm_args:
-            "defguard-${{ env.VERSION }}-x86_64-unknown-linux-gnu=/usr/bin/defguard
-            linux/defguard.service=/usr/lib/systemd/system/defguard.service
-            .env.example=/etc/defguard/core.conf"
+            "xguard-${{ env.VERSION }}-x86_64-unknown-linux-gnu=/usr/bin/xguard
+            linux/xguard.service=/usr/lib/systemd/system/xguard.service
+            .env.example=/etc/xguard/core.conf"
           fpm_opts: "--architecture amd64
             --output-type rpm
             --version ${{ env.VERSION }}
-            --package defguard-${{ env.VERSION }}-x86_64-unknown-linux-gnu.rpm
+            --package xguard-${{ env.VERSION }}-x86_64-unknown-linux-gnu.rpm
             --before-install linux/preinst
             --after-install linux/postinst
             --before-remove linux/prerm
             --after-remove linux/postrm"
 
       - name: Build aarch64 RPM package
-        uses: defGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
+        uses: xGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
         with:
           fpm_args:
-            "defguard-${{ env.VERSION }}-aarch64-unknown-linux-gnu=/usr/bin/defguard
-            linux/defguard.service=/usr/lib/systemd/system/defguard.service
-            .env.example=/etc/defguard/core.conf"
+            "xguard-${{ env.VERSION }}-aarch64-unknown-linux-gnu=/usr/bin/xguard
+            linux/xguard.service=/usr/lib/systemd/system/xguard.service
+            .env.example=/etc/xguard/core.conf"
           fpm_opts: "--architecture arm64
             --output-type rpm
             --version ${{ env.VERSION }}
-            --package defguard-${{ env.VERSION }}-aarch64-unknown-linux-gnu.rpm
+            --package xguard-${{ env.VERSION }}-aarch64-unknown-linux-gnu.rpm
             --before-install linux/preinst
             --after-install linux/postinst
             --before-remove linux/prerm
             --after-remove linux/postrm"
 
       - name: Build FreeBSD package
-        uses: defGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
+        uses: xGuard/fpm-action@ebb2575fbb892876fbdd326bb6d12524fbd7398c # main
         with:
           fpm_args:
-            "defguard-${{ env.VERSION }}-x86_64-unknown-freebsd=/usr/local/bin/defguard
-            freebsd/defguard=/usr/local/etc/rc.d/defguard
-            .env.example=/etc/defguard/core.conf.sample"
+            "xguard-${{ env.VERSION }}-x86_64-unknown-freebsd=/usr/local/bin/xguard
+            freebsd/xguard=/usr/local/etc/rc.d/xguard
+            .env.example=/etc/xguard/core.conf.sample"
           fpm_opts: "--architecture amd64
             --output-type freebsd
             --version ${{ env.VERSION }}
-            --package defguard-${{ env.VERSION }}_x86_64-unknown-freebsd.pkg
+            --package xguard-${{ env.VERSION }}_x86_64-unknown-freebsd.pkg
             --freebsd-osversion '*'
             --depends openssl
             --after-install freebsd/post-install.sh"
@@ -391,10 +391,10 @@ jobs:
         with:
           name: binaries
           path: |
-            defguard-${{ env.VERSION }}-*.tar.gz
-            defguard-${{ env.VERSION }}-*.deb
-            defguard-${{ env.VERSION }}-*.rpm
-            defguard-${{ env.VERSION }}_x86_64-unknown-freebsd.pkg
+            xguard-${{ env.VERSION }}-*.tar.gz
+            xguard-${{ env.VERSION }}-*.deb
+            xguard-${{ env.VERSION }}-*.rpm
+            xguard-${{ env.VERSION }}_x86_64-unknown-freebsd.pkg
           if-no-files-found: error
           overwrite: true
           retention-days: 7
@@ -409,7 +409,7 @@ jobs:
     timeout-minutes: 90
     env:
       VERSION: ${{ needs.precheck.outputs.version }}
-      DEFGUARD_BUILD_VERSION: ${{ needs.precheck.outputs.version }}
+      XGUARD_BUILD_VERSION: ${{ needs.precheck.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -478,20 +478,20 @@ jobs:
             --output-type deb \
             --version "${{ env.VERSION }}" \
             --architecture ${{ matrix.deb_arch }} \
-            --package defguard-${{ env.VERSION }}-${{ matrix.deb_arch }}_ubuntu-22-04-lts.deb \
+            --package xguard-${{ env.VERSION }}-${{ matrix.deb_arch }}_ubuntu-22-04-lts.deb \
             --before-install linux/preinst \
             --after-install linux/postinst \
             --before-remove linux/prerm \
             --after-remove linux/postrm \
-            "target/${{ matrix.rust_target }}/release/defguard=/usr/bin/defguard" \
-            "linux/defguard.service=/usr/lib/systemd/system/defguard.service" \
-            ".env.example=/etc/defguard/core.conf"
+            "target/${{ matrix.rust_target }}/release/xguard=/usr/bin/xguard" \
+            "linux/xguard.service=/usr/lib/systemd/system/xguard.service" \
+            ".env.example=/etc/xguard/core.conf"
 
       - name: Upload ubuntu-22-04-lts DEB
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ubuntu-22-04-${{ matrix.deb_arch }}
-          path: defguard-${{ env.VERSION }}-${{ matrix.deb_arch }}_ubuntu-22-04-lts.deb
+          path: xguard-${{ env.VERSION }}-${{ matrix.deb_arch }}_ubuntu-22-04-lts.deb
           if-no-files-found: error
           overwrite: true
           retention-days: 7
@@ -511,7 +511,7 @@ jobs:
       issues: write
     env:
       VERSION: ${{ needs.precheck.outputs.version }}
-      GHCR_REPO: ghcr.io/defguard/defguard
+      GHCR_REPO: ghcr.io/sajjad-alaa/xguard-core
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -533,28 +533,28 @@ jobs:
             exit 1
           fi
           # Later runs of the same commit move its sha tag, so the draft names this build by digest.
-          echo "$GHCR_REPO@$DIGEST" > "dist/defguard-$VERSION-docker-image.txt"
+          echo "$GHCR_REPO@$DIGEST" > "dist/xguard-$VERSION-docker-image.txt"
 
       - name: Compare build output with the expected release assets
         run: |
           set -euo pipefail
           expected=(
-            "defguard-$VERSION.tar.xz"
-            "defguard-$VERSION-x86_64-unknown-linux-gnu.tar.gz"
-            "defguard-$VERSION-aarch64-unknown-linux-gnu.tar.gz"
-            "defguard-$VERSION-x86_64-unknown-freebsd.tar.gz"
-            "defguard-$VERSION-x86_64-unknown-linux-gnu.deb"
-            "defguard-$VERSION-aarch64-unknown-linux-gnu.deb"
-            "defguard-$VERSION-x86_64-unknown-linux-gnu.rpm"
-            "defguard-$VERSION-aarch64-unknown-linux-gnu.rpm"
-            "defguard-${VERSION}_x86_64-unknown-freebsd.pkg"
-            "defguard-$VERSION-amd64_ubuntu-22-04-lts.deb"
-            "defguard-$VERSION-arm64_ubuntu-22-04-lts.deb"
-            "defguard-$VERSION.sbom.json"
-            "defguard-$VERSION-docker.sbom.json"
-            "defguard-$VERSION.advisories.json"
-            "defguard-$VERSION-docker.advisories.json"
-            "defguard-$VERSION-docker-image.txt"
+            "xguard-$VERSION.tar.xz"
+            "xguard-$VERSION-x86_64-unknown-linux-gnu.tar.gz"
+            "xguard-$VERSION-aarch64-unknown-linux-gnu.tar.gz"
+            "xguard-$VERSION-x86_64-unknown-freebsd.tar.gz"
+            "xguard-$VERSION-x86_64-unknown-linux-gnu.deb"
+            "xguard-$VERSION-aarch64-unknown-linux-gnu.deb"
+            "xguard-$VERSION-x86_64-unknown-linux-gnu.rpm"
+            "xguard-$VERSION-aarch64-unknown-linux-gnu.rpm"
+            "xguard-${VERSION}_x86_64-unknown-freebsd.pkg"
+            "xguard-$VERSION-amd64_ubuntu-22-04-lts.deb"
+            "xguard-$VERSION-arm64_ubuntu-22-04-lts.deb"
+            "xguard-$VERSION.sbom.json"
+            "xguard-$VERSION-docker.sbom.json"
+            "xguard-$VERSION.advisories.json"
+            "xguard-$VERSION-docker.advisories.json"
+            "xguard-$VERSION-docker-image.txt"
           )
           if ! diff <(printf '%s\n' "${expected[@]}" | sort) <(ls dist | sort); then
             echo "::error::The build output does not match the expected release assets"

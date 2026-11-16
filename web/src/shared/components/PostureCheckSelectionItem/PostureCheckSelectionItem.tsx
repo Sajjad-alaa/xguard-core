@@ -1,10 +1,10 @@
 import './style.scss';
 
 import type { ApiDevicePosture } from '../../api/types';
-import { Checkbox } from '../../defguard-ui/components/Checkbox/Checkbox';
-import { IconKind } from '../../defguard-ui/components/Icon';
-import { Icon } from '../../defguard-ui/components/Icon/Icon';
-import { ThemeVariable } from '../../defguard-ui/types';
+import { Checkbox } from '../../xguard-ui/components/Checkbox/Checkbox';
+import { IconKind } from '../../xguard-ui/components/Icon';
+import { Icon } from '../../xguard-ui/components/Icon/Icon';
+import { ThemeVariable } from '../../xguard-ui/types';
 import { getPostureCheckAssignmentSummarySections } from '../../utils/postureCheckAssignmentSummary';
 import type { SelectionSectionCustomRender } from '../SelectionSection/type';
 import { SummaryTooltip } from '../SummaryTooltip/SummaryTooltip';

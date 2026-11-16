@@ -1,4 +1,4 @@
-import { Snackbar } from '../defguard-ui/providers/snackbar/snackbar';
+import { Snackbar } from '../xguard-ui/providers/snackbar/snackbar';
 export const processCertificateFile = async (
   file: File | null,
 ): Promise<string | null> => {

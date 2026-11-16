@@ -10,14 +10,14 @@ import { Controls } from '../../../../shared/components/Controls/Controls';
 import { renderPostureCheckSelectionItem } from '../../../../shared/components/PostureCheckSelectionItem/PostureCheckSelectionItem';
 import { WizardCard } from '../../../../shared/components/wizard/WizardCard/WizardCard';
 import { externalLink } from '../../../../shared/constants';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { Divider } from '../../../../shared/defguard-ui/components/Divider/Divider';
-import { Fold } from '../../../../shared/defguard-ui/components/Fold/Fold';
-import { InfoBanner } from '../../../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { Radio } from '../../../../shared/defguard-ui/components/Radio/Radio';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Fold } from '../../../../shared/xguard-ui/components/Fold/Fold';
+import { InfoBanner } from '../../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { Radio } from '../../../../shared/xguard-ui/components/Radio/Radio';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { getLicenseInfoQueryOptions } from '../../../../shared/query';
 import { canUseEnterpriseFeature } from '../../../../shared/utils/license';
 import businessFeatureCardImage from '../../assets/business-feature-icon.png';
@@ -58,7 +58,7 @@ export const AddLocationPostureCheckStep = () => {
             title=""
             subtitle={m.add_location_postures_enterprise_only()}
           >
-            <a href={externalLink.defguard.pricing} target="_blank" rel="noreferrer">
+            <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
               <Button
                 variant="outlined"
                 text={m.license_see_other_plans()}

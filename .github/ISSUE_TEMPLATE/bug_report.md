@@ -21,8 +21,8 @@ Steps to reproduce the behavior:
 A clear and concise description of what you expected to happen.
 
 **Version information**
-- Defguard Core version: vX.Y.Z
-- Defguard Gateway version: vX.Y.Z (if bug is applicable to VPN functionality)
+- XGuard Core version: vX.Y.Z
+- XGuard Gateway version: vX.Y.Z (if bug is applicable to VPN functionality)
   - Operating system and version running the gateway: Debian X/Ubuntu Y/...
  - Your browser and version [e.g. chrome 99, safari]
 

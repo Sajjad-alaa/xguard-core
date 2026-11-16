@@ -3,12 +3,12 @@ import clsx from 'clsx';
 import type { ReactNode } from 'react';
 import { m } from '../../../../../paraglide/messages';
 import { BusinessBadge } from '../../../../../shared/components/badges/BusinessBadge';
-import { Badge } from '../../../../../shared/defguard-ui/components/Badge/Badge';
-import { Button } from '../../../../../shared/defguard-ui/components/Button/Button';
-import { Icon, IconKind } from '../../../../../shared/defguard-ui/components/Icon';
-import { IconButtonMenu } from '../../../../../shared/defguard-ui/components/IconButtonMenu/IconButtonMenu';
-import type { MenuItemsGroup } from '../../../../../shared/defguard-ui/components/Menu/types';
-import { ThemeVariable } from '../../../../../shared/defguard-ui/types';
+import { Badge } from '../../../../../shared/xguard-ui/components/Badge/Badge';
+import { Button } from '../../../../../shared/xguard-ui/components/Button/Button';
+import { Icon, IconKind } from '../../../../../shared/xguard-ui/components/Icon';
+import { IconButtonMenu } from '../../../../../shared/xguard-ui/components/IconButtonMenu/IconButtonMenu';
+import type { MenuItemsGroup } from '../../../../../shared/xguard-ui/components/Menu/types';
+import { ThemeVariable } from '../../../../../shared/xguard-ui/types';
 import google from '../../../SettingsExternalOpenIdPage/components/ExternalProviderCard/assets/google.png';
 import microsoft from '../../../SettingsExternalOpenIdPage/components/ExternalProviderCard/assets/microsoft.png';
 

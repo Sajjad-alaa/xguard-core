@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../defguard-ui/components/Modal/Modal';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
 import { AddDeviceModalClientConfigStep } from './steps/AddDeviceModalClientConfigStep/AddDeviceModalClientConfigStep';
 import { AddDeviceModalManualDownloadStep } from './steps/AddDeviceModalManualDownloadStep/AddDeviceModalManualDownloadStep';
 import { AddDeviceModalManualSetupStep } from './steps/AddDeviceModalManualSetupStep/AddDeviceModalManualSetupStep';

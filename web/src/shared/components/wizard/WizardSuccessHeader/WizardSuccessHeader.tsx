@@ -1,6 +1,6 @@
 import './style.scss';
 import type { PropsWithChildren } from 'react';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 
 interface Props extends PropsWithChildren {
   title: string;

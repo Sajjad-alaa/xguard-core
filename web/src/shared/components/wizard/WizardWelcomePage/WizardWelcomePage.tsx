@@ -2,11 +2,11 @@ import './style.scss';
 import clsx from 'clsx';
 import dayjs from 'dayjs';
 import { m } from '../../../../paraglide/messages';
-import { AppText } from '../../../defguard-ui/components/AppText/AppText';
-import { ExternalLink } from '../../../defguard-ui/components/ExternalLink/ExternalLink';
-import { SizedBox } from '../../../defguard-ui/components/SizedBox/SizedBox';
-import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../defguard-ui/types';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { AppText } from '../../../xguard-ui/components/AppText/AppText';
+import { ExternalLink } from '../../../xguard-ui/components/ExternalLink/ExternalLink';
+import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../../xguard-ui/types';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import type { WizardWelcomePageConfig } from '../types';
 import { WizardTop } from '../WizardTop/WizardTop';
 import fileIcon from './assets/file_icon.png';
@@ -20,7 +20,7 @@ export const WizardWelcomePage = ({
   content,
   media,
   containerProps,
-  docsLink = 'https://docs.defguard.net/',
+  docsLink = 'https://docs.xguard.local/',
   docsText = m.initial_setup_wizard_welcome_docs_description(),
   displayDocs = true,
   onClose,
@@ -70,8 +70,8 @@ export const WizardWelcomePage = ({
         <p>{m.footer_copyright({ year: dayjs().year() })}</p>
         <p>
           {m.initial_setup_wizard_footer_support_text()}{' '}
-          <a href="mailto:support@defguard.net" className="mail">
-            support@defguard.net
+          <a href="mailto:support@xguard.local" className="mail">
+            support@xguard.local
           </a>
         </p>
       </div>

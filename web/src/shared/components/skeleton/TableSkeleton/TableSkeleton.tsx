@@ -2,8 +2,8 @@ import './style.scss';
 import { useWindowSize } from '@uidotdev/usehooks';
 import { useMemo, useRef } from 'react';
 import Skeleton from 'react-loading-skeleton';
-import { SizedBox } from '../../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../../defguard-ui/types';
+import { SizedBox } from '../../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../xguard-ui/types';
 
 export const TableSkeleton = () => {
   const containerRef = useRef<HTMLDivElement>(null);

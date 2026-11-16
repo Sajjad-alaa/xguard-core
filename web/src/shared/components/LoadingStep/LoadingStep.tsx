@@ -1,13 +1,13 @@
 import clsx from 'clsx';
 import './style.scss';
 import { useMemo } from 'react';
-import { AppText } from '../../defguard-ui/components/AppText/AppText';
-import { Fold } from '../../defguard-ui/components/Fold/Fold';
-import { Icon, IconKind } from '../../defguard-ui/components/Icon';
-import { LoaderSpinner } from '../../defguard-ui/components/LoaderSpinner/LoaderSpinner';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { TextStyle, ThemeSpacing, ThemeVariable } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { AppText } from '../../xguard-ui/components/AppText/AppText';
+import { Fold } from '../../xguard-ui/components/Fold/Fold';
+import { Icon, IconKind } from '../../xguard-ui/components/Icon';
+import { LoaderSpinner } from '../../xguard-ui/components/LoaderSpinner/LoaderSpinner';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { TextStyle, ThemeSpacing, ThemeVariable } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import type { LoadingStepProps } from './types';
 
 type ComponentVariant = 'loading' | 'success' | 'error' | 'default';

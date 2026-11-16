@@ -4,8 +4,8 @@ import { useMemo } from 'react';
 import { m } from '../../../../paraglide/messages';
 import { AclListTab } from '../../../../shared/aclTabs';
 import { AclStatus } from '../../../../shared/api/types';
-import type { ButtonProps } from '../../../../shared/defguard-ui/components/Button/types';
-import { EmptyStateFlexible } from '../../../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import type { ButtonProps } from '../../../../shared/xguard-ui/components/Button/types';
+import { EmptyStateFlexible } from '../../../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
 import {
   getDestinationsQueryOptions,
   getRulesQueryOptions,

@@ -11,7 +11,7 @@ import {
   type TestDirectorySyncResponse,
 } from '../../shared/api/types';
 import type { JumpCloudRegion } from '../../shared/constants';
-import type { SelectOption } from '../../shared/defguard-ui/components/Select/types';
+import type { SelectOption } from '../../shared/xguard-ui/components/Select/types';
 
 export const validateExternalProviderWizard = async (
   values: AddOpenIdProvider,

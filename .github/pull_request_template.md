@@ -1,6 +1,6 @@
 ## 📝 New contributors 
 
-- [ ] I have read, understand, and agree to the Contributor Agreement. By checking this box, I confirm I have the right to contribute this work and I grant Defguard sp. z o.o. the necessary rights to use my contribution as outlined in the full agreement.: https://github.com/DefGuard/defguard/blob/stable/2.x/CLA.md
+- [ ] I have read, understand, and agree to the Contributor Agreement. By checking this box, I confirm I have the right to contribute this work and I grant XGuard sp. z o.o. the necessary rights to use my contribution as outlined in the full agreement.: https://github.com/Sajjad-alaa/xguard-core/blob/stable/2.x/CLA.md
 
 ⚠︎ If the checkbox will not be confirmed - we can't include your contribution in our codebase.
 
@@ -13,7 +13,7 @@
 
 #### Documentation
 
-- [ ] If testing requires changes in the environment or deployment, please **update the documentation** (https://docs.defguard.net/) first and **attach the link to the documentation** section in this pool request
+- [ ] If testing requires changes in the environment or deployment, please **update the documentation** (https://docs.xguard.local/) first and **attach the link to the documentation** section in this pool request
 - [ ] I have commented on my code, particularly in hard-to-understand areas
 
 #### Testing
@@ -24,7 +24,7 @@
 
 #### Deployment
 
-- [ ] If deployment is affected I have made corresponding/required changes to [deployment](https://github.com/defguard/deployment) (Docker, Kubernetes, one-line install)
+- [ ] If deployment is affected I have made corresponding/required changes to [deployment](https://github.com/Sajjad-alaa/xguard-deployment) (Docker, Kubernetes, one-line install)
 
 ### 🏚️ Main Branch Merge Checklist:
 

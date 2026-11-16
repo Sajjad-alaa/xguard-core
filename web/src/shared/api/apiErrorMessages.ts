@@ -1,6 +1,6 @@
 import type { AxiosError } from 'axios';
 import { m } from '../../paraglide/messages';
-import { isPresent } from '../defguard-ui/utils/isPresent';
+import { isPresent } from '../xguard-ui/utils/isPresent';
 import { type ApiError, type ApiErrorMessageKey, WebErrorCode } from './types';
 
 const isWebErrorCode = (value: string): value is WebErrorCode =>

@@ -23,7 +23,7 @@ vi.mock('../src/paraglide/messages', () => ({
       'Disk encryption enabled',
     posture_checks_wizard_operating_systems_condition_device_integrity: () =>
       'Device integrity enabled',
-    posture_checks_wizard_summary_defguard_version: ({ version }: { version: string }) =>
+    posture_checks_wizard_summary_xguard_version: ({ version }: { version: string }) =>
       `${version} and higher`,
     posture_checks_wizard_summary_desktop_client_version: ({
       version,
@@ -36,8 +36,8 @@ vi.mock('../src/paraglide/messages', () => ({
       version: string;
     }) => `Mobile application: ${version}`,
     posture_checks_wizard_summary_prerelease: () =>
-      'Allow pre-release versions of the Defguard client.',
-    posture_checks_wizard_summary_defguard_label: () => 'Defguard',
+      'Allow pre-release versions of the XGuard client.',
+    posture_checks_wizard_summary_xguard_label: () => 'XGuard',
     posture_checks_version_any: () => 'Any version',
   },
 }));
@@ -187,11 +187,11 @@ describe('edit location posture-checks section state', () => {
         ],
       },
       {
-        label: 'Defguard',
+        label: 'XGuard',
         lines: [
           { text: 'Desktop client: 2.0 and higher' },
           { text: 'Mobile application: 1.7.0 and higher' },
-          { text: 'Allow pre-release versions of the Defguard client.' },
+          { text: 'Allow pre-release versions of the XGuard client.' },
         ],
       },
     ]);
@@ -224,7 +224,7 @@ describe('edit location posture-checks section state', () => {
         lines: [{ text: 'Any version' }, { text: 'Disk encryption enabled' }],
       },
       {
-        label: 'Defguard',
+        label: 'XGuard',
         lines: [
           { text: 'Desktop client: Any version' },
           { text: 'Mobile application: Any version' },

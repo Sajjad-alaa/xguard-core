@@ -1,7 +1,7 @@
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
-import { Modal } from '../../../defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../defguard-ui/components/ModalControls/ModalControls';
+import { Modal } from '../../../xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../xguard-ui/components/ModalControls/ModalControls';
 import { useAppForm } from '../../../form';
 import { formChangeLogic } from '../../../formLogic';
 import {
@@ -17,9 +17,9 @@ import type { AxiosError } from 'axios';
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../../api/api';
 import { type ApiError, AuthKeyType, type AuthKeyTypeValue } from '../../../api/types';
-import { Select } from '../../../defguard-ui/components/Select/Select';
-import type { SelectOption } from '../../../defguard-ui/components/Select/types';
-import { isPresent } from '../../../defguard-ui/utils/isPresent';
+import { Select } from '../../../xguard-ui/components/Select/Select';
+import type { SelectOption } from '../../../xguard-ui/components/Select/types';
+import { isPresent } from '../../../xguard-ui/utils/isPresent';
 import { getUserAuthKeysQueryOptions } from '../../../query';
 
 const modalNameKey = ModalName.AddAuthKey;

@@ -6,7 +6,7 @@ import {
   WizardStepSummary,
   type WizardStepSummaryRecommendation,
 } from '../../../../shared/components/wizard-steps/WizardStepSummary/WizardStepSummary';
-import { Snackbar } from '../../../../shared/defguard-ui/providers/snackbar/snackbar';
+import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import CommunityIcon from '../../assets/community.png';
 import FileIcon from '../../assets/file-icon.png';
 import ShieldIcon from '../../assets/shield.png';
@@ -15,7 +15,7 @@ import { useAutoAdoptionSetupWizardStore } from '../useAutoAdoptionSetupWizardSt
 export const AutoAdoptionSummaryStep = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const wireguardPort = useAutoAdoptionSetupWizardStore((s) => s.vpn_wireguard_port);
-  const defguardUrl = useAutoAdoptionSetupWizardStore((s) => s.defguard_url);
+  const xguardUrl = useAutoAdoptionSetupWizardStore((s) => s.xguard_url);
 
   const { mutateAsync: finishSetup } = useMutation({
     mutationKey: ['finish-setup'],
@@ -25,12 +25,12 @@ export const AutoAdoptionSummaryStep = () => {
     },
   });
 
-  const handleGoToDefguard = async () => {
+  const handleGoToXGuard = async () => {
     try {
       setIsSubmitting(true);
       useAutoAdoptionSetupWizardStore.setState({ isFinishing: true });
       await finishSetup();
-      const base = defguardUrl ? defguardUrl.replace(/\/$/, '') : window.location.origin;
+      const base = xguardUrl ? xguardUrl.replace(/\/$/, '') : window.location.origin;
       window.onbeforeunload = null;
       await new Promise((r) => setTimeout(r, 2000));
       useAutoAdoptionSetupWizardStore.getState().reset();
@@ -50,7 +50,7 @@ export const AutoAdoptionSummaryStep = () => {
       kicker: m.initial_setup_auto_adoption_summary_docs_kicker(),
       title: m.initial_setup_auto_adoption_summary_docs_title(),
       buttonText: m.initial_setup_auto_adoption_summary_docs_button(),
-      onButtonClick: () => window.open('https://docs.defguard.net/', '_blank'),
+      onButtonClick: () => window.open('https://docs.xguard.local/', '_blank'),
     },
     {
       iconSrc: CommunityIcon,
@@ -59,7 +59,7 @@ export const AutoAdoptionSummaryStep = () => {
       title: m.initial_setup_auto_adoption_summary_community_title(),
       buttonText: m.initial_setup_auto_adoption_summary_community_button(),
       onButtonClick: () =>
-        window.open('https://github.com/DefGuard/defguard/discussions', '_blank'),
+        window.open('https://github.com/Sajjad-alaa/xguard-core/discussions', '_blank'),
     },
     {
       iconSrc: ShieldIcon,
@@ -67,7 +67,7 @@ export const AutoAdoptionSummaryStep = () => {
       kicker: m.initial_setup_auto_adoption_summary_support_kicker(),
       title: m.initial_setup_auto_adoption_summary_support_title(),
       buttonText: m.initial_setup_auto_adoption_summary_support_button(),
-      onButtonClick: () => window.open('https://github.com/DefGuard/defguard', '_blank'),
+      onButtonClick: () => window.open('https://github.com/Sajjad-alaa/xguard-core', '_blank'),
     },
   ];
 
@@ -84,7 +84,7 @@ export const AutoAdoptionSummaryStep = () => {
       encourageText={m.initial_setup_auto_adoption_summary_encourage()}
       recommendations={recommendations}
       submitButtonText={m.initial_setup_auto_adoption_summary_submit()}
-      onSubmit={handleGoToDefguard}
+      onSubmit={handleGoToXGuard}
       submitLoading={isSubmitting}
     />
   );

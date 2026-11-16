@@ -3,11 +3,11 @@ import { LoginPage } from '../../shared/components/LoginPage/LoginPage';
 import './style.scss';
 import { useLoaderData, useSearch } from '@tanstack/react-router';
 import { m } from '../../paraglide/messages';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import { Icon } from '../../shared/defguard-ui/components/Icon';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import { Icon } from '../../shared/xguard-ui/components/Icon';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import { parseOpenIdScopeSearch } from './utils';
 
 export const OpenIdConsentPage = () => {

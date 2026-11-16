@@ -1,9 +1,9 @@
 import './style.scss';
-import { Button } from '../../defguard-ui/components/Button/Button';
-import type { ButtonProps } from '../../defguard-ui/components/Button/types';
-import { SizedBox } from '../../defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../defguard-ui/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { Button } from '../../xguard-ui/components/Button/Button';
+import type { ButtonProps } from '../../xguard-ui/components/Button/types';
+import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../xguard-ui/types';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { NavLogo } from '../Navigation/assets/NavLogo';
 import { FlowEndImage } from './components/FlowEndImage/FlowEndImage';
 import type { FlowEndImageVariantValue } from './components/FlowEndImage/types';

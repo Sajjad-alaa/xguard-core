@@ -1,6 +1,6 @@
 import './style.scss';
-import { Icon } from '../../../../../../../../../shared/defguard-ui/components/Icon';
-import { ThemeVariable } from '../../../../../../../../../shared/defguard-ui/types';
+import { Icon } from '../../../../../../../../../shared/xguard-ui/components/Icon';
+import { ThemeVariable } from '../../../../../../../../../shared/xguard-ui/types';
 
 type Props = {
   text: string;

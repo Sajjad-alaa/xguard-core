@@ -8,7 +8,7 @@ import type {
   MfaMethodAvailabilityReasonValue,
   MfaMethodAvailabilityResponse,
 } from '../../api/types';
-import { isPresent } from '../../defguard-ui/utils/isPresent';
+import { isPresent } from '../../xguard-ui/utils/isPresent';
 import { mfaFlowMethodLabels } from '../../utils/mfaFlowSteps';
 import { SummaryTooltip } from '../SummaryTooltip/SummaryTooltip';
 

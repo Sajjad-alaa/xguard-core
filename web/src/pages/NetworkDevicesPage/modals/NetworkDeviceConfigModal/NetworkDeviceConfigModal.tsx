@@ -1,15 +1,15 @@
 import { m } from '../../../../paraglide/messages';
 import { DescriptionBlock } from '../../../../shared/components/DescriptionBlock/DescriptionBlock';
-import { Button } from '../../../../shared/defguard-ui/components/Button/Button';
-import { CodeBox } from '../../../../shared/defguard-ui/components/CodeBox/CodeBox';
-import { IconKind } from '../../../../shared/defguard-ui/components/Icon';
-import { InfoBanner } from '../../../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { Modal } from '../../../../shared/defguard-ui/components/Modal/Modal';
-import { ModalControls } from '../../../../shared/defguard-ui/components/ModalControls/ModalControls';
-import { SizedBox } from '../../../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { useClipboard } from '../../../../shared/defguard-ui/hooks/useClipboard';
-import { ThemeSpacing } from '../../../../shared/defguard-ui/types';
-import { isPresent } from '../../../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { CodeBox } from '../../../../shared/xguard-ui/components/CodeBox/CodeBox';
+import { IconKind } from '../../../../shared/xguard-ui/components/Icon';
+import { InfoBanner } from '../../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
+import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
+import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { useClipboard } from '../../../../shared/xguard-ui/hooks/useClipboard';
+import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
+import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import {
   closeModal,
   subscribeCloseModal,

@@ -1,0 +1,1422 @@
+use std::net::IpAddr;
+
+use axum::{
+    extract::{Json, Path, State},
+    http::StatusCode,
+};
+use axum_extra::{
+    TypedHeader,
+    extract::{
+        PrivateCookieJar,
+        cookie::{Cookie, CookieJar, SameSite},
+    },
+    headers::UserAgent,
+};
+use xguard_common::{
+    db::{
+        Id,
+        models::{
+            MFAInfo, MFAMethod, Session, SessionState, Settings, User, WebAuthn,
+            webauthn::{AuthenticatorInfo, RegistrationSource},
+        },
+    },
+    types::user_info::UserInfo,
+};
+use sqlx::{PgPool, types::Uuid};
+use time::Duration;
+use webauthn_rs::prelude::PublicKeyCredential;
+use webauthn_rs_proto::options::CollectedClientData;
+
+use super::{
+    ApiResponse, ApiResult, Auth, AuthCode, AuthResponse, AuthTotp, RecoveryCode, RecoveryCodes,
+    SESSION_COOKIE_NAME, WebAuthnRegistration,
+};
+#[cfg(feature = "openapi")]
+use crate::handlers::ApiErrorResponse;
+use crate::{
+    appstate::AppState,
+    auth::{
+        SessionExtractor, SessionInfo,
+        login_throttle::{charge_login_attempt, login_key, refund_login_attempt},
+    },
+    enterprise::{
+        db::models::openid_provider::OpenIdProvider,
+        ldap::{error::LdapError, utils::login_through_ldap},
+    },
+    error::WebError,
+    events::{ApiEvent, ApiEventType, ApiRequestContext},
+    handlers::{ClientIpAddr, SIGN_IN_COOKIE_NAME, cookie_domain, user_for_admin_or_self},
+    headers::{ParsedUserAgent, check_new_device_login, get_user_agent_device},
+    mail::templates::{mfa_activation_mail, mfa_code_mail, mfa_configured_mail},
+    server_config,
+};
+
+/// Common functionality for `authenticate()` and `auth_callback()`.
+/// Returns either `AuthResponse` or `MFAInfo`.
+pub async fn create_session(
+    pool: &PgPool,
+    ip_address: IpAddr,
+    user_agent: &str,
+    user: &mut User<Id>,
+) -> Result<(Session, Option<UserInfo>, Option<MFAInfo>), WebError> {
+    let agent = ParsedUserAgent::parse(user_agent);
+    let device_info = get_user_agent_device(&agent);
+    debug!("Cleaning up expired sessions...");
+    Session::delete_expired(pool).await?;
+    debug!("Expired sessions cleaned up");
+
+    debug!("Creating new session for user {}", user.username);
+    let session = Session::new(
+        user.id,
+        SessionState::PasswordVerified,
+        ip_address.to_string(),
+        Some(device_info),
+    );
+    session.save(pool).await?;
+    debug!("New session created for user {}", user.username);
+
+    let login_event_type = "AUTHENTICATION".to_owned();
+
+    // Check that MFA state is correct before proceeding further
+    user.verify_mfa_state(pool).await?;
+
+    info!("Authenticated user {}", user.username);
+    if user.mfa_enabled {
+        debug!(
+            "User {} has MFA enabled, sending MFA info for further authentication.",
+            user.username
+        );
+        if let Some(mfa_info) = MFAInfo::for_user(pool, user).await? {
+            check_new_device_login(
+                pool,
+                &session.clone().into(),
+                user,
+                ip_address.to_string(),
+                login_event_type,
+                agent,
+            )
+            .await?;
+            Ok((session, None, Some(mfa_info)))
+        } else {
+            error!(
+                "Couldn't fetch MFA info for user {} with MFA enabled",
+                user.username
+            );
+            Err(WebError::DbError("MFA info read error".into()))
+        }
+    } else {
+        debug!(
+            "User {} has MFA disabled, returning user info for login.",
+            user.username
+        );
+        let oidc_disable_password_management =
+            OpenIdProvider::current_disables_password_management(pool).await?;
+        let user_info =
+            UserInfo::from_user(pool, user.clone(), oidc_disable_password_management).await?;
+
+        check_new_device_login(
+            pool,
+            &session.clone().into(),
+            user,
+            ip_address.to_string(),
+            login_event_type,
+            agent,
+        )
+        .await?;
+
+        Ok((session, Some(user_info), None))
+    }
+}
+
+/// Authenticate a user
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth",
+    tag = "auth",
+    request_body(content = Auth, description = "`username` also accepts the user's email address.", example = json!({"username": "admin", "password": "some-password"})),
+    responses(
+        (status = 200, description = "User authenticated.", body = AuthResponse,
+            headers(
+                ("Set-Cookie" = String, description = "`xguard_session` cookie."),
+            ),
+        ),
+        (status = 201, description = "A second authentication factor is required. Verify one of the listed methods with the matching `/api/v1/auth/{method}` endpoint.", body = MFAInfo,
+            headers(
+                ("Set-Cookie" = String, description = "`xguard_session` cookie of a not fully authenticated session."),
+            ),
+        ),
+        (status = 401, description = "Invalid credentials or user groups are not synced.", body = ApiErrorResponse, example = json!({"msg": "Invalid credentials"})),
+        (status = 403, description = "License user limit reached.", body = ApiErrorResponse, example = json!({"msg": "License limit reached."})),
+        (status = 429, description = "Too many failed login attempts for this user.", body = ApiErrorResponse, example = json!({"msg": "Too many login attempts"})),
+        (status = 500, description = "Unable to authenticate user.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+))]
+pub async fn authenticate(
+    cookies: CookieJar,
+    mut private_cookies: PrivateCookieJar,
+    user_agent: TypedHeader<UserAgent>,
+    ClientIpAddr(ip_addr): ClientIpAddr,
+    State(appstate): State<AppState>,
+    Json(data): Json<Auth>,
+) -> Result<(CookieJar, PrivateCookieJar, ApiResponse), WebError> {
+    let username_or_email = data.username;
+    debug!("Authenticating user {username_or_email}");
+
+    let settings = Settings::get_current_settings();
+
+    // Attempt to find a user: first by username, and then by email.
+    let mut conn = appstate.pool.acquire().await?;
+    let found_user = User::find_by_username_or_email(&mut conn, &username_or_email).await?;
+    let throttle_key = login_key(found_user.as_ref(), &username_or_email);
+    charge_login_attempt(&mut *conn, &throttle_key).await?;
+
+    let mut user = if let Some(user) = found_user {
+        // user was found, attempt to authenticate by password first
+        match user.verify_password(&data.password) {
+            Ok(()) => user,
+            Err(err) => {
+                // password authentication failed, try authenticating with LDAP if configured
+                if settings.ldap_enabled {
+                    match login_through_ldap(&appstate.pool, &username_or_email, &data.password)
+                        .await
+                    {
+                        Ok(user) => user,
+                        Err(LdapError::LicenseUserLimitReached(_, _)) => {
+                            refund_login_attempt(&mut *conn, &throttle_key).await?;
+                            return Err(WebError::Forbidden("License limit reached."));
+                        }
+                        Err(ldap_err) => {
+                            warn!(
+                                "Failed to authenticate user {username_or_email} internally and through LDAP. Internal error: {err}, LDAP error: {ldap_err}"
+                            );
+
+                            appstate.emit_event(ApiEvent {
+                            context: ApiRequestContext::new(
+                                user.id,
+                                user.username,
+                                ip_addr,
+                                user_agent.to_string(),
+                            ),
+                            event: Box::new(ApiEventType::UserLoginFailed {
+                                message: format!(
+                                    "Internal and LDAP authentication for {username_or_email} failed. Internal error: {err}, LDAP error: {ldap_err}"
+                                ),
+                            }),
+                        })?;
+                            return Err(WebError::Authentication);
+                        }
+                    }
+                } else {
+                    warn!("Failed to authenticate user {username_or_email}: {err}");
+                    appstate.emit_event(ApiEvent {
+                        context: ApiRequestContext::new(
+                            user.id,
+                            user.username,
+                            ip_addr,
+                            user_agent.to_string(),
+                        ),
+                        event: Box::new(ApiEventType::UserLoginFailed {
+                            message: format!(
+                                "Authentication for {username_or_email} failed: {err}"
+                            ),
+                        }),
+                    })?;
+                    return Err(WebError::Authentication);
+                }
+            }
+        }
+    } else {
+        // try to create user from LDAP
+        debug!("User not found in DB, authenticating user {username_or_email} with LDAP");
+        match login_through_ldap(&appstate.pool, &username_or_email, &data.password).await {
+            Ok(user) => user,
+            Err(LdapError::LicenseUserLimitReached(_, _)) => {
+                refund_login_attempt(&mut *conn, &throttle_key).await?;
+                return Err(WebError::Forbidden("License limit reached."));
+            }
+            Err(err) => {
+                info!("Failed to authenticate user {username_or_email} with LDAP: {err}");
+                return Err(WebError::Authentication);
+            }
+        }
+    };
+    refund_login_attempt(&mut *conn, &throttle_key).await?;
+
+    // check if user account is active
+    if !user.is_active {
+        info!("Failed to authenticate user {username_or_email}: user is disabled");
+        return Err(WebError::Authentication);
+    }
+
+    let (session, user_info, mfa_info) =
+        create_session(&appstate.pool, ip_addr, user_agent.as_str(), &mut user).await?;
+
+    let settings = Settings::get_current_settings();
+    let timeout = settings.authentication_timeout();
+    let max_age = Duration::try_from(timeout).map_err(|err| {
+        error!("Failed to convert authentication timeout for cookie max-age: {err}");
+        WebError::Http(StatusCode::INTERNAL_SERVER_ERROR)
+    })?;
+    let config = server_config();
+    let mut auth_cookie = Cookie::build((SESSION_COOKIE_NAME, session.id.clone()))
+        .path("/")
+        .http_only(true)
+        .secure(
+            config
+                .cookie_insecure
+                .map_or(settings.cookie_secure()?, |insecure| !insecure),
+        )
+        .same_site(SameSite::Lax)
+        .max_age(max_age);
+    if let Some(cookie_domain) = cookie_domain() {
+        auth_cookie = auth_cookie.domain(cookie_domain);
+    }
+    let cookies = cookies.add(auth_cookie);
+
+    if let Some(mfa_info) = mfa_info {
+        return Ok((
+            cookies,
+            private_cookies,
+            ApiResponse::json(mfa_info, StatusCode::CREATED),
+        ));
+    }
+
+    if let Some(user_info) = user_info {
+        let url = if let Some(openid_cookie) = private_cookies.get(SIGN_IN_COOKIE_NAME) {
+            debug!("Found OpenID session cookie, returning the redirect URL stored in it.");
+            let url = openid_cookie.value().to_owned();
+            private_cookies = private_cookies.remove(openid_cookie);
+            Some(url)
+        } else {
+            debug!("No OpenID session found, proceeding with login to XGuard.");
+            None
+        };
+
+        appstate.emit_event(ApiEvent {
+            context: ApiRequestContext::new(
+                user_info.id,
+                user_info.username.clone(),
+                ip_addr,
+                user_agent.to_string(),
+            ),
+            event: Box::new(ApiEventType::UserLogin),
+        })?;
+
+        Ok((
+            cookies,
+            private_cookies,
+            ApiResponse::json(
+                AuthResponse {
+                    user: user_info,
+                    url,
+                },
+                StatusCode::OK,
+            ),
+        ))
+    } else {
+        unimplemented!("Impossible to get here");
+    }
+}
+
+/// Log out and clear the session cookie
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/logout",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Session removed.",
+            headers(
+                ("Set-Cookie" = String, description = "Expired `xguard_session` cookie."),
+            ),
+        ),
+        (status = 400, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "User 1 does not exist"})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to remove the session.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn logout(
+    cookies: CookieJar,
+    private_cookies: PrivateCookieJar,
+    SessionExtractor(session): SessionExtractor,
+    user_agent: TypedHeader<UserAgent>,
+    State(appstate): State<AppState>,
+    ClientIpAddr(ip_addr): ClientIpAddr,
+) -> Result<(CookieJar, PrivateCookieJar, ApiResponse), WebError> {
+    let mut session_cookie = Cookie::build((SESSION_COOKIE_NAME, "")).path("/");
+    let mut sign_in_cookie = Cookie::build((SIGN_IN_COOKIE_NAME, "")).path("/");
+    if let Some(cookie_domain) = cookie_domain() {
+        session_cookie = session_cookie.domain(cookie_domain.clone());
+        sign_in_cookie = sign_in_cookie.domain(cookie_domain);
+    }
+    let cookies = cookies.remove(session_cookie);
+    let private_cookies = private_cookies.remove(sign_in_cookie);
+    let user = User::find_by_id(&appstate.pool, session.user_id)
+        .await?
+        .ok_or_else(|| WebError::BadRequest(format!("User {} does not exist", session.user_id)))?;
+    // remove stored session
+    session.delete(&appstate.pool).await?;
+
+    appstate.emit_event(ApiEvent {
+        // User may not be fully authenticated so we can't use
+        // context extractor in this handler since it requires
+        // the `SessionInfo` object.
+        context: ApiRequestContext::new(user.id, user.username, ip_addr, user_agent.to_string()),
+        event: Box::new(ApiEventType::UserLogout),
+    })?;
+
+    Ok((cookies, private_cookies, ApiResponse::default()))
+}
+
+/// Enable MFA
+///
+/// Applies to the user of the current session.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    put,
+    path = "/api/v1/auth/mfa",
+    tag = "auth",
+    responses(
+        (status = 200, description = "MFA enabled. All other sessions of this user are terminated."),
+        (status = 304, description = "MFA could not be enabled, for example when no authentication factor is configured."),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to enable MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn mfa_enable(
+    cookies: CookieJar,
+    SessionExtractor(_session): SessionExtractor,
+    session_info: SessionInfo,
+    State(appstate): State<AppState>,
+) -> Result<(CookieJar, ApiResponse), WebError> {
+    let mut user = session_info.user;
+    debug!("Enabling MFA for user {}", user.username);
+    user.enable_mfa(&appstate.pool).await?;
+    if user.mfa_enabled {
+        info!("Enabled MFA for user {}", user.username);
+        let cookies = cookies.remove(Cookie::from("xguard_sesssion"));
+        user.logout_all_sessions(&appstate.pool).await?;
+        debug!(
+            "Removed auth sessions for user {} after enabling MFA",
+            user.username
+        );
+        Ok((cookies, ApiResponse::default()))
+    } else {
+        error!("Error enabling MFA for user {}", user.username);
+        Err(WebError::Http(StatusCode::NOT_MODIFIED))
+    }
+}
+
+/// Disable MFA
+///
+/// Applies to the user of the current session.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    delete,
+    path = "/api/v1/auth/mfa",
+    tag = "auth",
+    responses(
+        (status = 200, description = "MFA disabled."),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to disable MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn mfa_disable(
+    session_info: SessionInfo,
+    context: ApiRequestContext,
+    State(appstate): State<AppState>,
+) -> ApiResult {
+    let mut user = session_info.user;
+    debug!("Disabling MFA for user {}", user.username);
+    user.disable_mfa(&appstate.pool).await?;
+    appstate.emit_event(ApiEvent {
+        context,
+        event: Box::new(ApiEventType::MfaDisabled),
+    })?;
+    info!("Disabled MFA for user {}", user.username);
+    Ok(ApiResponse::default())
+}
+
+/// Disable MFA of a user
+#[cfg_attr(feature = "openapi", utoipa::path(
+    delete,
+    path = "/api/v1/user/{username}/mfa",
+    tag = "user",
+    params(
+        ("username" = String, Path, description = "Name of the user."),
+    ),
+    responses(
+        (status = 200, description = "MFA disabled for the user."),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges or the request must target your own account.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "user not found"})),
+        (status = 500, description = "Unable to disable MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn disable_user_mfa(
+    session_info: SessionInfo,
+    context: ApiRequestContext,
+    State(appstate): State<AppState>,
+    Path(username): Path<String>,
+) -> ApiResult {
+    let mut user = user_for_admin_or_self(&appstate.pool, &session_info, &username).await?;
+    debug!("Disabling MFA for user {}", user.username);
+    user.disable_mfa(&appstate.pool).await?;
+    appstate.emit_event(ApiEvent {
+        context,
+        event: Box::new(ApiEventType::UserMfaDisabled { user }),
+    })?;
+    info!("Disabled MFA for user {username}");
+    Ok(ApiResponse::default())
+}
+
+/// Start WebAuthn registration
+///
+/// Applies to the user of the current session.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/webauthn/init",
+    tag = "auth",
+    responses(
+        (status = 200, description = "WebAuthn registration challenge.", body = Object, example = json!({
+            "publicKey": {
+                "rp": {"name": "xguard", "id": "vpn.example.com"},
+                "user": {"id": "TDNkX2FkbWlu", "name": "admin", "displayName": "admin"},
+                "challenge": "y5EiUNc9wZ0mGvJ0mQdKZg",
+                "pubKeyCredParams": [{"type": "public-key", "alg": -7}]
+            }
+        })),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to start WebAuthn registration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn webauthn_init(
+    mut session_info: SessionInfo,
+    State(appstate): State<AppState>,
+) -> ApiResult {
+    let user = session_info.user;
+    info!(
+        "Initializing WebAuthn registration for user {}",
+        user.username
+    );
+    // passkeys to exclude
+    let passkeys = WebAuthn::passkeys_for_user(&appstate.pool, user.id, None).await?;
+    let webauthn = appstate.webauthn()?;
+    match webauthn.start_passkey_registration(
+        Uuid::new_v4(),
+        &user.username,
+        &user.username,
+        Some(passkeys.iter().map(|key| key.cred_id().clone()).collect()),
+    ) {
+        Ok((ccr, passkey_reg)) => {
+            session_info
+                .session
+                .set_passkey_registration(&appstate.pool, &passkey_reg)
+                .await?;
+            info!(
+                "Initialized WebAuthn registration for user {}",
+                user.username
+            );
+            Ok(ApiResponse::json(ccr, StatusCode::OK))
+        }
+        Err(err) => Err(WebError::WebauthnRegistration(err.to_string())),
+    }
+}
+
+/// Finish WebAuthn registration
+///
+/// Applies to the user of the current session.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/webauthn/finish",
+    tag = "auth",
+    request_body = WebAuthnRegistration,
+    responses(
+        (status = 200, description = "Security key registered. Returns recovery codes when this is the first configured factor.", body = RecoveryCodes),
+        (status = 400, description = "Invalid registration data.", body = ApiErrorResponse, example = json!({"msg": "Webauthn registration error"})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to finish WebAuthn registration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn webauthn_finish(
+    session: SessionInfo,
+    context: ApiRequestContext,
+    State(appstate): State<AppState>,
+    Json(webauth_reg): Json<WebAuthnRegistration>,
+) -> ApiResult {
+    info!(
+        "Finishing WebAuthn registration for user {}",
+        session.user.username
+    );
+    let webauthn = appstate.webauthn()?;
+    let passkey_reg =
+        session
+            .session
+            .get_passkey_registration()
+            .ok_or(WebError::WebauthnRegistration(
+                "Passkey registration session not found".into(),
+            ))?;
+
+    let ccdj: CollectedClientData = serde_json::from_slice(
+        webauth_reg.rpkc.response.client_data_json.as_ref(),
+    )
+    .map_err(|_| {
+        WebError::WebauthnRegistration("Failed to parse passkey registration request data".into())
+    })?;
+    info!("Passkey registration request origin: {}", ccdj.origin);
+    info!("Allowed origins: {:?}", webauthn.get_allowed_origins());
+
+    let passkey = webauthn
+        .finish_passkey_registration(&webauth_reg.rpkc, &passkey_reg)
+        .map_err(|err| WebError::WebauthnRegistration(err.to_string()))?;
+    let mut user = User::find_by_id(&appstate.pool, session.session.user_id)
+        .await?
+        .ok_or(WebError::WebauthnRegistration("User not found".into()))?;
+    let recovery_codes = RecoveryCodes::new(user.get_recovery_codes(&appstate.pool).await?);
+    let webauthn = WebAuthn::new(
+        session.session.user_id,
+        webauth_reg.name,
+        &passkey,
+        AuthenticatorInfo::unattested(RegistrationSource::Core),
+    )?
+    .save(&appstate.pool)
+    .await?;
+    if user.mfa_method == MFAMethod::None {
+        let mut conn = appstate.pool.begin().await?;
+        mfa_configured_mail(
+            &user.email,
+            &mut conn,
+            Some(&session.session.into()),
+            &MFAMethod::Webauthn,
+            &user.first_name,
+        )
+        .await?;
+        user.set_mfa_method(&mut *conn, MFAMethod::Webauthn).await?;
+        conn.commit().await?;
+    }
+
+    info!("Finished Webauthn registration for user {}", user.username);
+    appstate.emit_event(ApiEvent {
+        context,
+        event: Box::new(ApiEventType::MfaSecurityKeyAdded { key: webauthn }),
+    })?;
+
+    Ok(ApiResponse::json(recovery_codes, StatusCode::OK))
+}
+
+/// Start WebAuthn authentication
+///
+/// Returns the challenge for the session started by `POST /api/v1/auth`. Send the answer to
+/// `POST /api/v1/auth/webauthn`.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/webauthn/start",
+    tag = "auth",
+    responses(
+        (status = 200, description = "WebAuthn authentication challenge.", body = Object, example = json!({
+            "publicKey": {
+                "challenge": "y5EiUNc9wZ0mGvJ0mQdKZg",
+                "rpId": "vpn.example.com",
+                "allowCredentials": [{"type": "public-key", "id": "AbCdEf0123456789"}],
+                "userVerification": "preferred"
+            }
+        })),
+        (status = 400, description = "No security key is registered for this user.", body = ApiErrorResponse, example = json!({"msg": "Bad Request"})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to start WebAuthn authentication.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn webauthn_start(
+    SessionExtractor(mut session): SessionExtractor,
+    State(appstate): State<AppState>,
+) -> ApiResult {
+    let passkeys = WebAuthn::passkeys_for_user(&appstate.pool, session.user_id, None).await?;
+    let webauthn = appstate.webauthn()?;
+
+    match webauthn.start_passkey_authentication(&passkeys) {
+        Ok((rcr, passkey_reg)) => {
+            session
+                .set_passkey_authentication(&appstate.pool, &passkey_reg)
+                .await?;
+            Ok(ApiResponse::json(rcr, StatusCode::OK))
+        }
+        Err(_err) => Err(WebError::Http(StatusCode::BAD_REQUEST)),
+    }
+}
+
+/// Finish WebAuthn authentication
+///
+/// Verifies the second factor of the session started by `POST /api/v1/auth`.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/webauthn",
+    tag = "auth",
+    request_body = Object,
+    responses(
+        (status = 200, description = "Security key verified, user is fully authenticated.", body = AuthResponse),
+        (status = 400, description = "Invalid security key assertion.", body = ApiErrorResponse, example = json!({"msg": "Bad Request"})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to finish WebAuthn authentication.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn webauthn_end(
+    private_cookies: PrivateCookieJar,
+    SessionExtractor(mut session): SessionExtractor,
+    user_agent: TypedHeader<UserAgent>,
+    ClientIpAddr(ip_addr): ClientIpAddr,
+    State(appstate): State<AppState>,
+    Json(pubkey): Json<PublicKeyCredential>,
+) -> Result<(PrivateCookieJar, ApiResponse), WebError> {
+    if let Some(passkey_auth) = session.get_passkey_authentication() {
+        let webauthn = appstate.webauthn()?;
+        match webauthn.finish_passkey_authentication(&pubkey, &passkey_auth) {
+            Ok(auth_result) => {
+                if auth_result.needs_update() {
+                    // Find `Passkey` and try to update its credentials
+                    for webauthn in WebAuthn::all_for_user(&appstate.pool, session.user_id).await? {
+                        if let Some(true) = webauthn.passkey()?.update_credential(&auth_result) {
+                            webauthn.save(&appstate.pool).await?;
+                        }
+                    }
+                }
+
+                session
+                    .set_state(&appstate.pool, SessionState::MultiFactorVerified)
+                    .await?;
+
+                return if let Some(user) = User::find_by_id(&appstate.pool, session.user_id).await?
+                {
+                    let oidc_disable_password_management =
+                        OpenIdProvider::current_disables_password_management(&appstate.pool)
+                            .await?;
+                    let user_info = UserInfo::from_user(
+                        &appstate.pool,
+                        user.clone(),
+                        oidc_disable_password_management,
+                    )
+                    .await?;
+                    appstate.emit_event(ApiEvent {
+                        // User may not be fully authenticated so we can't use
+                        // context extractor in this handler since it requires
+                        // the `SessionInfo` object.
+                        context: ApiRequestContext::new(
+                            user.id,
+                            user.username,
+                            ip_addr,
+                            user_agent.to_string(),
+                        ),
+                        event: Box::new(ApiEventType::UserMfaLogin {
+                            mfa_method: MFAMethod::Webauthn,
+                        }),
+                    })?;
+
+                    if let Some(openid_cookie) = private_cookies.get(SIGN_IN_COOKIE_NAME) {
+                        debug!("Found OpenID session cookie.");
+                        let redirect_url = openid_cookie.value().to_owned();
+                        let private_cookies = private_cookies.remove(openid_cookie);
+                        Ok((
+                            private_cookies,
+                            ApiResponse::json(
+                                AuthResponse {
+                                    user: user_info,
+                                    url: Some(redirect_url),
+                                },
+                                StatusCode::OK,
+                            ),
+                        ))
+                    } else {
+                        Ok((
+                            private_cookies,
+                            ApiResponse::json(
+                                AuthResponse {
+                                    user: user_info,
+                                    url: None,
+                                },
+                                StatusCode::OK,
+                            ),
+                        ))
+                    }
+                } else {
+                    Ok((private_cookies, ApiResponse::default()))
+                };
+            }
+            Err(err) => {
+                // authentication failed, emit relevant event
+                if let Some(user) = User::find_by_id(&appstate.pool, session.user_id).await? {
+                    appstate.emit_event(ApiEvent {
+                        // User may not be fully authenticated so we can't use
+                        // context extractor in this handler since it requires
+                        // the `SessionInfo` object.
+                        context: ApiRequestContext::new(
+                            user.id,
+                            user.username,
+                            ip_addr,
+                            user_agent.to_string(),
+                        ),
+                        event: Box::new(ApiEventType::UserMfaLoginFailed {
+                            mfa_method: MFAMethod::Webauthn,
+                            message: format!("Passkey authentication failed: {err}"),
+                        }),
+                    })?;
+                }
+            }
+        }
+    }
+    Err(WebError::Http(StatusCode::BAD_REQUEST))
+}
+
+/// Generate a new TOTP secret
+///
+/// Applies to the user of the current session.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/totp/init",
+    tag = "auth",
+    responses(
+        (status = 200, description = "New TOTP secret. It becomes active only after `POST /api/v1/auth/totp`.", body = AuthTotp),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to generate TOTP secret.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn totp_secret(session: SessionInfo, State(appstate): State<AppState>) -> ApiResult {
+    let mut user = session.user;
+    debug!("Generating new TOTP secret for user {}", user.username);
+
+    let secret = user.new_totp_secret(&appstate.pool).await?;
+    info!("Generated new TOTP secret for user {}", user.username);
+    Ok(ApiResponse::json(AuthTotp::new(secret), StatusCode::OK))
+}
+
+/// Enable TOTP
+///
+/// Applies to the user of the current session.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/totp",
+    tag = "auth",
+    request_body = AuthCode,
+    responses(
+        (status = 200, description = "TOTP enabled. Returns recovery codes when this is the first configured factor.", body = RecoveryCodes),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 404, description = "Invalid TOTP code.", body = ApiErrorResponse, example = json!({"msg": "Invalid TOTP code"})),
+        (status = 500, description = "Unable to enable TOTP.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn totp_enable(
+    session: SessionInfo,
+    context: ApiRequestContext,
+    State(appstate): State<AppState>,
+    Json(data): Json<AuthCode>,
+) -> ApiResult {
+    let mut user = session.user;
+    debug!("Enabling TOTP for user {}", user.username);
+    if user.verify_totp_code(&data.code) {
+        let mut conn = appstate.pool.begin().await?;
+        let recovery_codes = RecoveryCodes::new(user.get_recovery_codes(&mut *conn).await?);
+        user.enable_totp(&mut *conn).await?;
+        if user.mfa_method == MFAMethod::None {
+            mfa_configured_mail(
+                &user.email,
+                &mut conn,
+                Some(&session.session.into()),
+                &MFAMethod::OneTimePassword,
+                &user.first_name,
+            )
+            .await?;
+            user.set_mfa_method(&mut *conn, MFAMethod::OneTimePassword)
+                .await?;
+        }
+        conn.commit().await?;
+
+        info!("Enabled TOTP for user {}", user.username);
+        appstate.emit_event(ApiEvent {
+            context,
+            event: Box::new(ApiEventType::MfaTotpEnabled),
+        })?;
+        Ok(ApiResponse::json(recovery_codes, StatusCode::OK))
+    } else {
+        Err(WebError::ObjectNotFound("Invalid TOTP code".into()))
+    }
+}
+
+/// Disable TOTP of a user
+#[cfg_attr(feature = "openapi", utoipa::path(
+    delete,
+    path = "/api/v1/user/{username}/totp",
+    tag = "user",
+    params(
+        ("username" = String, Path, description = "Name of the user."),
+    ),
+    responses(
+        (status = 200, description = "TOTP disabled for the user."),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges or the request must target your own account.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "user not found"})),
+        (status = 500, description = "Unable to disable TOTP.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn totp_disable(
+    session: SessionInfo,
+    context: ApiRequestContext,
+    State(appstate): State<AppState>,
+    username: Path<String>,
+) -> ApiResult {
+    let mut user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
+    debug!("Disabling TOTP for user {}", user.username);
+    user.disable_totp(&appstate.pool).await?;
+    user.verify_mfa_state(&appstate.pool).await?;
+    info!("Disabled TOTP for user {}", user.username);
+    appstate.emit_event(ApiEvent {
+        context,
+        event: Box::new(ApiEventType::MfaTotpDisabled),
+    })?;
+    Ok(ApiResponse::default())
+}
+
+/// Verify a TOTP code
+///
+/// Verifies the second factor of the session started by `POST /api/v1/auth`.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/totp/verify",
+    tag = "auth",
+    request_body = AuthCode,
+    responses(
+        (status = 200, description = "TOTP code verified, user is fully authenticated.", body = AuthResponse),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Invalid TOTP code"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "Invalid user"})),
+        (status = 429, description = "Too many failed login attempts for this user.", body = ApiErrorResponse, example = json!({"msg": "Too many login attempts"})),
+        (status = 500, description = "Unable to verify TOTP code.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn totp_code(
+    private_cookies: PrivateCookieJar,
+    SessionExtractor(mut session): SessionExtractor,
+    user_agent: TypedHeader<UserAgent>,
+    ClientIpAddr(ip_addr): ClientIpAddr,
+    State(appstate): State<AppState>,
+    Json(data): Json<AuthCode>,
+) -> Result<(PrivateCookieJar, ApiResponse), WebError> {
+    if let Some(user) = User::find_by_id(&appstate.pool, session.user_id).await? {
+        let username = user.username.clone();
+        charge_login_attempt(&appstate.pool, &username).await?;
+
+        debug!("Verifying TOTP for user {}", username);
+        if user.totp_enabled && user.verify_totp_code(&data.code) {
+            refund_login_attempt(&appstate.pool, &username).await?;
+            session
+                .set_state(&appstate.pool, SessionState::MultiFactorVerified)
+                .await?;
+            let oidc_disable_password_management =
+                OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+            let user_info =
+                UserInfo::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
+            info!("Verified TOTP for user {username}");
+            appstate.emit_event(ApiEvent {
+                // User may not be fully authenticated so we can't use
+                // context extractor in this handler since it requires
+                // the `SessionInfo` object.
+                context: ApiRequestContext::new(
+                    user_info.id,
+                    user_info.username.clone(),
+                    ip_addr,
+                    user_agent.to_string(),
+                ),
+                event: Box::new(ApiEventType::UserMfaLogin {
+                    mfa_method: MFAMethod::OneTimePassword,
+                }),
+            })?;
+            if let Some(openid_cookie) = private_cookies.get(SIGN_IN_COOKIE_NAME) {
+                debug!("Found openid session cookie.");
+                let redirect_url = openid_cookie.value().to_owned();
+                let private_cookies = private_cookies.remove(openid_cookie);
+                Ok((
+                    private_cookies,
+                    ApiResponse::json(
+                        AuthResponse {
+                            user: user_info,
+                            url: Some(redirect_url),
+                        },
+                        StatusCode::OK,
+                    ),
+                ))
+            } else {
+                Ok((
+                    private_cookies,
+                    ApiResponse::json(
+                        AuthResponse {
+                            user: user_info,
+                            url: None,
+                        },
+                        StatusCode::OK,
+                    ),
+                ))
+            }
+        } else {
+            let message = if user.totp_enabled {
+                "TOTP code verification failed".to_owned()
+            } else {
+                format!("TOTP authentication is disabled for {username}")
+            };
+
+            appstate.emit_event(ApiEvent {
+                // User may not be fully authenticated so we can't use
+                // context extractor in this handler since it requires
+                // the `SessionInfo` object.
+                context: ApiRequestContext::new(
+                    user.id,
+                    user.username,
+                    ip_addr,
+                    user_agent.to_string(),
+                ),
+                event: Box::new(ApiEventType::UserMfaLoginFailed {
+                    mfa_method: MFAMethod::OneTimePassword,
+                    message,
+                }),
+            })?;
+            Err(WebError::Authorization("Invalid TOTP code".into()))
+        }
+    } else {
+        Err(WebError::ObjectNotFound("Invalid user".into()))
+    }
+}
+
+/// Start email MFA setup
+///
+/// Applies to the user of the current session.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/email/init",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Configuration started, email code sent."),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to start email MFA configuration.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+        (status = 503, description = "SMTP is not configured.", body = ApiErrorResponse, example = json!({"msg": "SMTP is not configured", "code": "smtp_not_configured"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn email_mfa_init(session: SessionInfo, State(appstate): State<AppState>) -> ApiResult {
+    // check if SMTP is configured
+    let settings = Settings::get_current_settings();
+    if !settings.smtp_configured() {
+        error!("Unable to start email MFA configuration. SMTP is not configured.");
+        return Err(WebError::SmtpNotConfigured);
+    }
+
+    // generate TOTP secret
+    let mut user = session.user;
+    debug!("Generating new email MFA secret for user {}", user.username);
+    user.new_email_secret(&appstate.pool).await?;
+    info!("Generated new email MFA secret for user {}", user.username);
+
+    // generate a verification code
+    let mut transaction = appstate.pool.begin().await?;
+    let code = user.generate_email_mfa_code()?;
+
+    // send email with code
+    mfa_activation_mail(
+        &user.email,
+        &mut transaction,
+        &user.first_name,
+        &code,
+        Some(&session.session.into()),
+        false,
+    )
+    .await?;
+
+    Ok(ApiResponse::default())
+}
+
+/// Enable email MFA
+///
+/// Applies to the user of the current session.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/email",
+    tag = "auth",
+    request_body = AuthCode,
+    responses(
+        (status = 200, description = "Email MFA enabled. Returns recovery codes when this is the first configured factor.", body = RecoveryCodes),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 404, description = "Invalid email MFA code.", body = ApiErrorResponse, example = json!({"msg": "Invalid email MFA code"})),
+        (status = 500, description = "Unable to enable email MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn email_mfa_enable(
+    session: SessionInfo,
+    context: ApiRequestContext,
+    State(appstate): State<AppState>,
+    Json(data): Json<AuthCode>,
+) -> ApiResult {
+    let mut user = session.user;
+    debug!("Enabling email MFA for user {}", user.username);
+    if user.verify_email_mfa_code(&data.code) {
+        let mut conn = appstate.pool.begin().await?;
+        let recovery_codes = RecoveryCodes::new(user.get_recovery_codes(&mut *conn).await?);
+        user.enable_email_mfa(&mut *conn).await?;
+        if user.mfa_method == MFAMethod::None {
+            mfa_configured_mail(
+                &user.email,
+                &mut conn,
+                Some(&session.session.into()),
+                &MFAMethod::Email,
+                &user.first_name,
+            )
+            .await?;
+            user.set_mfa_method(&mut *conn, MFAMethod::Email).await?;
+        }
+        conn.commit().await?;
+
+        info!("Enabled email MFA for user {}", user.username);
+        appstate.emit_event(ApiEvent {
+            context,
+            event: Box::new(ApiEventType::MfaEmailEnabled),
+        })?;
+        Ok(ApiResponse::json(recovery_codes, StatusCode::OK))
+    } else {
+        Err(WebError::ObjectNotFound("Invalid email code".into()))
+    }
+}
+
+/// Disable email MFA of a user
+#[cfg_attr(feature = "openapi", utoipa::path(
+    delete,
+    path = "/api/v1/user/{username}/email",
+    tag = "user",
+    params(
+        ("username" = String, Path, description = "Name of the user."),
+    ),
+    responses(
+        (status = 200, description = "Email MFA disabled for the user."),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges or the request must target your own account.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "user not found"})),
+        (status = 500, description = "Unable to disable email MFA.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn email_mfa_disable(
+    session: SessionInfo,
+    context: ApiRequestContext,
+    State(appstate): State<AppState>,
+    username: Path<String>,
+) -> ApiResult {
+    let mut user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
+    debug!("Disabling email MFA for user {}", user.username);
+    user.disable_email_mfa(&appstate.pool).await?;
+    user.verify_mfa_state(&appstate.pool).await?;
+    info!("Disabled email MFA for user {}", user.username);
+    appstate.emit_event(ApiEvent {
+        context,
+        event: Box::new(ApiEventType::MfaEmailDisabled),
+    })?;
+    Ok(ApiResponse::default())
+}
+
+/// Send an email MFA code
+///
+/// Sends the code to the user of the session started by `POST /api/v1/auth`.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/v1/auth/email",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Email code sent."),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Email MFA not enabled"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "Invalid user"})),
+        (status = 500, description = "Unable to send email MFA code.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+        (status = 503, description = "SMTP is not configured.", body = ApiErrorResponse, example = json!({"msg": "SMTP is not configured", "code": "smtp_not_configured"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn request_email_mfa_code(
+    SessionExtractor(session): SessionExtractor,
+    State(appstate): State<AppState>,
+) -> ApiResult {
+    if let Some(user) = User::find_by_id(&appstate.pool, session.user_id).await? {
+        debug!("Sending email MFA code for user {}", user.username);
+        if user.email_mfa_enabled {
+            let mut transaction = appstate.pool.begin().await?;
+            let code = user.generate_email_mfa_code()?;
+            mfa_code_mail(
+                &user.email,
+                &mut transaction,
+                &user.first_name,
+                &code,
+                Some(&session.into()),
+                false,
+            )
+            .await?;
+            info!("Sent email MFA code for user {}", user.username);
+            Ok(ApiResponse::default())
+        } else {
+            Err(WebError::Authorization("Email MFA not enabled".into()))
+        }
+    } else {
+        Err(WebError::ObjectNotFound("Invalid user".into()))
+    }
+}
+
+/// Verify an email MFA code
+///
+/// Verifies the second factor of the session started by `POST /api/v1/auth`.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/email/verify",
+    tag = "auth",
+    request_body = AuthCode,
+    responses(
+        (status = 200, description = "Email MFA code verified, user is fully authenticated.", body = AuthResponse),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Invalid email MFA code"})),
+        (status = 404, description = "User not found.", body = ApiErrorResponse, example = json!({"msg": "Invalid user"})),
+        (status = 429, description = "Too many failed login attempts for this user.", body = ApiErrorResponse, example = json!({"msg": "Too many login attempts"})),
+        (status = 500, description = "Unable to verify email MFA code.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn email_mfa_code(
+    private_cookies: PrivateCookieJar,
+    SessionExtractor(mut session): SessionExtractor,
+    user_agent: TypedHeader<UserAgent>,
+    ClientIpAddr(ip_addr): ClientIpAddr,
+    State(appstate): State<AppState>,
+    Json(data): Json<AuthCode>,
+) -> Result<(PrivateCookieJar, ApiResponse), WebError> {
+    if let Some(user) = User::find_by_id(&appstate.pool, session.user_id).await? {
+        let username = user.username.clone();
+        charge_login_attempt(&appstate.pool, &username).await?;
+
+        debug!("Verifying email MFA code for user {}", username);
+        if user.email_mfa_enabled && user.verify_email_mfa_code(&data.code) {
+            refund_login_attempt(&appstate.pool, &username).await?;
+            session
+                .set_state(&appstate.pool, SessionState::MultiFactorVerified)
+                .await?;
+            let oidc_disable_password_management =
+                OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+            let user_info =
+                UserInfo::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
+            info!("Verified email MFA code for user {username}");
+            appstate.emit_event(ApiEvent {
+                // User may not be fully authenticated so we can't use
+                // context extractor in this handler since it requires
+                // the `SessionInfo` object.
+                context: ApiRequestContext::new(
+                    user_info.id,
+                    user_info.username.clone(),
+                    ip_addr,
+                    user_agent.to_string(),
+                ),
+                event: Box::new(ApiEventType::UserMfaLogin {
+                    mfa_method: MFAMethod::Email,
+                }),
+            })?;
+            if let Some(openid_cookie) = private_cookies.get(SIGN_IN_COOKIE_NAME) {
+                debug!("Found OpenID session cookie.");
+                let redirect_url = openid_cookie.value().to_owned();
+                let private_cookies = private_cookies.remove(openid_cookie);
+                Ok((
+                    private_cookies,
+                    ApiResponse::json(
+                        AuthResponse {
+                            user: user_info,
+                            url: Some(redirect_url),
+                        },
+                        StatusCode::OK,
+                    ),
+                ))
+            } else {
+                Ok((
+                    private_cookies,
+                    ApiResponse::json(
+                        AuthResponse {
+                            user: user_info,
+                            url: None,
+                        },
+                        StatusCode::OK,
+                    ),
+                ))
+            }
+        } else {
+            let message = if user.email_mfa_enabled {
+                "Email code verification failed".to_owned()
+            } else {
+                format!("Email code authentication is disabled for {username}")
+            };
+
+            appstate.emit_event(ApiEvent {
+                // User may not be fully authenticated so we can't use
+                // context extractor in this handler since it requires
+                // the `SessionInfo` object.
+                context: ApiRequestContext::new(
+                    user.id,
+                    user.username,
+                    ip_addr,
+                    user_agent.to_string(),
+                ),
+                event: Box::new(ApiEventType::UserMfaLoginFailed {
+                    mfa_method: MFAMethod::Email,
+                    message,
+                }),
+            })?;
+            Err(WebError::Authorization("Invalid email MFA code".into()))
+        }
+    } else {
+        Err(WebError::ObjectNotFound("Invalid user".into()))
+    }
+}
+
+/// Authenticate with a recovery code
+///
+/// Verifies the second factor of the session started by `POST /api/v1/auth`.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/recovery",
+    tag = "auth",
+    request_body = RecoveryCode,
+    responses(
+        (status = 200, description = "Recovery code verified, user is fully authenticated.", body = AuthResponse),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 500, description = "Unable to verify recovery code.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = []),
+        ("api_token" = [])
+    )
+))]
+pub async fn recovery_code(
+    private_cookies: PrivateCookieJar,
+    SessionExtractor(mut session): SessionExtractor,
+    user_agent: TypedHeader<UserAgent>,
+    ClientIpAddr(ip_addr): ClientIpAddr,
+    State(appstate): State<AppState>,
+    Json(recovery_code): Json<RecoveryCode>,
+) -> Result<(PrivateCookieJar, ApiResponse), WebError> {
+    if let Some(mut user) = User::find_by_id(&appstate.pool, session.user_id).await? {
+        let username = user.username.clone();
+        debug!("Authenticating user {username} with recovery code");
+        if user
+            .verify_recovery_code(&appstate.pool, &recovery_code.code)
+            .await?
+        {
+            session
+                .set_state(&appstate.pool, SessionState::MultiFactorVerified)
+                .await?;
+            let oidc_disable_password_management =
+                OpenIdProvider::current_disables_password_management(&appstate.pool).await?;
+            let user_info = UserInfo::from_user(
+                &appstate.pool,
+                user.clone(),
+                oidc_disable_password_management,
+            )
+            .await?;
+            info!("Authenticated user {username} with recovery code");
+            appstate.emit_event(ApiEvent {
+                // User may not be fully authenticated so we can't use
+                // context extractor in this handler since it requires
+                // the `SessionInfo` object.
+                context: ApiRequestContext::new(
+                    user.id,
+                    user.username,
+                    ip_addr,
+                    user_agent.to_string(),
+                ),
+                event: Box::new(ApiEventType::RecoveryCodeUsed),
+            })?;
+            if let Some(openid_cookie) = private_cookies.get(SIGN_IN_COOKIE_NAME) {
+                debug!("Found OpenID session cookie.");
+                let redirect_url = openid_cookie.value().to_owned();
+                let private_cookies = private_cookies.remove(openid_cookie);
+                return Ok((
+                    private_cookies,
+                    ApiResponse::json(
+                        AuthResponse {
+                            user: user_info,
+                            url: Some(redirect_url),
+                        },
+                        StatusCode::OK,
+                    ),
+                ));
+            }
+
+            return Ok((
+                private_cookies,
+                ApiResponse::json(
+                    AuthResponse {
+                        user: user_info,
+                        url: None,
+                    },
+                    StatusCode::OK,
+                ),
+            ));
+        }
+
+        appstate.emit_event(ApiEvent {
+            context: ApiRequestContext::new(user.id, username, ip_addr, user_agent.to_string()),
+            event: Box::new(ApiEventType::RecoveryCodeLoginFailed),
+        })?;
+    }
+    Err(WebError::Http(StatusCode::UNAUTHORIZED))
+}

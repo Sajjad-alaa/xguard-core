@@ -12,10 +12,10 @@ import api from '../../shared/api/api';
 import { LicenseFeature } from '../../shared/api/types';
 import { Page } from '../../shared/components/Page/Page';
 import { TableSkeleton } from '../../shared/components/skeleton/TableSkeleton/TableSkeleton';
-import type { ButtonProps } from '../../shared/defguard-ui/components/Button/types';
-import { EmptyStateFlexible } from '../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
+import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
+import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
 import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
 import {
   getDevicePostureVersionMetadataQueryOptions,
@@ -84,8 +84,8 @@ const PostureChecksContent = () => {
             linux: [],
             ios: [],
             android: [],
-            defguard_desktop: [],
-            defguard_mobile: [],
+            xguard_desktop: [],
+            xguard_mobile: [],
           },
     [versionValues],
   );

@@ -13,22 +13,22 @@ import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import { getApiErrorMessage } from '../../shared/api/apiErrorMessages';
 import type { ApiError, NetworkDevice } from '../../shared/api/types';
-import { Badge } from '../../shared/defguard-ui/components/Badge/Badge';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import type { ButtonProps } from '../../shared/defguard-ui/components/Button/types';
-import { EmptyStateFlexible } from '../../shared/defguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
+import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
+import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
 import type {
   MenuItemProps,
   MenuItemsGroup,
-} from '../../shared/defguard-ui/components/Menu/types';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { tableEditColumnSize } from '../../shared/defguard-ui/components/table/consts';
-import { TableBody } from '../../shared/defguard-ui/components/table/TableBody/TableBody';
-import { TableCell } from '../../shared/defguard-ui/components/table/TableCell/TableCell';
-import { TableEditCell } from '../../shared/defguard-ui/components/table/TableEditCell/TableEditCell';
-import { TableTop } from '../../shared/defguard-ui/components/table/TableTop/TableTop';
-import { Snackbar } from '../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSize } from '../../shared/defguard-ui/types';
+} from '../../shared/xguard-ui/components/Menu/types';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { tableEditColumnSize } from '../../shared/xguard-ui/components/table/consts';
+import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/TableBody';
+import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
+import { TableEditCell } from '../../shared/xguard-ui/components/table/TableEditCell/TableEditCell';
+import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
+import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSize } from '../../shared/xguard-ui/types';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import { displayDate } from '../../shared/utils/displayDate';

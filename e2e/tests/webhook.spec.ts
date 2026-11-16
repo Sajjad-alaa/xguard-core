@@ -9,7 +9,7 @@ test.describe('Test webhooks', () => {
   test.beforeEach(() => {
     dockerRestart();
   });
-  const webhook_url = 'https://defguard.defguard/webhook';
+  const webhook_url = 'https://xguard.xguard/webhook';
   const webhook_description = 'example webhook';
   const webhook_secret = 'secret';
 
@@ -27,7 +27,7 @@ test.describe('Test webhooks', () => {
     await expect(webhookRow).toContainText('Active');
   });
 
-  const new_webhook_url = 'https://changed.defguard/webhook';
+  const new_webhook_url = 'https://changed.xguard/webhook';
   const new_webhook_description = 'changed webhook';
 
   test('Create, modify webhook and verify content', async ({ page, browser }) => {

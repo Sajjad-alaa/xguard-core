@@ -33,16 +33,16 @@ import type {
 } from '../../shared/components/SelectionSection/type';
 import { SelectMultiple } from '../../shared/components/SelectMultiple/SelectMultiple';
 import { externalLink, MAX_MTU, MIN_MTU } from '../../shared/constants';
-import { Button } from '../../shared/defguard-ui/components/Button/Button';
-import { FieldError } from '../../shared/defguard-ui/components/FieldError/FieldError';
-import { Helper } from '../../shared/defguard-ui/components/Helper/Helper';
-import { IconKind } from '../../shared/defguard-ui/components/Icon';
-import { InfoBanner } from '../../shared/defguard-ui/components/InfoBanner/InfoBanner';
-import { SizedBox } from '../../shared/defguard-ui/components/SizedBox/SizedBox';
-import { Toggle } from '../../shared/defguard-ui/components/Toggle/Toggle';
-import { Snackbar } from '../../shared/defguard-ui/providers/snackbar/snackbar';
-import { ThemeSpacing } from '../../shared/defguard-ui/types';
-import { isPresent } from '../../shared/defguard-ui/utils/isPresent';
+import { Button } from '../../shared/xguard-ui/components/Button/Button';
+import { FieldError } from '../../shared/xguard-ui/components/FieldError/FieldError';
+import { Helper } from '../../shared/xguard-ui/components/Helper/Helper';
+import { IconKind } from '../../shared/xguard-ui/components/Icon';
+import { InfoBanner } from '../../shared/xguard-ui/components/InfoBanner/InfoBanner';
+import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { Toggle } from '../../shared/xguard-ui/components/Toggle/Toggle';
+import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
+import { ThemeSpacing } from '../../shared/xguard-ui/types';
+import { isPresent } from '../../shared/xguard-ui/utils/isPresent';
 import { useAppForm } from '../../shared/form';
 import { formChangeLogic } from '../../shared/formLogic';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
@@ -444,7 +444,7 @@ const EditLocationForm = ({
     return (
       <>
         <p>{m.license_enterprise_required()}</p>
-        <a href={externalLink.defguard.pricing} target="_blank" rel="noreferrer">
+        <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
           {m.license_upgrade_to_unlock()}
         </a>
       </>
@@ -456,7 +456,7 @@ const EditLocationForm = ({
     return (
       <>
         <p>{m.license_business_required()}</p>
-        <a href={externalLink.defguard.pricing} target="_blank" rel="noreferrer">
+        <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
           {m.license_upgrade_to_unlock()}
         </a>
       </>
@@ -468,7 +468,7 @@ const EditLocationForm = ({
     return (
       <>
         <p>{m.license_enterprise_required()}</p>
-        <a href={externalLink.defguard.pricing} target="_blank" rel="noreferrer">
+        <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
           {m.license_upgrade_to_unlock()}
         </a>
       </>
@@ -747,7 +747,7 @@ const EditLocationForm = ({
           {!canUseAllowedIpsFromAcl && (
             <>
               <p className="acl-upsell-text">
-                <a href={externalLink.defguard.pricing} target="_blank" rel="noreferrer">
+                <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
                   {m.add_location_internal_vpn_allowed_ips_from_firewall_rules_upsell_link()}
                 </a>
                 <span>
