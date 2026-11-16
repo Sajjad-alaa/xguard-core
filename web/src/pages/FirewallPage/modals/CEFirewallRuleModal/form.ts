@@ -5,6 +5,7 @@ import {
   FirewallRuleAction,
   type FirewallRuleInput,
 } from '../../../../shared/api/types';
+import { nameValidator } from '../../../../shared/validators';
 
 /** Protocols offered as checkboxes; anything else stays as stored. */
 export const COMMON_PROTOCOLS = [6, 17, 1, 58] as const;
@@ -17,7 +18,7 @@ const splitList = (text: string | null) =>
 
 export const formSchema = z
   .object({
-    name: z.string().trim().min(1, m.form_error_required()).max(255),
+    name: z.string().trim().min(1, m.form_error_required()).max(255).pipe(nameValidator),
     description: z.string().max(4096).nullable(),
     enabled: z.boolean(),
     priority: z.number(m.form_error_required()).int().min(-1_000_000).max(1_000_000),

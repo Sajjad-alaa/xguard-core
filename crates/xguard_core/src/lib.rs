@@ -148,6 +148,7 @@ use crate::{
         webhooks::{
             add_webhook, change_enabled, change_webhook, delete_webhook, get_webhook, list_webhooks,
         },
+        api_tokens::{create_api_token, delete_api_token, list_api_tokens, rename_api_token},
         firewall::{
             create_firewall_rule, create_snat_binding, delete_firewall_rule, delete_snat_binding,
             get_firewall_rule, list_firewall_rules, list_snat_bindings, location_firewall_policy,
@@ -344,6 +345,19 @@ pub fn build_webapp(
             .route(
                 "/user/{username}/auth_key/{key_id}/rename",
                 post(rename_authentication_key),
+            )
+            // API tokens
+            .route(
+                "/user/{username}/api_token",
+                get(list_api_tokens).post(create_api_token),
+            )
+            .route(
+                "/user/{username}/api_token/{token_id}",
+                delete(delete_api_token),
+            )
+            .route(
+                "/user/{username}/api_token/{token_id}/rename",
+                post(rename_api_token),
             )
             // yubi keys
             .route("/user/{username}/yubikey/{key_id}", delete(delete_yubikey))

@@ -12,7 +12,8 @@ use xguard_core::{
     db::models::activity_log::{
         ActivityLogEvent, ActivityLogModule, EventType,
         metadata::{
-            AuthenticationKeyMetadata, AuthenticationKeyRenamedMetadata,
+            ApiTokenMetadata, ApiTokenRenamedMetadata, AuthenticationKeyMetadata,
+            AuthenticationKeyRenamedMetadata,
             ClientConfigurationTokenMetadata, DeviceMetadata, DeviceModifiedMetadata,
             EnrollmentDeviceAddedMetadata, EnrollmentTokenMetadata, GatewayDeletedMetadata,
             GatewayModifiedMetadata, GroupAssignedMetadata, GroupMembersModifiedMetadata,
@@ -299,6 +300,37 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 ApiEventType::MfaSecurityKeyRemoved { key } => (
                     EventType::MfaSecurityKeyRemoved,
                     serde_json::to_value(MfaSecurityKeyMetadata { key: key.into() }).ok(),
+                ),
+                ApiEventType::ApiTokenAdded { owner, token } => (
+                    EventType::ApiTokenAdded,
+                    serde_json::to_value(ApiTokenMetadata {
+                        owner: owner.into(),
+                        token,
+                    })
+                    .ok(),
+                ),
+                ApiEventType::ApiTokenRemoved { owner, token } => (
+                    EventType::ApiTokenRemoved,
+                    serde_json::to_value(ApiTokenMetadata {
+                        owner: owner.into(),
+                        token,
+                    })
+                    .ok(),
+                ),
+                ApiEventType::ApiTokenRenamed {
+                    owner,
+                    token,
+                    old_name,
+                    new_name,
+                } => (
+                    EventType::ApiTokenRenamed,
+                    serde_json::to_value(ApiTokenRenamedMetadata {
+                        owner: owner.into(),
+                        token,
+                        old_name,
+                        new_name,
+                    })
+                    .ok(),
                 ),
                 ApiEventType::AuthenticationKeyAdded { key } => (
                     EventType::AuthenticationKeyAdded,

@@ -4,8 +4,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use xguard_common::db::{
     Id,
     models::{
-        ModelError, Settings, User, WireguardNetwork, WireguardNetworkError, device::DeviceInfo,
-        settings::set_settings,
+        ApiToken, ModelError, Settings, User, WireguardNetwork, WireguardNetworkError,
+        device::DeviceInfo, settings::set_settings,
     },
 };
 
@@ -102,6 +102,7 @@ impl UserManager {
         user.is_active = false;
         user.save(&mut *conn).await?;
         user.logout_all_sessions(&mut *conn).await?;
+        ApiToken::delete_all_for_user(&mut *conn, user.id).await?;
 
         self.sync_allowed_user_devices(user, conn).await?;
 

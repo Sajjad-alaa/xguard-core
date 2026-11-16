@@ -134,6 +134,17 @@ impl From<xguard_common::firewall::SnatError> for WebError {
     }
 }
 
+impl From<xguard_common::db::models::api_token::ApiTokenError> for WebError {
+    fn from(err: xguard_common::db::models::api_token::ApiTokenError) -> Self {
+        use xguard_common::db::models::api_token::ApiTokenError;
+        match err {
+            ApiTokenError::Invalid(_) | ApiTokenError::TooMany => Self::BadRequest(err.to_string()),
+            ApiTokenError::NotFound => Self::ObjectNotFound(err.to_string()),
+            ApiTokenError::Database(err) => err.into(),
+        }
+    }
+}
+
 impl From<sqlx::Error> for WebError {
     fn from(error: sqlx::Error) -> Self {
         Self::DbError(error.to_string())

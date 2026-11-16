@@ -222,6 +222,23 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
             key.key_type,
             key.name.clone().unwrap_or_default()
         )),
+        ApiEventType::ApiTokenAdded { owner, token } => Some(format!(
+            "Added API token {} ({}) for user {owner}",
+            token.name, token.hint
+        )),
+        ApiEventType::ApiTokenRemoved { owner, token } => Some(format!(
+            "Revoked API token {} ({}) of user {owner}",
+            token.name, token.hint
+        )),
+        ApiEventType::ApiTokenRenamed {
+            owner,
+            token,
+            old_name,
+            new_name,
+        } => Some(format!(
+            "Renamed API token {} of user {owner} from {old_name} to {new_name}",
+            token.hint
+        )),
         ApiEventType::AuthenticationKeyRenamed {
             key,
             old_name,

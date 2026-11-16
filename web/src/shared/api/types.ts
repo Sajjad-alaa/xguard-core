@@ -688,16 +688,28 @@ export interface AuthKey {
 export interface AddApiTokenRequest {
   username: string;
   name: string;
+  /** Days until the token expires; null for a token that never expires. */
+  expires_in_days: number | null;
+  read_only: boolean;
 }
 
 export interface AddApiTokenResponse {
+  /** The token itself. It is returned only once. */
   token: string;
+  api_token: ApiToken;
 }
 
 export interface ApiToken {
   id: number;
+  user_id: number;
   name: string;
+  /** The start of the token, such as xgt_AbCd, for telling tokens apart. */
+  hint: string;
   created_at: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  last_used_ip: string | null;
+  read_only: boolean;
 }
 
 export interface RenameApiTokenRequest {

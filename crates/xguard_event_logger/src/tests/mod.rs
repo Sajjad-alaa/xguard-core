@@ -339,6 +339,17 @@ fn api_event_cases() -> Vec<EventTestCase> {
         created_at: chrono::NaiveDateTime::default(),
         updated_at: chrono::NaiveDateTime::default(),
     };
+    let api_token = xguard_common::db::models::ApiToken {
+        id: 1,
+        user_id: 1,
+        name: "ci".into(),
+        hint: "xgt_AbCd".into(),
+        created_at: chrono::NaiveDateTime::default(),
+        expires_at: None,
+        last_used_at: None,
+        last_used_ip: None,
+        read_only: true,
+    };
     let snat_binding = xguard_common::firewall::SnatBinding {
         id: 1,
         user_id: 1,
@@ -900,6 +911,38 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::WebHookStateChanged,
             module: ActivityLogModule::XGuard,
             description_contains: Some("Disabled"),
+        },
+        EventTestCase {
+            name: "ApiTokenAdded",
+            message: api_message(ApiEventType::ApiTokenAdded {
+                owner: user.clone(),
+                token: api_token.clone(),
+            }),
+            event_type: EventType::ApiTokenAdded,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Added API token ci (xgt_AbCd)"),
+        },
+        EventTestCase {
+            name: "ApiTokenRemoved",
+            message: api_message(ApiEventType::ApiTokenRemoved {
+                owner: user.clone(),
+                token: api_token.clone(),
+            }),
+            event_type: EventType::ApiTokenRemoved,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Revoked API token ci"),
+        },
+        EventTestCase {
+            name: "ApiTokenRenamed",
+            message: api_message(ApiEventType::ApiTokenRenamed {
+                owner: user.clone(),
+                token: api_token,
+                old_name: "ci".into(),
+                new_name: "deploy".into(),
+            }),
+            event_type: EventType::ApiTokenRenamed,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("from ci to deploy"),
         },
         EventTestCase {
             name: "FirewallRuleAdded",

@@ -166,6 +166,16 @@ export const contextualHelpQueryOptions = queryOptions({
   retry: false,
 });
 
+export const getUserApiTokensQueryOptions = (username: string, enabled: boolean) =>
+  queryOptions({
+    queryFn: () => api.user.getApiTokens(username),
+    queryKey: ['user', username, 'api_token'],
+    select: (response) => response.data,
+    refetchOnReconnect: true,
+    throwOnError: false,
+    enabled,
+  });
+
 export const getUserAuthKeysQueryOptions = (username: string) =>
   queryOptions({
     queryFn: () => api.user.getAuthKeys(username),

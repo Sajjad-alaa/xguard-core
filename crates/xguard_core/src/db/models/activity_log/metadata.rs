@@ -478,6 +478,20 @@ pub struct WebHookMetadata {
 }
 
 #[derive(Serialize)]
+pub struct ApiTokenMetadata {
+    pub owner: UserNoSecrets,
+    pub token: xguard_common::db::models::ApiToken,
+}
+
+#[derive(Serialize)]
+pub struct ApiTokenRenamedMetadata {
+    pub owner: UserNoSecrets,
+    pub token: xguard_common::db::models::ApiToken,
+    pub old_name: String,
+    pub new_name: String,
+}
+
+#[derive(Serialize)]
 pub struct FirewallRuleMetadata {
     pub rule: xguard_common::firewall::FirewallRule,
 }

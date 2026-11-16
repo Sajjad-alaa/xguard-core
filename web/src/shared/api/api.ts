@@ -7,6 +7,8 @@ import type {
   ActivityLogEvent,
   ActivityLogEventDetails,
   ActivityLogRequestParams,
+  AddApiTokenRequest,
+  AddApiTokenResponse,
   AddAuthKeyRequest,
   AddDeviceRequest,
   AddDeviceResponse,
@@ -19,6 +21,7 @@ import type {
   AddUsersToGroupsRequest,
   AddWebhookRequest,
   AdminChangeUserPasswordRequest,
+  ApiToken,
   ApplicationInfo,
   AssignStaticIpsRequest,
   AuthKey,
@@ -33,6 +36,7 @@ import type {
   CreateCARequest,
   CreateGroupRequest,
   CreateMfaFlowRequest,
+  DeleteApiTokenRequest,
   DeleteAuthKeyRequest,
   Device,
   DeviceLocationIpsResponse,
@@ -78,6 +82,7 @@ import type {
   NetworkLocation,
   OpenIdClient,
   PublicKeyCredentialJSON,
+  RenameApiTokenRequest,
   RenameAuthKeyRequest,
   ResourceDisplay,
   SessionInfo,
@@ -214,6 +219,14 @@ const api = {
         `/user/${data.username}/start_enrollment`,
         data,
       ),
+    getApiTokens: (username: string) =>
+      client.get<ApiToken[]>(`/user/${username}/api_token`),
+    addApiToken: ({ username, ...data }: AddApiTokenRequest) =>
+      client.post<AddApiTokenResponse>(`/user/${username}/api_token`, data),
+    renameApiToken: ({ username, id, ...data }: RenameApiTokenRequest) =>
+      client.post<ApiToken>(`/user/${username}/api_token/${id}/rename`, data),
+    deleteApiToken: ({ username, id }: DeleteApiTokenRequest) =>
+      client.delete(`/user/${username}/api_token/${id}`),
     getAuthKeys: (username: string) =>
       client.get<AuthKey[]>(`/user/${username}/auth_key`),
     addAuthKey: ({ username, ...data }: AddAuthKeyRequest) =>

@@ -11,4 +11,19 @@
   .table {
     grid-column: 1 / 13;
   }
+
+  .api-tokens-note {
+    grid-column: 1 / 13;
+    padding-bottom: var(--spacing-md);
+    color: var(--fg-muted);
+  }
+
+  .api-token-hint {
+    margin-left: var(--spacing-sm);
+    color: var(--fg-muted);
+  }
+}
+
+#add-api-token-modal .api-token-usage {
+  color: var(--fg-muted);
 }

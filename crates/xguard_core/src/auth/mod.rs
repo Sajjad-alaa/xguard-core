@@ -1,20 +1,31 @@
 pub mod login_throttle;
 
-use axum::{Extension, extract::FromRequestParts, http::request::Parts};
+use axum::{
+    Extension,
+    extract::FromRequestParts,
+    http::{Method, header::AUTHORIZATION, request::Parts},
+};
 use axum_extra::extract::cookie::CookieJar;
+use chrono::Utc;
 use sqlx::PgPool;
 use xguard_common::db::{
     Id,
     models::{
-        OAuth2Token, Session, SessionState,
+        ApiToken, OAuth2Token, Session, SessionState,
+        api_token::TokenAuth,
         group::{Group, Permission},
         oauth2client::OAuth2Client,
         user::User,
     },
 };
 
-use crate::{error::WebError, handlers::SESSION_COOKIE_NAME};
+use crate::{
+    error::WebError,
+    handlers::{ClientIpAddr, SESSION_COOKIE_NAME},
+};
 
+/// The session from the session cookie. API tokens are not accepted here, so endpoints that
+/// finish a login or change the session itself stay cookie-only.
 pub struct SessionExtractor(pub Session);
 
 impl<S> FromRequestParts<S> for SessionExtractor
@@ -84,8 +95,21 @@ where
     type Rejection = WebError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let session = SessionExtractor::from_request_parts(parts, state).await?.0;
+        // Role checks and handlers both ask for the session; look it up once per request.
+        if let Some(cached) = parts.extensions.get::<Self>() {
+            return Ok(cached.clone());
+        }
         let pool = extract_pool(parts, state).await?;
+        let (session, token) = match bearer_token(parts)? {
+            Some(token) => {
+                let (session, auth) = token_session(parts, state, &pool, &token).await?;
+                (session, Some(auth))
+            }
+            None => (
+                SessionExtractor::from_request_parts(parts, state).await?.0,
+                None,
+            ),
+        };
         let user = User::find_by_id(&pool, session.user_id).await?;
 
         if let Some(user) = user {
@@ -100,11 +124,21 @@ where
             };
             let is_admin = user.is_admin(&pool).await?;
 
-            // non-admin users are not allowed to use token auth
-            if !is_admin && session.state == SessionState::ApiTokenVerified {
-                return Err(WebError::Forbidden(
-                    "Token authentication is not allowed for normal users",
-                ));
+            if let Some(auth) = token {
+                // Only active admins may use tokens. Tokens of anyone else are revoked, so
+                // they do not come back to life if the user is enabled or promoted again.
+                if !user.is_active || !is_admin {
+                    let revoked = ApiToken::delete_all_for_user(&pool, user.id).await?;
+                    warn!(
+                        "Revoked {revoked} API token(s) of {}, who is no longer an active admin",
+                        user.username
+                    );
+                    return Err(WebError::Forbidden(
+                        "API tokens can only be used by active admins",
+                    ));
+                }
+                let ClientIpAddr(ip) = ClientIpAddr::from_request_parts(parts, state).await?;
+                ApiToken::record_use(&pool, &auth, ip).await?;
             }
 
             // Store session info into request extensions so future extractors can use it
@@ -120,6 +154,59 @@ where
             Err(WebError::Authorization("User not found".into()))
         }
     }
+}
+
+/// Marks a request authenticated with an API token.
+#[derive(Clone, Copy, Debug)]
+pub struct ApiTokenAuth {
+    pub token_id: Id,
+    pub read_only: bool,
+}
+
+/// The token from an `Authorization: Bearer` header, if there is one.
+fn bearer_token(parts: &Parts) -> Result<Option<String>, WebError> {
+    let Some(value) = parts.headers.get(AUTHORIZATION) else {
+        return Ok(None);
+    };
+    let value = value
+        .to_str()
+        .map_err(|_| WebError::Authorization("Invalid authorization header".into()))?;
+    match value.split_once(' ') {
+        Some((scheme, token)) if scheme.eq_ignore_ascii_case("bearer") => {
+            Ok(Some(token.trim().to_owned()))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// A short-lived session for a request carrying an API token. It is never stored.
+async fn token_session<S: Send + Sync>(
+    parts: &mut Parts,
+    state: &S,
+    pool: &PgPool,
+    token: &str,
+) -> Result<(Session, TokenAuth), WebError> {
+    let Some(auth) = ApiToken::authenticate(pool, token).await? else {
+        return Err(WebError::Authorization("Invalid API token".into()));
+    };
+    if auth.is_expired(Utc::now().naive_utc()) {
+        return Err(WebError::Authorization("API token has expired".into()));
+    }
+    if auth.read_only && !matches!(parts.method, Method::GET | Method::HEAD | Method::OPTIONS) {
+        return Err(WebError::Forbidden("This API token is read-only"));
+    }
+    let ClientIpAddr(ip) = ClientIpAddr::from_request_parts(parts, state).await?;
+    parts.extensions.insert(ApiTokenAuth {
+        token_id: auth.id,
+        read_only: auth.read_only,
+    });
+    let session = Session::new(
+        auth.user_id,
+        SessionState::ApiTokenVerified,
+        ip.to_string(),
+        None,
+    );
+    Ok((session, auth))
 }
 
 #[macro_export]

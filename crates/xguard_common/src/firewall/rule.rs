@@ -149,6 +149,11 @@ impl FirewallRuleInput {
         if self.name.is_empty() || self.name.chars().count() > 255 {
             return Err(invalid("Name must be between 1 and 255 characters."));
         }
+        if !crate::names::is_safe_name(&self.name) {
+            return Err(invalid(
+                "Name can use letters, digits, spaces and - _ . ( ) : / only.",
+            ));
+        }
         if self.description.chars().count() > 4096 {
             return Err(invalid("Description must be at most 4096 characters."));
         }

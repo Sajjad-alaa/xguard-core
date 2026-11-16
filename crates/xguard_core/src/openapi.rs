@@ -1,6 +1,6 @@
 use utoipa::{
     Modify, OpenApi,
-    openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
+    openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 use xguard_common::{
     CARGO_VERSION,
@@ -13,8 +13,8 @@ use xguard_common::{
 
 use super::handlers::{
     ApiErrorResponse, Auth, EditGroupInfo, GroupInfo, PasswordChange, PasswordChangeSelf,
-    SESSION_COOKIE_NAME, StartEnrollmentRequest, Username, activity_log, app_info, auth,
-    component_setup, core_certs, firewall, forward_auth, gateway,
+    SESSION_COOKIE_NAME, StartEnrollmentRequest, Username, activity_log, api_tokens, app_info,
+    auth, component_setup, core_certs, firewall, forward_auth, gateway,
     group::{self, BulkAssignToGroupsRequest},
     location_stats, mail, mfa_flow, network_devices, openid_clients, openid_flow, proxy, reserved,
     resource_display, session_info, settings, ssh_authorized_keys, static_ips, support, updates,
@@ -32,7 +32,12 @@ use super::handlers::{
         description = "
 REST API of xguard Core.
 
-Authentication is done with the session cookie obtained from `POST /api/v1/auth`.
+Authentication is done either with the session cookie obtained from `POST /api/v1/auth`,
+or, for admins, with an API token passed as `Authorization: Bearer xgt_...`.
+
+An admin creates their own tokens with `POST /api/v1/user/{username}/api_token` while signed in.
+The token is returned only once, in that response. A token can expire and can be limited to
+read-only (GET) requests. Tokens are revoked when their owner is disabled or stops being an admin.
 
 Errors are returned as a JSON object with a `msg` field and, for some of them, a machine-readable `code` field.",
     ),
@@ -168,6 +173,11 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         webhooks::get_webhook,
         webhooks::change_enabled,
         webhooks::change_webhook,
+        // API tokens
+        api_tokens::list_api_tokens,
+        api_tokens::create_api_token,
+        api_tokens::rename_api_token,
+        api_tokens::delete_api_token,
         // firewall
         firewall::list_firewall_rules,
         firewall::get_firewall_rule,
@@ -223,7 +233,10 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
             user::SortKey, user::SortOrder, reserved::CheckResource,
             xguard_common::firewall::FirewallRule, xguard_common::firewall::FirewallRuleInput,
             xguard_common::firewall::FirewallRuleAction, xguard_common::firewall::SnatBinding,
-            xguard_common::firewall::SnatBindingInput
+            xguard_common::firewall::SnatBindingInput,
+            xguard_common::db::models::ApiToken,
+            xguard_common::db::models::api_token::NewApiToken,
+            api_tokens::CreatedApiToken, api_tokens::RenameApiToken
         ),
     ),
     tags(
@@ -241,6 +254,7 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         (name = "certificates", description = "Internal (core) and external (edge) URL certificates."),
         (name = "SSH key", description = "SSH and GPG authentication keys of users."),
         (name = "webhook", description = "Webhooks triggered by user and provisioning events."),
+        (name = "api token", description = "Personal API tokens of admins, for automation."),
         (name = "firewall", description = "XGuard firewall rules and the policies compiled from them."),
         (name = "settings", description = "Instance settings."),
         (name = "activity log", description = "Activity log events."),
@@ -261,6 +275,11 @@ impl Modify for SecurityAddon {
             components.add_security_scheme(
                 "cookie",
                 SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new(SESSION_COOKIE_NAME))),
+            );
+            // API token auth (`Authorization: Bearer xgt_...`)
+            components.add_security_scheme(
+                "api_token",
+                SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()),
             );
         }
     }

@@ -13,6 +13,7 @@ pub mod gateway_types;
 pub mod globals;
 pub mod hex;
 pub mod messages;
+pub mod names;
 pub mod random;
 pub mod secret;
 #[cfg(feature = "test-support")]

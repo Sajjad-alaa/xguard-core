@@ -276,6 +276,20 @@ pub enum ApiEventType {
     UserSnatBindingRemoved {
         binding: xguard_common::firewall::SnatBinding,
     },
+    ApiTokenAdded {
+        owner: User<Id>,
+        token: xguard_common::db::models::ApiToken,
+    },
+    ApiTokenRemoved {
+        owner: User<Id>,
+        token: xguard_common::db::models::ApiToken,
+    },
+    ApiTokenRenamed {
+        owner: User<Id>,
+        token: xguard_common::db::models::ApiToken,
+        old_name: String,
+        new_name: String,
+    },
     AuthenticationKeyAdded {
         key: AuthenticationKey<Id>,
     },

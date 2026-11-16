@@ -4,7 +4,7 @@ use sqlx::{PgConnection, PgPool, query_scalar};
 use crate::{
     db::{
         Id,
-        models::{MFAMethod, Settings, device::UserDevice, group::Group, user::User},
+        models::{ApiToken, MFAMethod, Settings, device::UserDevice, group::Group, user::User},
     },
     types::group_diff::GroupDiff,
 };
@@ -157,6 +157,7 @@ impl UserInfo {
         } else {
             if !self.is_active {
                 user.logout_all_sessions(&mut *transaction).await?;
+                ApiToken::delete_all_for_user(&mut *transaction, user.id).await?;
             }
             user.is_active = self.is_active;
             user.save(&mut *transaction).await?;

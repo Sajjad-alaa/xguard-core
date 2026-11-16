@@ -27,6 +27,7 @@ use crate::{
 };
 
 pub(crate) mod activity_log;
+pub(crate) mod api_tokens;
 pub mod app_info;
 pub mod auth;
 pub mod component_setup;
@@ -612,12 +613,7 @@ pub async fn device_for_admin_or_self<'e, E: sqlx::PgExecutor<'e>>(
 /// Validate name provided by user
 #[must_use]
 pub fn validate_name(name: &str) -> bool {
-    if name.is_empty() {
-        return false;
-    }
-    let allowed_symbols = [' ', '-', '_', '.', '(', ')', ':', '/'];
-    name.chars()
-        .all(|c| c.is_alphanumeric() || allowed_symbols.contains(&c))
+    xguard_common::names::is_safe_name(name)
 }
 
 impl<S> FromRequestParts<S> for ApiRequestContext
