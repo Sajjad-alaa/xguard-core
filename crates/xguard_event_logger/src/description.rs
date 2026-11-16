@@ -222,6 +222,16 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
             key.key_type,
             key.name.clone().unwrap_or_default()
         )),
+        ApiEventType::ActivityLogStreamCreated { stream } => Some(format!(
+            "Added activity log stream {} to {}",
+            stream.name, stream.url
+        )),
+        ApiEventType::ActivityLogStreamModified { before: _, after } => {
+            Some(format!("Modified activity log stream {}", after.name))
+        }
+        ApiEventType::ActivityLogStreamRemoved { stream } => {
+            Some(format!("Removed activity log stream {}", stream.name))
+        }
         ApiEventType::ApiTokenAdded { owner, token } => Some(format!(
             "Added API token {} ({}) for user {owner}",
             token.name, token.hint

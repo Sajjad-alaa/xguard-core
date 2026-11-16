@@ -256,6 +256,16 @@ pub enum ApiEventType {
         webhook: WebHook<Id>,
         enabled: bool,
     },
+    ActivityLogStreamCreated {
+        stream: crate::log_stream::ActivityLogStream,
+    },
+    ActivityLogStreamModified {
+        before: crate::log_stream::ActivityLogStream,
+        after: crate::log_stream::ActivityLogStream,
+    },
+    ActivityLogStreamRemoved {
+        stream: crate::log_stream::ActivityLogStream,
+    },
     FirewallRuleAdded {
         rule: xguard_common::firewall::FirewallRule,
     },

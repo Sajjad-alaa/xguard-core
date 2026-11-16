@@ -478,6 +478,17 @@ pub struct WebHookMetadata {
 }
 
 #[derive(Serialize)]
+pub struct ActivityLogStreamMetadata {
+    pub stream: crate::log_stream::ActivityLogStream,
+}
+
+#[derive(Serialize)]
+pub struct ActivityLogStreamModifiedMetadata {
+    pub before: crate::log_stream::ActivityLogStream,
+    pub after: crate::log_stream::ActivityLogStream,
+}
+
+#[derive(Serialize)]
 pub struct ApiTokenMetadata {
     pub owner: UserNoSecrets,
     pub token: xguard_common::db::models::ApiToken,

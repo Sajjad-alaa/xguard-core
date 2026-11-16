@@ -405,6 +405,10 @@ async fn main() -> Result<(), anyhow::Error> {
             activity_log_stream_reload_notify.clone(),
             activity_log_messages_tx.clone()
         ) => bail!("Activity log event logger returned early: {res:?}"),
+        () = xguard_core::log_stream::sender::run(
+            pool.clone(),
+            activity_log_messages_tx.clone()
+        ) => bail!("Activity log streaming returned early"),
         () = xguard_core::directory::push::run_worker(
             pool.clone(),
             ldap_tx.clone(),

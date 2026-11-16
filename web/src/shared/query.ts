@@ -166,6 +166,14 @@ export const contextualHelpQueryOptions = queryOptions({
   retry: false,
 });
 
+export const getActivityLogStreamsQueryOptions = queryOptions({
+  queryFn: api.activityLogStream.getStreams,
+  queryKey: ['activity_log_stream'],
+  select: (resp) => resp.data,
+  // Delivery status changes on its own.
+  refetchInterval: 10_000,
+});
+
 export const getUserApiTokensQueryOptions = (username: string, enabled: boolean) =>
   queryOptions({
     queryFn: () => api.user.getApiTokens(username),

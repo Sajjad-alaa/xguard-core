@@ -124,6 +124,7 @@ use crate::{
             location_connected_network_devices, location_connected_user_devices,
             location_connected_users, location_stats, locations_overview_stats,
         },
+        log_stream::{create_stream, delete_stream, list_streams, test_stream, update_stream},
         mail::{send_support_data, test_mail},
         openid_clients::{
             add_openid_client, change_openid_client, change_openid_client_state,
@@ -186,6 +187,7 @@ pub mod headers;
 pub mod letsencrypt;
 pub mod location_management;
 pub mod log_file;
+pub mod log_stream;
 pub mod mail;
 pub mod mfa_engine;
 pub mod setup_logs;
@@ -405,6 +407,15 @@ pub fn build_webapp(
             .route("/ldap/test", post(test_directory))
             .route("/ldap/sync", post(sync_directory))
             .route("/ldap/dry_run", post(preview_directory_sync))
+            .route(
+                "/activity_log_stream",
+                get(list_streams).post(create_stream),
+            )
+            .route("/activity_log_stream/test", post(test_stream))
+            .route(
+                "/activity_log_stream/{id}",
+                put(update_stream).delete(delete_stream),
+            )
             // support
             .route("/support/configuration", get(configuration))
             .route("/support/logs", get(logs))

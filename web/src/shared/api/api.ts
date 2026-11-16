@@ -7,6 +7,7 @@ import type {
   ActivityLogEvent,
   ActivityLogEventDetails,
   ActivityLogRequestParams,
+  ActivityLogStream,
   AddApiTokenRequest,
   AddApiTokenResponse,
   AddAuthKeyRequest,
@@ -32,6 +33,7 @@ import type {
   CheckReservedParams,
   CheckReservedResponse,
   CountResponse,
+  CreateActivityLogStreamRequest,
   CreateAdminRequest,
   CreateCARequest,
   CreateGroupRequest,
@@ -451,6 +453,25 @@ const api = {
       client.post(`/device/user/${username}/ip`, data),
     validateUserDeviceIp: (username: string, data: ValidateIpAssignmentRequest) =>
       client.post(`/device/user/${username}/ip/validate`, data),
+  },
+  activityLogStream: {
+    getStreams: () => client.get<ActivityLogStream[]>('/activity_log_stream'),
+    createStream: ({ stream_config, ...data }: CreateActivityLogStreamRequest) =>
+      client.post('/activity_log_stream', { ...data, ...stream_config }),
+    updateStream: (
+      id: number,
+      { stream_config, ...data }: CreateActivityLogStreamRequest,
+    ) => client.put(`/activity_log_stream/${id}`, { ...data, ...stream_config }),
+    deleteStream: (id: number) => client.delete(`/activity_log_stream/${id}`),
+    /** Sends a test entry with a stored destination's settings. */
+    testStream: (stream: ActivityLogStream) =>
+      client.post(`/activity_log_stream/test?id=${stream.id}`, {
+        name: stream.name,
+        stream_type: stream.stream_type,
+        url: stream.url,
+        username: stream.username,
+        cert: stream.cert,
+      }),
   },
   settings: {
     getSettings: () => client.get<Settings>('/settings'),

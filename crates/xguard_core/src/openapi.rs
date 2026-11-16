@@ -16,8 +16,9 @@ use super::handlers::{
     SESSION_COOKIE_NAME, StartEnrollmentRequest, Username, activity_log, api_tokens, app_info,
     auth, component_setup, core_certs, directory, firewall, forward_auth, gateway,
     group::{self, BulkAssignToGroupsRequest},
-    location_stats, mail, mfa_flow, network_devices, openid_clients, openid_flow, proxy, reserved,
-    resource_display, session_info, settings, ssh_authorized_keys, static_ips, support, updates,
+    location_stats, log_stream, mail, mfa_flow, network_devices, openid_clients, openid_flow,
+    proxy, reserved, resource_display, session_info, settings, ssh_authorized_keys, static_ips,
+    support, updates,
     user::{self, UserDetails},
     webhooks, wireguard as device, wireguard as network,
     wireguard::AddDeviceResult,
@@ -173,6 +174,12 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         webhooks::get_webhook,
         webhooks::change_enabled,
         webhooks::change_webhook,
+        // activity log streaming
+        log_stream::list_streams,
+        log_stream::create_stream,
+        log_stream::update_stream,
+        log_stream::delete_stream,
+        log_stream::test_stream,
         // directory
         directory::test_directory,
         directory::sync_directory,
@@ -241,7 +248,9 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
             xguard_common::db::models::ApiToken,
             xguard_common::db::models::api_token::NewApiToken,
             api_tokens::CreatedApiToken, api_tokens::RenameApiToken,
-            directory::SyncRequest, directory::ConnectionTest
+            directory::SyncRequest, directory::ConnectionTest,
+            log_stream::StreamWithStatus, crate::log_stream::StreamInput,
+            crate::log_stream::StreamType, crate::log_stream::sender::StreamStatus
         ),
     ),
     tags(

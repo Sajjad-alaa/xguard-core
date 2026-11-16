@@ -38,6 +38,7 @@ pub(crate) mod forward_auth;
 pub mod gateway;
 pub(crate) mod group;
 pub(crate) mod location_stats;
+pub(crate) mod log_stream;
 pub mod mail;
 pub(crate) mod mfa_flow;
 pub mod network_devices;

@@ -395,5 +395,14 @@
   "settings_ldap_button_sync_now": "Sync now",
   "settings_ldap_sync_done": "Synchronization finished",
   "settings_ldap_sync_errors": "Synchronization finished with {count} errors",
-  "settings_ldap_confirm_deletions_title": "Confirm deletions"
+  "settings_ldap_confirm_deletions_title": "Confirm deletions",
+  "settings_activity_log_streaming_table_header_url": "URL",
+  "settings_activity_log_streaming_table_header_status": "Delivery",
+  "settings_activity_log_streaming_status_failing": "Failing",
+  "settings_activity_log_streaming_status_delivered": "Delivered {date}",
+  "settings_activity_log_streaming_status_waiting": "Waiting for events",
+  "settings_activity_log_streaming_status_dropped": "{count} dropped",
+  "settings_activity_log_streaming_send_test": "Send test entry",
+  "settings_activity_log_streaming_test_success": "Test entry delivered",
+  "settings_activity_log_streaming_test_failed": "The test entry was not delivered"
 }

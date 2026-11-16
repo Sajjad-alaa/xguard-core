@@ -1757,12 +1757,25 @@ export const ActivityLogStreamType = {
 export type ActivityLogStreamTypeValue =
   (typeof ActivityLogStreamType)[keyof typeof ActivityLogStreamType];
 
+export interface ActivityLogStreamStatus {
+  last_delivery: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
+  /** Bytes waiting to be sent. */
+  pending_bytes: number;
+  /** Entries dropped because the buffer was full. */
+  dropped: number;
+}
+
 export interface ActivityLogStream {
   id: number;
   name: string;
   stream_type: ActivityLogStreamTypeValue;
-  config: ActivityLogStreamConfig;
+  url: string;
+  username: string | null;
+  cert: string | null;
   password_set: boolean;
+  status: ActivityLogStreamStatus;
 }
 export interface CreateActivityLogStreamRequest {
   name: string;

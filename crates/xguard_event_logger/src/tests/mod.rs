@@ -339,6 +339,15 @@ fn api_event_cases() -> Vec<EventTestCase> {
         created_at: chrono::NaiveDateTime::default(),
         updated_at: chrono::NaiveDateTime::default(),
     };
+    let log_stream = xguard_core::log_stream::ActivityLogStream {
+        id: 1,
+        name: "siem".into(),
+        stream_type: xguard_core::log_stream::StreamType::VectorHttp,
+        url: "https://logs.example.org/".into(),
+        username: None,
+        cert: None,
+        password_set: false,
+    };
     let api_token = xguard_common::db::models::ApiToken {
         id: 1,
         user_id: 1,
@@ -911,6 +920,32 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::WebHookStateChanged,
             module: ActivityLogModule::XGuard,
             description_contains: Some("Disabled"),
+        },
+        EventTestCase {
+            name: "ActivityLogStreamCreated",
+            message: api_message(ApiEventType::ActivityLogStreamCreated {
+                stream: log_stream.clone(),
+            }),
+            event_type: EventType::ActivityLogStreamCreated,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Added activity log stream siem"),
+        },
+        EventTestCase {
+            name: "ActivityLogStreamModified",
+            message: api_message(ApiEventType::ActivityLogStreamModified {
+                before: log_stream.clone(),
+                after: log_stream.clone(),
+            }),
+            event_type: EventType::ActivityLogStreamModified,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Modified activity log stream siem"),
+        },
+        EventTestCase {
+            name: "ActivityLogStreamRemoved",
+            message: api_message(ApiEventType::ActivityLogStreamRemoved { stream: log_stream }),
+            event_type: EventType::ActivityLogStreamRemoved,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Removed activity log stream siem"),
         },
         EventTestCase {
             name: "ApiTokenAdded",
