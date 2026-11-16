@@ -39,6 +39,7 @@ use crate::{
         SessionExtractor, SessionInfo,
         login_throttle::{charge_login_attempt, login_key, refund_login_attempt},
     },
+    directory::{self, login::LoginOutcome},
     error::WebError,
     events::{ApiEvent, ApiEventType, ApiRequestContext},
     handlers::{ClientIpAddr, SIGN_IN_COOKIE_NAME, cookie_domain, user_for_admin_or_self},
@@ -157,7 +158,7 @@ pub async fn authenticate(
     let username_or_email = data.username;
     debug!("Authenticating user {username_or_email}");
 
-    let _settings = Settings::get_current_settings();
+    let settings = Settings::get_current_settings();
 
     // Attempt to find a user: first by username, and then by email.
     let mut conn = appstate.pool.acquire().await?;
@@ -165,29 +166,74 @@ pub async fn authenticate(
     let throttle_key = login_key(found_user.as_ref(), &username_or_email);
     charge_login_attempt(&mut *conn, &throttle_key).await?;
 
-    let mut user = if let Some(user) = found_user {
-        // user was found, attempt to authenticate by password first
-        match user.verify_password(&data.password) {
-            Ok(()) => user,
-            Err(err) => {
-                warn!("Failed to authenticate user {username_or_email}: {err}");
-                appstate.emit_event(ApiEvent {
-                    context: ApiRequestContext::new(
-                        user.id,
-                        user.username,
-                        ip_addr,
-                        user_agent.to_string(),
-                    ),
-                    event: Box::new(ApiEventType::UserLoginFailed {
-                        message: format!("Authentication for {username_or_email} failed: {err}"),
-                    }),
-                })?;
-                return Err(WebError::Authentication);
+    let local_check = found_user
+        .as_ref()
+        .map(|user| user.verify_password(&data.password));
+    let mut user = match (found_user, local_check) {
+        (Some(user), Some(Ok(()))) => {
+            // A directory account XGuard created with a random password gets the real one now.
+            if settings.ldap_enabled
+                && user.ldap_pass_randomized
+                && let Err(err) =
+                    directory::push::set_password(&appstate.pool, &user, &data.password).await
+            {
+                warn!(
+                    "Failed to set the directory password of {}: {err}",
+                    user.username
+                );
+            }
+            user
+        }
+        (found_user, local_check) => {
+            // Try the directory: the password may have changed there, or the user may not be
+            // in XGuard yet.
+            let from_directory = if settings.ldap_enabled {
+                match directory::login::authenticate(
+                    &appstate.pool,
+                    &username_or_email,
+                    &data.password,
+                    found_user.as_ref(),
+                )
+                .await
+                {
+                    Ok(LoginOutcome::Authenticated(user)) => Some(*user),
+                    Ok(LoginOutcome::Rejected) => None,
+                    Err(err) => {
+                        warn!("Directory sign-in of {username_or_email} failed: {err}");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            match (from_directory, found_user) {
+                (Some(user), _) => user,
+                (None, Some(user)) => {
+                    let reason = local_check
+                        .and_then(Result::err)
+                        .map_or_else(|| "wrong password".to_owned(), |err| err.to_string());
+                    warn!("Failed to authenticate user {username_or_email}: {reason}");
+                    appstate.emit_event(ApiEvent {
+                        context: ApiRequestContext::new(
+                            user.id,
+                            user.username,
+                            ip_addr,
+                            user_agent.to_string(),
+                        ),
+                        event: Box::new(ApiEventType::UserLoginFailed {
+                            message: format!(
+                                "Authentication for {username_or_email} failed: {reason}"
+                            ),
+                        }),
+                    })?;
+                    return Err(WebError::Authentication);
+                }
+                (None, None) => {
+                    info!("Failed to authenticate user {username_or_email}: user not found");
+                    return Err(WebError::Authentication);
+                }
             }
         }
-    } else {
-        info!("Failed to authenticate user {username_or_email}: user not found");
-        return Err(WebError::Authentication);
     };
     refund_login_attempt(&mut *conn, &throttle_key).await?;
 

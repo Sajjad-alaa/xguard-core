@@ -488,6 +488,17 @@ impl EnrollmentServer {
             user.phone = request.phone_number;
         }
         if let Some(password) = &request.password {
+            xguard_core::directory::push::set_password(&self.pool, &user, password)
+                .await
+                .map_err(|err| {
+                    warn!(
+                        "Failed to set the directory password of {}: {err}",
+                        user.username
+                    );
+                    Status::failed_precondition(format!(
+                        "the directory refused the password: {err}"
+                    ))
+                })?;
             user.set_password(password);
         }
         user.save(&mut *transaction).await.map_err(|err| {

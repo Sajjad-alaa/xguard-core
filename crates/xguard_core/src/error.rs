@@ -145,6 +145,16 @@ impl From<xguard_common::db::models::api_token::ApiTokenError> for WebError {
     }
 }
 
+impl From<crate::directory::DirectoryError> for WebError {
+    fn from(err: crate::directory::DirectoryError) -> Self {
+        use crate::directory::DirectoryError;
+        match err {
+            DirectoryError::Database(err) => err.into(),
+            other => Self::BadRequest(other.to_string()),
+        }
+    }
+}
+
 impl From<sqlx::Error> for WebError {
     fn from(error: sqlx::Error) -> Self {
         Self::DbError(error.to_string())

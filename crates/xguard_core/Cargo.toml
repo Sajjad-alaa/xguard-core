@@ -44,6 +44,8 @@ humantime.workspace = true
 # match version used by sqlx
 ipnetwork.workspace = true
 jsonwebtoken.workspace = true
+ldap3.workspace = true
+url = "2.5"
 openidconnect.workspace = true
 prost.workspace = true
 # match version used by sqlx

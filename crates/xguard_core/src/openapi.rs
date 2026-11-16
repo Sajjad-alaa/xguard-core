@@ -14,7 +14,7 @@ use xguard_common::{
 use super::handlers::{
     ApiErrorResponse, Auth, EditGroupInfo, GroupInfo, PasswordChange, PasswordChangeSelf,
     SESSION_COOKIE_NAME, StartEnrollmentRequest, Username, activity_log, api_tokens, app_info,
-    auth, component_setup, core_certs, firewall, forward_auth, gateway,
+    auth, component_setup, core_certs, directory, firewall, forward_auth, gateway,
     group::{self, BulkAssignToGroupsRequest},
     location_stats, mail, mfa_flow, network_devices, openid_clients, openid_flow, proxy, reserved,
     resource_display, session_info, settings, ssh_authorized_keys, static_ips, support, updates,
@@ -173,6 +173,10 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         webhooks::get_webhook,
         webhooks::change_enabled,
         webhooks::change_webhook,
+        // directory
+        directory::test_directory,
+        directory::sync_directory,
+        directory::preview_directory_sync,
         // API tokens
         api_tokens::list_api_tokens,
         api_tokens::create_api_token,
@@ -236,7 +240,8 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
             xguard_common::firewall::SnatBindingInput,
             xguard_common::db::models::ApiToken,
             xguard_common::db::models::api_token::NewApiToken,
-            api_tokens::CreatedApiToken, api_tokens::RenameApiToken
+            api_tokens::CreatedApiToken, api_tokens::RenameApiToken,
+            directory::SyncRequest, directory::ConnectionTest
         ),
     ),
     tags(

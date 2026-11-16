@@ -82,18 +82,8 @@ test-ldap *ARGS:
     #!/usr/bin/env bash
     set -uo pipefail
     docker compose -p xguard-ldap -f docker-compose.ldap-test.yaml up -d --wait openldap
-    LDAP_URL=ldap://localhost:389 \
-    LDAP_BIND_USERNAME=cn=admin,dc=example,dc=org \
-    LDAP_BIND_PASSWORD=pass123 \
-    LDAP_USER_SEARCH_BASE=ou=users,dc=example,dc=org \
-    LDAP_GROUP_SEARCH_BASE=ou=groups,dc=example,dc=org \
-    LDAP_USER_CLASS=inetOrgPerson \
-    LDAP_GROUP_CLASS=groupOfUniqueNames \
-    LDAP_USERNAME_ATTR=cn \
-    LDAP_GROUPNAME_ATTR=cn \
-    LDAP_MEMBER_ATTR=memberOf \
-    LDAP_GROUP_MEMBER_ATTR=uniqueMember \
-        cargo nextest run --run-ignored only -E 'package(xguard_core) and test(/^ldap::/)' {{ARGS}}
+    XGUARD_TEST_LDAP_URL=ldap://localhost:389 \
+        cargo test -p xguard_core --test integration directory:: {{ARGS}} -- --test-threads=1
     status=$?
     docker compose -p xguard-ldap -f docker-compose.ldap-test.yaml down
     exit $status

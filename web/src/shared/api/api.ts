@@ -57,7 +57,10 @@ import type {
   GetInternalSslInfoResponse,
   GroupInfo,
   IpValidation,
+  LdapConnectionTest,
   LdapMigrationRepairResponse,
+  LdapSyncReport,
+  LdapSyncRequest,
   LicenseInfo,
   LocationConnectedNetworkDevice,
   LocationConnectedNetworkDevicesRequest,
@@ -453,6 +456,10 @@ const api = {
     getSettings: () => client.get<Settings>('/settings'),
     editSettings: (data: Settings) => client.put('/settings', data),
     patchSettings: (data: Partial<Settings>) => client.patch('/settings', data),
+    testLdapSettings: (data: Settings) =>
+      client.post<LdapConnectionTest>('/ldap/test', data),
+    ldapDryRun: (data: Settings) => client.post<LdapSyncReport>('/ldap/dry_run', data),
+    ldapSync: (data: LdapSyncRequest) => client.post<LdapSyncReport>('/ldap/sync', data),
     getSettingsEssentials: () => client.get<SettingsEssentials>('/settings_essentials'),
   },
   mail: {

@@ -685,6 +685,51 @@ export interface AuthKey {
   yubikey_serial: string | null;
 }
 
+export interface LdapMembership {
+  group: string;
+  username: string;
+}
+
+export interface LdapStatusChange {
+  username: string;
+  active: boolean;
+}
+
+/** The changes a directory sync makes; see `crates/xguard_core/src/directory/plan.rs`. */
+export interface LdapSyncPlan {
+  create_local: string[];
+  update_local: string[];
+  delete_local: string[];
+  local_status: LdapStatusChange[];
+  create_local_groups: string[];
+  add_local_members: LdapMembership[];
+  remove_local_members: LdapMembership[];
+  create_remote: string[];
+  update_remote: string[];
+  delete_remote: string[];
+  remote_status: LdapStatusChange[];
+  create_remote_groups: string[];
+  add_remote_members: LdapMembership[];
+  remove_remote_members: LdapMembership[];
+  skipped: string[];
+}
+
+export interface LdapSyncReport {
+  plan: LdapSyncPlan;
+  applied: boolean;
+  errors: string[];
+}
+
+export interface LdapConnectionTest {
+  users: number;
+  groups: number;
+}
+
+export interface LdapSyncRequest {
+  dry_run?: boolean;
+  confirm_deletions?: boolean;
+}
+
 export interface AddApiTokenRequest {
   username: string;
   name: string;

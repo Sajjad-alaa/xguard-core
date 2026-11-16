@@ -99,6 +99,7 @@ impl AppState {
     ///
     /// This method is fallible since events are used for communication between services
     pub fn emit_event(&self, event: ApiEvent) -> Result<(), WebError> {
+        crate::directory::push::on_api_event(&event.event);
         Ok(self.event_tx.send(event)?)
     }
 

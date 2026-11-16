@@ -7,6 +7,7 @@ import { Tabs } from '../../../shared/xguard-ui/components/Tabs/Tabs';
 import type { TabProps } from '../../../shared/xguard-ui/components/Tabs/types';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { SettingsCertificatesTab } from './tabs/SettingsCertificatesTab/SettingsCertificatesTab';
+import { SettingsExternalProvidersTab } from './tabs/SettingsExternalProvidersTab';
 import { SettingsGeneralTab } from './tabs/SettingsGeneralTab';
 import { SettingsNotificationsTab } from './tabs/SettingsNotificationsTab';
 import { type SettingsTabValue, settingsTabsSchema } from './types';
@@ -15,6 +16,7 @@ import { useCertificatesWarningState } from './useCertificatesWarningState';
 const tabComponent: Record<SettingsTabValue, JSX.Element> = {
   general: <SettingsGeneralTab />,
   notifications: <SettingsNotificationsTab />,
+  identity: <SettingsExternalProvidersTab />,
   certs: <SettingsCertificatesTab />,
 };
 
@@ -24,6 +26,8 @@ const tabToTitle = (tab: SettingsTabValue): string => {
       return m.settings_tab_general();
     case 'notifications':
       return m.settings_tab_notifications();
+    case 'identity':
+      return m.settings_tab_identity_providers();
     case 'certs':
       return m.settings_tab_certificates();
   }

@@ -98,6 +98,7 @@ use crate::{
     db::AppEvent,
     grpc::{GatewayCommand, WorkerState},
     handlers::{
+        api_tokens::{create_api_token, delete_api_token, list_api_tokens, rename_api_token},
         app_info::get_app_info,
         auth::{
             authenticate, email_mfa_code, email_mfa_disable, email_mfa_enable, email_mfa_init,
@@ -107,6 +108,12 @@ use crate::{
         },
         component_setup::{adopt_gateway, setup_gateway_tls_stream},
         core_certs::{get_ca, get_certs, set_external_url_settings, set_internal_url_settings},
+        directory::{preview_directory_sync, sync_directory, test_directory},
+        firewall::{
+            create_firewall_rule, create_snat_binding, delete_firewall_rule, delete_snat_binding,
+            get_firewall_rule, list_firewall_rules, list_snat_bindings, location_firewall_policy,
+            update_firewall_rule, update_snat_binding,
+        },
         forward_auth::forward_auth,
         gateway::{delete_gateway, gateway_details, gateway_list, update_gateway},
         group::{
@@ -148,12 +155,6 @@ use crate::{
         webhooks::{
             add_webhook, change_enabled, change_webhook, delete_webhook, get_webhook, list_webhooks,
         },
-        api_tokens::{create_api_token, delete_api_token, list_api_tokens, rename_api_token},
-        firewall::{
-            create_firewall_rule, create_snat_binding, delete_firewall_rule, delete_snat_binding,
-            get_firewall_rule, list_firewall_rules, list_snat_bindings, location_firewall_policy,
-            update_firewall_rule, update_snat_binding,
-        },
         wireguard::{
             add_device, add_user_devices, count_networks, create_network, delete_device,
             delete_network, download_config, gateway_status, get_device, import_network,
@@ -173,6 +174,7 @@ pub mod auth;
 pub mod cert_settings;
 pub mod db;
 pub mod device_access;
+pub mod directory;
 pub mod enrollment_management;
 
 pub mod error;
@@ -400,6 +402,9 @@ pub fn build_webapp(
             .route("/settings/{id}", put(set_default_branding))
             // settings for frontend
             .route("/settings_essentials", get(get_settings_essentials))
+            .route("/ldap/test", post(test_directory))
+            .route("/ldap/sync", post(sync_directory))
+            .route("/ldap/dry_run", post(preview_directory_sync))
             // support
             .route("/support/configuration", get(configuration))
             .route("/support/logs", get(logs))
@@ -427,7 +432,10 @@ pub fn build_webapp(
                 "/firewall/location/{id}/policy",
                 get(location_firewall_policy),
             )
-            .route("/firewall/snat", get(list_snat_bindings).post(create_snat_binding))
+            .route(
+                "/firewall/snat",
+                get(list_snat_bindings).post(create_snat_binding),
+            )
             .route(
                 "/firewall/snat/{id}",
                 put(update_snat_binding).delete(delete_snat_binding),
@@ -1199,6 +1207,7 @@ pub async fn change_user_password(
     let mut user = User::find_by_username(pool, &args.username)
         .await?
         .ok_or_else(|| anyhow!("User '{}' not found.", args.username))?;
+    directory::push::set_password(pool, &user, args.password.expose_secret()).await?;
     user.set_password(args.password.expose_secret());
     user.save(pool).await?;
     user.logout_all_sessions(pool).await?;

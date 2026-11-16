@@ -1,0 +1,743 @@
+import { Link } from '@tanstack/react-router';
+import { Breadcrumbs } from '../../../shared/components/Breadcrumbs/Breadcrumbs';
+import {
+  ContextualHelpKey,
+  ContextualHelpSidebar,
+} from '../../../shared/components/ContextualHelp';
+import { Page } from '../../../shared/components/Page/Page';
+import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCard';
+import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
+import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
+import './style.scss';
+import { useStore } from '@tanstack/react-form';
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
+import { Suspense, useMemo, useState } from 'react';
+import Skeleton from 'react-loading-skeleton';
+import z from 'zod';
+import { m } from '../../../paraglide/messages';
+import api from '../../../shared/api/api';
+import type { ApiError, LdapSyncReport, Settings } from '../../../shared/api/types';
+import { Controls } from '../../../shared/components/Controls/Controls';
+import { DescriptionBlock } from '../../../shared/components/DescriptionBlock/DescriptionBlock';
+import { useAppForm } from '../../../shared/form';
+import { formChangeLogic } from '../../../shared/formLogic';
+import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
+import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
+import { getSettingsQueryOptions } from '../../../shared/query';
+import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { EvenSplit } from '../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
+import { Fold } from '../../../shared/xguard-ui/components/Fold/Fold';
+import { Helper } from '../../../shared/xguard-ui/components/Helper/Helper';
+import { IconKind } from '../../../shared/xguard-ui/components/Icon';
+import { MarkedSection } from '../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
+import { MarkedSectionHeader } from '../../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import {
+  Snackbar,
+  SnackbarAnchor,
+} from '../../../shared/xguard-ui/providers/snackbar/snackbar';
+import { TooltipContent } from '../../../shared/xguard-ui/providers/tooltip/TooltipContent';
+import { TooltipProvider } from '../../../shared/xguard-ui/providers/tooltip/TooltipContext';
+import { TooltipTrigger } from '../../../shared/xguard-ui/providers/tooltip/TooltipTrigger';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
+import { LdapConnectionErrorModal } from './modals/LdapConnectionErrorModal/LdapConnectionErrorModal';
+import { LdapDryRunModal } from './modals/LdapDryRunModal/LdapDryRunModal';
+
+const connectionErrorSnackbarId = 'ldap-connection-error';
+
+const breadcrumbsLinks = [
+  <Link
+    key={0}
+    to="/settings"
+    search={{
+      tab: 'identity',
+    }}
+  >
+    {m.settings_breadcrumb_identity_providers()}
+  </Link>,
+  <Link key={1} to="/settings/ldap">
+    {m.settings_ldap_title()}
+  </Link>,
+];
+
+export const SettingsLdapPage = () => {
+  return (
+    <Page id="settings-ldap-page" title={m.settings_page_title()}>
+      <Breadcrumbs links={breadcrumbsLinks} />
+      <SettingsLayout
+        suggestion={<ContextualHelpSidebar pageKey={ContextualHelpKey.SettingsLdap} />}
+      >
+        <SettingsHeader
+          icon={IconKind.Servers}
+          title={m.settings_ldap_title()}
+          subtitle={m.settings_ldap_subtitle()}
+        />
+        <Suspense fallback={<Skeleton height={500} />}>
+          <SettingsCard>
+            <PageForm />
+          </SettingsCard>
+        </Suspense>
+      </SettingsLayout>
+    </Page>
+  );
+};
+
+// Matches the server's minimum (see MIN_SYNC_INTERVAL).
+const ldap_minimum_sync_interval = 60;
+
+// Mirrors FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS on the backend.
+const forbiddenEnrollmentTokenAttrs = ['userpassword', 'cn', 'uid', 'sambantpassword'];
+
+const formSchema = z
+  .object({
+    ldap_bind_password: z
+      .string()
+      .trim()
+      .min(1, m.form_error_required())
+      .nullable()
+      .optional(),
+    ldap_bind_username: z.string().trim().min(1, m.form_error_required()),
+    ldap_url: z.url(m.form_error_invalid()).min(1, m.form_error_required()),
+    ldap_group_member_attr: z.string().trim().min(1, m.form_error_required()),
+    ldap_group_obj_class: z.string().trim().min(1, m.form_error_required()),
+    ldap_group_search_base: z.string().trim().min(1, m.form_error_required()),
+    ldap_groupname_attr: z.string().trim().min(1, m.form_error_required()),
+    ldap_member_attr: z.string().trim().min(1, m.form_error_required()),
+    ldap_user_obj_class: z.string().trim().min(1, m.form_error_required()),
+    ldap_user_auxiliary_obj_classes: z.string().trim().nullable(),
+    ldap_user_search_base: z.string().trim().min(1, m.form_error_required()),
+    ldap_username_attr: z.string().trim().min(1, m.form_error_required()),
+    ldap_enabled: z.boolean(),
+    ldap_sync_enabled: z.boolean(),
+    ldap_is_authoritative: z.boolean(),
+    ldap_use_starttls: z.boolean(),
+    ldap_tls_verify_cert: z.boolean(),
+    ldap_sync_interval: z.number(m.form_error_required()),
+    ldap_uses_ad: z.boolean(),
+    ldap_sync_account_status: z.boolean(),
+    ldap_disable_password_management: z.boolean(),
+    ldap_user_rdn_attr: z.string().trim().nullable(),
+    ldap_sync_groups: z.string().trim().nullable(),
+    ldap_remote_enrollment_enabled: z.boolean(),
+    ldap_remote_enrollment_send_invite: z.boolean(),
+    ldap_enrollment_token_attr: z.string().trim().nullable(),
+  })
+  .superRefine((value, context) => {
+    if (
+      value.ldap_sync_enabled &&
+      value.ldap_sync_interval < ldap_minimum_sync_interval
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ldap_sync_interval'],
+        message: m.form_error_min({
+          value: ldap_minimum_sync_interval,
+        }),
+      });
+    }
+    // LDAP attribute names are case-insensitive.
+    const tokenAttr = value.ldap_enrollment_token_attr?.toLowerCase();
+    if (isPresent(tokenAttr) && forbiddenEnrollmentTokenAttrs.includes(tokenAttr)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ldap_enrollment_token_attr'],
+        message: m.settings_ldap_error_forbidden_enrollment_token_attribute(),
+      });
+    }
+  });
+
+type FormFields = z.infer<typeof formSchema>;
+
+const csvToArray = (value: string | null): string[] =>
+  value
+    ? value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+
+const PageForm = () => {
+  const { data: settings } = useSuspenseQuery(getSettingsQueryOptions);
+
+  const defaultValues = useMemo((): FormFields => {
+    return {
+      ldap_group_search_base: settings?.ldap_group_search_base ?? '',
+      ldap_group_member_attr: settings?.ldap_group_member_attr ?? '',
+      ldap_group_obj_class: settings?.ldap_group_obj_class ?? '',
+      ldap_username_attr: settings?.ldap_username_attr ?? '',
+      ldap_user_search_base: settings?.ldap_user_search_base ?? '',
+      ldap_user_obj_class: settings?.ldap_user_obj_class ?? '',
+      ldap_user_auxiliary_obj_classes:
+        settings?.ldap_user_auxiliary_obj_classes.join(', ') || null,
+      ldap_url: settings?.ldap_url ?? '',
+      ldap_member_attr: settings?.ldap_member_attr ?? '',
+      ldap_groupname_attr: settings?.ldap_groupname_attr ?? '',
+      ldap_bind_password: settings?.ldap_bind_password_set ? undefined : '',
+      ldap_bind_username: settings?.ldap_bind_username ?? '',
+      ldap_enabled: settings?.ldap_enabled ?? false,
+      ldap_sync_enabled: settings?.ldap_sync_enabled ?? false,
+      ldap_is_authoritative: settings?.ldap_is_authoritative ?? false,
+      ldap_use_starttls: settings?.ldap_use_starttls ?? false,
+      ldap_tls_verify_cert: settings?.ldap_tls_verify_cert ?? true,
+      ldap_sync_interval: settings?.ldap_sync_interval ?? 300,
+      ldap_uses_ad: settings?.ldap_uses_ad ?? false,
+      ldap_sync_account_status: settings?.ldap_sync_account_status ?? false,
+      ldap_disable_password_management:
+        settings?.ldap_disable_password_management ?? false,
+      ldap_user_rdn_attr: settings?.ldap_user_rdn_attr ?? '',
+      ldap_sync_groups: settings?.ldap_sync_groups.join(', ') || null,
+      ldap_remote_enrollment_enabled: settings?.ldap_remote_enrollment_enabled ?? false,
+      ldap_remote_enrollment_send_invite:
+        settings?.ldap_remote_enrollment_send_invite ?? false,
+      ldap_enrollment_token_attr: settings?.ldap_enrollment_token_attr ?? '',
+    };
+  }, [settings]);
+
+  const { mutateAsync } = useMutation({
+    mutationFn: api.settings.patchSettings,
+    meta: {
+      invalidate: [['settings'], ['info']],
+    },
+    onSuccess: () => {
+      Snackbar.default(m.settings_msg_saved());
+    },
+    onError: (e) => {
+      Snackbar.error(m.settings_msg_save_failed());
+      console.error(e);
+    },
+  });
+
+  const [dryRunResult, setDryRunResult] = useState<LdapSyncReport | null>(null);
+  const [dryRunModalOpen, setDryRunModalOpen] = useState(false);
+  const [connectionError, setConnectionError] = useState('');
+  const [connectionErrorModalOpen, setConnectionErrorModalOpen] = useState(false);
+
+  const showConnectionError = (e: Error) => {
+    console.error(e);
+    const msg = (e as AxiosError<ApiError>).response?.data?.msg;
+    if (!isPresent(msg)) {
+      Snackbar.error(m.settings_ldap_test_failed());
+      return;
+    }
+    const snackbar = Snackbar.custom({
+      id: connectionErrorSnackbarId,
+      variant: 'error',
+      text: m.settings_ldap_test_failed(),
+      dismissible: true,
+      action: {
+        text: m.settings_ldap_test_failed_details(),
+        onClick: () => {
+          snackbar.dismiss();
+          setConnectionError(msg);
+          setConnectionErrorModalOpen(true);
+        },
+      },
+    });
+  };
+
+  const { mutate: handleLdapDryRun, isPending: dryRunInProgress } = useMutation({
+    mutationFn: (data: Settings) => api.settings.ldapDryRun(data),
+    onSuccess: (res) => {
+      setDryRunResult(res.data);
+      setDryRunModalOpen(true);
+    },
+    onError: showConnectionError,
+  });
+
+  const { mutate: handleLdapConnectionTest, isPending: connectionTestInProgress } =
+    useMutation({
+      mutationFn: (data: Settings) => api.settings.testLdapSettings(data),
+      onSuccess: (res) => {
+        Snackbar.default(
+          m.settings_ldap_test_success_counts({
+            users: res.data.users,
+            groups: res.data.groups,
+          }),
+        );
+      },
+      onError: showConnectionError,
+    });
+
+  const { mutate: runSync, isPending: syncInProgress } = useMutation({
+    mutationFn: api.settings.ldapSync,
+    meta: {
+      invalidate: [['settings'], ['user'], ['group']],
+    },
+    onSuccess: (res) => {
+      if (res.data.errors.length > 0) {
+        Snackbar.error(m.settings_ldap_sync_errors({ count: res.data.errors.length }));
+        setConnectionError(res.data.errors.join('\n'));
+        setConnectionErrorModalOpen(true);
+      } else {
+        Snackbar.default(m.settings_ldap_sync_done());
+      }
+    },
+    onError: (e: Error) => {
+      const msg = (e as AxiosError<ApiError>).response?.data?.msg;
+      // A run that deletes many accounts must be confirmed.
+      if (isPresent(msg) && msg.includes('confirm the deletion')) {
+        openModal(ModalName.ConfirmAction, {
+          title: m.settings_ldap_confirm_deletions_title(),
+          contentMd: msg,
+          actionPromise: () => api.settings.ldapSync({ confirm_deletions: true }),
+          invalidateKeys: [['settings'], ['user'], ['group']],
+          submitProps: { text: m.settings_ldap_button_sync_now(), variant: 'critical' },
+          onSuccess: () => Snackbar.default(m.settings_ldap_sync_done()),
+          onError: () => Snackbar.error(m.settings_ldap_test_failed()),
+        });
+        return;
+      }
+      showConnectionError(e);
+    },
+  });
+
+  const form = useAppForm({
+    defaultValues,
+    validationLogic: formChangeLogic,
+    validators: {
+      onSubmit: formSchema,
+      onChange: formSchema,
+    },
+    onSubmit: async ({ value, formApi }) => {
+      await mutateAsync({
+        ...value,
+        ldap_user_auxiliary_obj_classes: csvToArray(
+          value.ldap_user_auxiliary_obj_classes,
+        ),
+        ldap_sync_groups: csvToArray(value.ldap_sync_groups),
+      });
+      formApi.reset(value);
+    },
+  });
+
+  const requiredFieldsFilled = useStore(form.store, (s) => {
+    const v = s.values;
+    return (
+      URL.canParse(v.ldap_url.trim()) &&
+      v.ldap_bind_username !== null &&
+      v.ldap_bind_username.trim().length > 0 &&
+      (v.ldap_bind_password === undefined ||
+        (v.ldap_bind_password ?? '').trim().length > 0) &&
+      v.ldap_username_attr.trim().length > 0 &&
+      v.ldap_user_search_base.trim().length > 0 &&
+      v.ldap_user_obj_class.trim().length > 0 &&
+      v.ldap_member_attr.trim().length > 0 &&
+      v.ldap_groupname_attr.trim().length > 0 &&
+      v.ldap_group_obj_class.trim().length > 0 &&
+      v.ldap_group_member_attr.trim().length > 0 &&
+      v.ldap_group_search_base.trim().length > 0
+    );
+  });
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        form.handleSubmit();
+      }}
+    >
+      <form.AppForm>
+        <MarkedSection icon={IconKind.NetworkSettings}>
+          <MarkedSectionHeader
+            title={m.settings_ldap_section_connection_title()}
+            description={m.settings_ldap_section_connection_description()}
+          />
+          <div className="checkbox-group-column">
+            <form.AppField name="ldap_use_starttls">
+              {(field) => (
+                <field.FormCheckbox text={m.settings_ldap_checkbox_use_starttls()} />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_tls_verify_cert">
+              {(field) => (
+                <field.FormCheckbox
+                  text={m.settings_ldap_checkbox_verify_tls_certificate()}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_uses_ad">
+              {(field) => (
+                <field.FormCheckbox
+                  text={m.settings_ldap_checkbox_server_is_active_directory()}
+                />
+              )}
+            </form.AppField>
+            <form.Subscribe selector={(s) => s.values.ldap_uses_ad}>
+              {(usesAd) =>
+                usesAd && (
+                  <form.AppField name="ldap_sync_account_status">
+                    {(field) => (
+                      <field.FormCheckbox
+                        text={m.settings_ldap_checkbox_sync_account_status()}
+                      />
+                    )}
+                  </form.AppField>
+                )
+              }
+            </form.Subscribe>
+            <form.AppField name="ldap_disable_password_management">
+              {(field) => (
+                <field.FormCheckbox
+                  text={m.settings_ldap_checkbox_disable_password_management()}
+                  helperBlock={
+                    <Helper>
+                      <p>
+                        {m.settings_ldap_checkbox_disable_password_management_helper()}
+                      </p>
+                    </Helper>
+                  }
+                />
+              )}
+            </form.AppField>
+          </div>
+          <SizedBox height={ThemeSpacing.Xl2} />
+          <EvenSplit>
+            <form.AppField name="ldap_url">
+              {(field) => (
+                <field.FormInput
+                  label={m.form_label_url()}
+                  required
+                  notNull
+                  helper={m.settings_ldap_helper_url()}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_bind_username">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_bind_username()}
+                  helper={m.settings_ldap_helper_bind_username()}
+                  required
+                  notNull
+                />
+              )}
+            </form.AppField>
+          </EvenSplit>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <EvenSplit>
+            <form.AppField name="ldap_bind_password">
+              {(field) => (
+                <field.FormSecretInput
+                  label={m.settings_ldap_label_bind_password()}
+                  helper={m.settings_ldap_helper_bind_password()}
+                  required
+                  stored={settings?.ldap_bind_password_set ?? false}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_sync_groups">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_sync_groups()}
+                  helper={m.settings_ldap_helper_sync_groups()}
+                />
+              )}
+            </form.AppField>
+          </EvenSplit>
+        </MarkedSection>
+        <Divider spacing={ThemeSpacing.Xl2} />
+        <MarkedSection icon="add-user">
+          <MarkedSectionHeader
+            title={m.settings_ldap_section_user_title()}
+            description={m.settings_ldap_section_user_description()}
+          />
+          <EvenSplit>
+            <form.AppField name="ldap_username_attr">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_username_attribute()}
+                  helper={m.settings_ldap_helper_username_attribute()}
+                  required
+                  notNull
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_user_rdn_attr">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_user_rdn_attribute()}
+                  helper={m.settings_ldap_helper_user_rdn_attribute()}
+                />
+              )}
+            </form.AppField>
+          </EvenSplit>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <EvenSplit>
+            <form.AppField name="ldap_user_search_base">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_user_search_base()}
+                  helper={m.settings_ldap_helper_user_search_base()}
+                  required
+                  notNull
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_user_obj_class">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_user_object_class()}
+                  helper={m.settings_ldap_helper_user_object_class()}
+                  required
+                  notNull
+                />
+              )}
+            </form.AppField>
+          </EvenSplit>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <EvenSplit>
+            <form.AppField name="ldap_member_attr">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_member_attribute()}
+                  helper={m.settings_ldap_helper_member_attribute()}
+                  required
+                  notNull
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_user_auxiliary_obj_classes">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_additional_user_object_classes()}
+                  helper={m.settings_ldap_helper_additional_user_object_classes()}
+                />
+              )}
+            </form.AppField>
+          </EvenSplit>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <EvenSplit>
+            <form.AppField name="ldap_enrollment_token_attr">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_enrollment_token_attribute()}
+                  helper={m.settings_ldap_helper_enrollment_token_attribute()}
+                />
+              )}
+            </form.AppField>
+          </EvenSplit>
+        </MarkedSection>
+        <Divider spacing={ThemeSpacing.Xl2} />
+        <MarkedSection icon="groups">
+          <MarkedSectionHeader
+            title={m.settings_ldap_section_group_title()}
+            description={m.settings_ldap_section_group_description()}
+          />
+          <EvenSplit>
+            <form.AppField name="ldap_groupname_attr">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_groupname_attribute()}
+                  helper={m.settings_ldap_helper_groupname_attribute()}
+                  notNull
+                  required
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_group_obj_class">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_group_object_class()}
+                  helper={m.settings_ldap_helper_group_object_class()}
+                  notNull
+                  required
+                />
+              )}
+            </form.AppField>
+          </EvenSplit>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <EvenSplit>
+            <form.AppField name="ldap_group_member_attr">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_group_member_attribute()}
+                  helper={m.settings_ldap_helper_group_member_attribute()}
+                  notNull
+                  required
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="ldap_group_search_base">
+              {(field) => (
+                <field.FormInput
+                  label={m.settings_ldap_label_group_search_base()}
+                  helper={m.settings_ldap_helper_group_search_base()}
+                  notNull
+                  required
+                />
+              )}
+            </form.AppField>
+          </EvenSplit>
+        </MarkedSection>
+        <Divider spacing={ThemeSpacing.Xl2} />
+        <MarkedSection icon={IconKind.Sync}>
+          <MarkedSectionHeader
+            title={m.settings_ldap_section_sync_title()}
+            description={m.settings_ldap_section_sync_description()}
+            warning={
+              requiredFieldsFilled ? undefined : m.settings_ldap_section_sync_warning()
+            }
+          />
+          <form.AppField name="ldap_sync_enabled">
+            {(field) => (
+              <field.FormInteractiveBlock
+                variant={'radio'}
+                value={false}
+                disabled={!requiredFieldsFilled}
+                title={m.settings_ldap_sync_one_way_title()}
+                content={m.settings_ldap_sync_one_way_content()}
+              />
+            )}
+          </form.AppField>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <form.AppField name="ldap_sync_enabled">
+            {(field) => (
+              <field.FormInteractiveBlock
+                variant={'radio'}
+                value={true}
+                disabled={!requiredFieldsFilled}
+                title={m.settings_ldap_sync_two_way_title()}
+                content={m.settings_ldap_sync_two_way_content()}
+              />
+            )}
+          </form.AppField>
+          <form.Subscribe selector={(s) => s.values.ldap_sync_enabled}>
+            {(syncEnabled) => (
+              <>
+                <Fold open={syncEnabled}>
+                  <Divider spacing={ThemeSpacing.Xl} />
+                  <DescriptionBlock title={m.settings_ldap_authority_block_title()}>
+                    <p>{m.settings_ldap_authority_block_description()}</p>
+                  </DescriptionBlock>
+                  <SizedBox height={ThemeSpacing.Xl} />
+                  <form.AppField name="ldap_is_authoritative">
+                    {(field) => (
+                      <field.FormInteractiveBlock
+                        variant={'radio'}
+                        value={false}
+                        title={m.settings_ldap_authority_xguard_title()}
+                        content={m.settings_ldap_authority_xguard_content()}
+                      />
+                    )}
+                  </form.AppField>
+                  <SizedBox height={ThemeSpacing.Xl} />
+                  <form.AppField name="ldap_is_authoritative">
+                    {(field) => (
+                      <field.FormInteractiveBlock
+                        variant={'radio'}
+                        value={true}
+                        title={m.settings_ldap_authority_ldap_title()}
+                        content={m.settings_ldap_authority_ldap_content()}
+                      />
+                    )}
+                  </form.AppField>
+                  <SizedBox height={ThemeSpacing.Xl2} />
+                  <form.AppField name="ldap_sync_interval">
+                    {(field) => (
+                      <field.FormInput
+                        notNull
+                        label={m.settings_ldap_label_sync_interval()}
+                        helper={m.settings_ldap_helper_sync_interval()}
+                        type="number"
+                        required={syncEnabled}
+                      />
+                    )}
+                  </form.AppField>
+                </Fold>
+              </>
+            )}
+          </form.Subscribe>
+        </MarkedSection>
+        <Controls>
+          <form.AppField name="ldap_enabled">
+            {(field) => (
+              <field.FormToggle
+                label={m.settings_ldap_toggle_enable_integration()}
+                disabled={!requiredFieldsFilled}
+              />
+            )}
+          </form.AppField>
+          <div className="right">
+            <form.Subscribe
+              selector={(s) => ({
+                isSubmitting: s.isSubmitting,
+                isDefaultValue: s.isPristine || s.isDefaultValue,
+              })}
+            >
+              {({ isDefaultValue, isSubmitting }) => (
+                <>
+                  {settings?.ldap_enabled && (
+                    <Button
+                      type="button"
+                      variant="outlined"
+                      text={m.settings_ldap_button_sync_now()}
+                      iconLeft={IconKind.Sync}
+                      testId="ldap-sync-now"
+                      disabled={isSubmitting || !isDefaultValue}
+                      loading={syncInProgress}
+                      onClick={() => runSync({})}
+                    />
+                  )}
+                  <TooltipProvider disabled={requiredFieldsFilled}>
+                    <TooltipTrigger>
+                      <div>
+                        <Button
+                          type="button"
+                          variant="outlined"
+                          text={m.settings_ldap_button_test_connection()}
+                          iconLeft={IconKind.Refresh}
+                          disabled={isSubmitting || !requiredFieldsFilled}
+                          loading={dryRunInProgress || connectionTestInProgress}
+                          onClick={() => {
+                            new SnackbarAnchor(connectionErrorSnackbarId).dismiss();
+                            const values = form.state.values;
+                            const submitted = {
+                              ...settings,
+                              ...values,
+                              ldap_user_auxiliary_obj_classes: csvToArray(
+                                values.ldap_user_auxiliary_obj_classes,
+                              ),
+                              ldap_sync_groups: csvToArray(values.ldap_sync_groups),
+                            } as Settings;
+                            if (values.ldap_sync_enabled) {
+                              handleLdapDryRun(submitted);
+                            } else {
+                              handleLdapConnectionTest(submitted);
+                            }
+                          }}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{m.settings_ldap_test_connection_tooltip()}</p>
+                    </TooltipContent>
+                  </TooltipProvider>
+                  <Button
+                    type="submit"
+                    text={m.controls_save_changes()}
+                    disabled={isDefaultValue}
+                    loading={isSubmitting}
+                  />
+                </>
+              )}
+            </form.Subscribe>
+          </div>
+        </Controls>
+      </form.AppForm>
+      <LdapDryRunModal
+        isOpen={dryRunModalOpen}
+        result={dryRunResult}
+        onClose={() => setDryRunModalOpen(false)}
+      />
+      <LdapConnectionErrorModal
+        isOpen={connectionErrorModalOpen}
+        error={connectionError}
+        onClose={() => setConnectionErrorModalOpen(false)}
+      />
+    </form>
+  );
+};

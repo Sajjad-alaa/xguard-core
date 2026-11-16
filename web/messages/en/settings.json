@@ -390,5 +390,10 @@
   "settings_smtp_label_oauth_issuer_url": "Issuer URL",
   "settings_smtp_label_oauth_scope": "Scope",
   "settings_smtp_label_oauth_tenant_id": "Tenant ID",
-  "settings_smtp_other_methods_label": "Other configuration methods"
+  "settings_smtp_other_methods_label": "Other configuration methods",
+  "settings_ldap_test_success_counts": "Connected: {users} users and {groups} groups found",
+  "settings_ldap_button_sync_now": "Sync now",
+  "settings_ldap_sync_done": "Synchronization finished",
+  "settings_ldap_sync_errors": "Synchronization finished with {count} errors",
+  "settings_ldap_confirm_deletions_title": "Confirm deletions"
 }

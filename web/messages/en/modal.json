@@ -277,7 +277,7 @@
   "modal_app_update_snackbar_message": "New version {version} is available",
   "modal_app_update_snackbar_action": "What's new",
   "modal_ldap_dry_run_title": "Test synchronization results",
-  "modal_ldap_dry_run_description": "The results below show the outcome of the connection check using the current synchronization settings. These changes will be applied to the system if the configuration is saved and activated.",
+  "modal_ldap_dry_run_description": "The changes below are what a synchronization with the settings in the form would make. Nothing is changed until you save and sync.",
   "modal_ldap_dry_run_tab_xguard": "XGuard",
   "modal_ldap_dry_run_tab_ldap": "LDAP",
   "modal_ldap_dry_run_search_placeholder": "Search",
@@ -300,5 +300,14 @@
   "modal_add_api_token_read_only_label": "Read-only: allow only requests that read data",
   "modal_add_api_token_failed": "Failed to create the API token",
   "modal_rename_api_token_failed": "Failed to rename the API token",
-  "modal_api_token_name_too_long": "Use at most 64 characters."
+  "modal_api_token_name_too_long": "Use at most 64 characters.",
+  "modal_ldap_dry_run_col_change": "Change",
+  "modal_ldap_dry_run_status_updated": "Will be updated",
+  "modal_ldap_dry_run_change_account": "Account",
+  "modal_ldap_dry_run_change_details": "Name, email or phone",
+  "modal_ldap_dry_run_change_enabled": "Account enabled",
+  "modal_ldap_dry_run_change_disabled": "Account disabled",
+  "modal_ldap_dry_run_change_group": "Group {group}",
+  "modal_ldap_dry_run_new_groups": "New groups: {groups}",
+  "modal_ldap_dry_run_skipped": "Left unchanged on purpose:"
 }

@@ -405,6 +405,11 @@ async fn main() -> Result<(), anyhow::Error> {
             activity_log_stream_reload_notify.clone(),
             activity_log_messages_tx.clone()
         ) => bail!("Activity log event logger returned early: {res:?}"),
+        () = xguard_core::directory::push::run_worker(
+            pool.clone(),
+            ldap_tx.clone(),
+            gateway_tx.clone()
+        ) => bail!("Directory sync worker returned early"),
         res = run_session_manager(
             pool.clone(),
             peer_stats_rx,

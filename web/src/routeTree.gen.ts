@@ -53,6 +53,7 @@ import { Route as AuthorizedDefaultSettingsCaRouteImport } from './routes/_autho
 import { Route as AuthorizedDefaultSettingsCertsRouteImport } from './routes/_authorized/_default/settings/certs'
 import { Route as AuthorizedDefaultSettingsGatewayNotificationsRouteImport } from './routes/_authorized/_default/settings/gateway-notifications'
 import { Route as AuthorizedDefaultSettingsInstanceRouteImport } from './routes/_authorized/_default/settings/instance'
+import { Route as AuthorizedDefaultSettingsLdapRouteImport } from './routes/_authorized/_default/settings/ldap'
 import { Route as AuthorizedDefaultSettingsSmtpRouteImport } from './routes/_authorized/_default/settings/smtp'
 import { Route as AuthorizedDefaultUserUsernameRouteImport } from './routes/_authorized/_default/user/$username'
 import { Route as AuthorizedDefaultVpnOverviewIndexRouteImport } from './routes/_authorized/_default/vpn-overview/index'
@@ -299,6 +300,12 @@ const AuthorizedDefaultSettingsInstanceRoute =
     path: '/settings/instance',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
+const AuthorizedDefaultSettingsLdapRoute =
+  AuthorizedDefaultSettingsLdapRouteImport.update({
+    id: '/settings/ldap',
+    path: '/settings/ldap',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
 const AuthorizedDefaultSettingsSmtpRoute =
   AuthorizedDefaultSettingsSmtpRouteImport.update({
     id: '/settings/smtp',
@@ -388,6 +395,7 @@ export interface FileRoutesByFullPath {
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
+  '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -439,6 +447,7 @@ export interface FileRoutesByTo {
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
+  '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -494,6 +503,7 @@ export interface FileRoutesById {
   '/_authorized/_default/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
   '/_authorized/_default/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/_authorized/_default/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
+  '/_authorized/_default/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
   '/_authorized/_default/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/_authorized/_default/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/_authorized/_default/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -548,6 +558,7 @@ export interface FileRouteTypes {
     | '/settings/certs'
     | '/settings/gateway-notifications'
     | '/settings/instance'
+    | '/settings/ldap'
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
@@ -599,6 +610,7 @@ export interface FileRouteTypes {
     | '/settings/certs'
     | '/settings/gateway-notifications'
     | '/settings/instance'
+    | '/settings/ldap'
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
@@ -653,6 +665,7 @@ export interface FileRouteTypes {
     | '/_authorized/_default/settings/certs'
     | '/_authorized/_default/settings/gateway-notifications'
     | '/_authorized/_default/settings/instance'
+    | '/_authorized/_default/settings/ldap'
     | '/_authorized/_default/settings/smtp'
     | '/_authorized/_default/user/$username'
     | '/_authorized/_default/vpn-overview/$locationId'
@@ -991,6 +1004,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultSettingsInstanceRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
+    '/_authorized/_default/settings/ldap': {
+      id: '/_authorized/_default/settings/ldap'
+      path: '/settings/ldap'
+      fullPath: '/settings/ldap'
+      preLoaderRoute: typeof AuthorizedDefaultSettingsLdapRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
     '/_authorized/_default/settings/smtp': {
       id: '/_authorized/_default/settings/smtp'
       path: '/settings/smtp'
@@ -1066,6 +1086,7 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultSettingsCertsRoute: typeof AuthorizedDefaultSettingsCertsRoute
   AuthorizedDefaultSettingsGatewayNotificationsRoute: typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   AuthorizedDefaultSettingsInstanceRoute: typeof AuthorizedDefaultSettingsInstanceRoute
+  AuthorizedDefaultSettingsLdapRoute: typeof AuthorizedDefaultSettingsLdapRoute
   AuthorizedDefaultSettingsSmtpRoute: typeof AuthorizedDefaultSettingsSmtpRoute
   AuthorizedDefaultUserUsernameRoute: typeof AuthorizedDefaultUserUsernameRoute
   AuthorizedDefaultVpnOverviewLocationIdRoute: typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -1097,6 +1118,7 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
     AuthorizedDefaultSettingsGatewayNotificationsRoute,
   AuthorizedDefaultSettingsInstanceRoute:
     AuthorizedDefaultSettingsInstanceRoute,
+  AuthorizedDefaultSettingsLdapRoute: AuthorizedDefaultSettingsLdapRoute,
   AuthorizedDefaultSettingsSmtpRoute: AuthorizedDefaultSettingsSmtpRoute,
   AuthorizedDefaultUserUsernameRoute: AuthorizedDefaultUserUsernameRoute,
   AuthorizedDefaultVpnOverviewLocationIdRoute:

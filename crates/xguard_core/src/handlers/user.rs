@@ -1099,6 +1099,7 @@ pub(crate) async fn change_self_password(
         return Ok(ApiResponse::with_status(StatusCode::BAD_REQUEST));
     }
 
+    crate::directory::push::set_password(&appstate.pool, &user, &data.new_password).await?;
     user.set_password(&data.new_password);
     user.save(&appstate.pool).await?;
 
@@ -1178,6 +1179,7 @@ pub(crate) async fn change_password(
             ));
         }
 
+        crate::directory::push::set_password(&appstate.pool, &user, &data.new_password).await?;
         user.set_password(&data.new_password);
         user.save(&appstate.pool).await?;
         user.logout_all_sessions(&appstate.pool).await?;
