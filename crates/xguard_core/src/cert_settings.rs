@@ -1,5 +1,8 @@
 use axum_server::tls_rustls::RustlsConfig;
 use chrono::{NaiveDateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use thiserror::Error;
 use xguard_certs::{
     CertificateError, CertificateInfo, Csr, DnType, PemLabel, der_to_pem, generate_key_pair,
     parse_pem_certificate,
@@ -8,9 +11,6 @@ use xguard_common::db::models::{
     Certificates, CoreCertSource, ProxyCertSource, Settings,
     settings::{SettingsSaveError, update_current_settings},
 };
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
-use thiserror::Error;
 
 /// Errors arising from certificate settings operations.
 #[derive(Debug, Error)]
@@ -86,6 +86,8 @@ pub enum InternalSslType {
     /// No SSL - plain HTTP, user manages reverse proxy / SSL termination themselves.
     None,
     /// Generate certificates using XGuard's internal Certificate Authority.
+    // Explicit name: snake_case would give "x_guard_ca"; clients send "xguard_ca".
+    #[serde(rename = "xguard_ca")]
     XGuardCa,
     /// Upload a custom certificate and private key.
     OwnCert,
@@ -119,6 +121,8 @@ pub enum ExternalSslType {
     /// Obtain a certificate via ACME / Let's Encrypt.
     LetsEncrypt,
     /// Generate certificates using XGuard's internal Certificate Authority.
+    // Explicit name: snake_case would give "x_guard_ca"; clients send "xguard_ca".
+    #[serde(rename = "xguard_ca")]
     XGuardCa,
     /// Upload a custom certificate and private key.
     OwnCert,
@@ -436,6 +440,7 @@ pub(crate) async fn refresh_proxy_self_signed_cert(
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
     use xguard_certs::{
         CertificateAuthority, Csr, DnType, ExtendedKeyUsagePurpose, PemLabel, der_to_pem,
         generate_key_pair,
@@ -447,7 +452,6 @@ mod tests {
         },
         setup_pool,
     };
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
     use super::{
         CertSettingsError, extract_hostname, parse_cert, refresh_core_self_signed_cert,

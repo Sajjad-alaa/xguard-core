@@ -1,8 +1,8 @@
 use chrono::NaiveDateTime;
-use xguard_common::db::{Id, NoId};
 use ipnetwork::IpNetwork;
 use model_derive::Model;
 use sqlx::{FromRow, Type};
+use xguard_common::db::{Id, NoId};
 
 pub mod metadata;
 
@@ -11,6 +11,9 @@ pub mod metadata;
 #[sqlx(type_name = "activity_log_module", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum ActivityLogModule {
+    // Explicit name: snake_case would give "x_guard", the stored value is "xguard".
+    #[sqlx(rename = "xguard")]
+    #[serde(rename = "xguard")]
     XGuard,
     Client,
     Vpn,
