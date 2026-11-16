@@ -478,6 +478,11 @@ pub struct WebHookMetadata {
 }
 
 #[derive(Serialize)]
+pub struct OpenIdProviderMetadata {
+    pub provider: crate::sso::provider::OpenIdProvider,
+}
+
+#[derive(Serialize)]
 pub struct ActivityLogStreamMetadata {
     pub stream: crate::log_stream::ActivityLogStream,
 }

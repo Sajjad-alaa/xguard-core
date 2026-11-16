@@ -23,13 +23,14 @@ use xguard_core::{
             NetworkDeviceMetadata, NetworkDeviceModifiedMetadata,
             OidcDirectorySyncGroupMemberMetadata, OidcDirectorySyncGroupMetadata,
             OidcDirectorySyncUserMetadata, OpenIdAppMetadata, OpenIdAppModifiedMetadata,
-            OpenIdAppStateChangedMetadata, PasswordChangedByAdminMetadata, PasswordResetMetadata,
-            ProxyDeletedMetadata, ProxyModifiedMetadata, SettingsUpdateMetadata,
-            SnatBindingMetadata, SnatBindingModifiedMetadata, UserGroupsModifiedMetadata,
-            UserImportBlockedMetadata, UserMetadata, UserMfaDisabledMetadata, UserModifiedMetadata,
-            VpnClientMetadata, VpnClientMfaAbortedMetadata, VpnClientMfaFailedMetadata,
-            VpnClientMfaMetadata, VpnLocationMetadata, VpnLocationModifiedMetadata,
-            WebHookMetadata, WebHookModifiedMetadata, WebHookStateChangedMetadata,
+            OpenIdAppStateChangedMetadata, OpenIdProviderMetadata, PasswordChangedByAdminMetadata,
+            PasswordResetMetadata, ProxyDeletedMetadata, ProxyModifiedMetadata,
+            SettingsUpdateMetadata, SnatBindingMetadata, SnatBindingModifiedMetadata,
+            UserGroupsModifiedMetadata, UserImportBlockedMetadata, UserMetadata,
+            UserMfaDisabledMetadata, UserModifiedMetadata, VpnClientMetadata,
+            VpnClientMfaAbortedMetadata, VpnClientMfaFailedMetadata, VpnClientMfaMetadata,
+            VpnLocationMetadata, VpnLocationModifiedMetadata, WebHookMetadata,
+            WebHookModifiedMetadata, WebHookStateChangedMetadata,
         },
     },
     events::{
@@ -300,6 +301,14 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 ApiEventType::MfaSecurityKeyRemoved { key } => (
                     EventType::MfaSecurityKeyRemoved,
                     serde_json::to_value(MfaSecurityKeyMetadata { key: key.into() }).ok(),
+                ),
+                ApiEventType::OpenIdProviderModified { provider } => (
+                    EventType::OpenIdProviderModified,
+                    serde_json::to_value(OpenIdProviderMetadata { provider }).ok(),
+                ),
+                ApiEventType::OpenIdProviderRemoved { provider } => (
+                    EventType::OpenIdProviderRemoved,
+                    serde_json::to_value(OpenIdProviderMetadata { provider }).ok(),
                 ),
                 ApiEventType::ActivityLogStreamCreated { stream } => (
                     EventType::ActivityLogStreamCreated,

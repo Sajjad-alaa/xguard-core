@@ -404,5 +404,21 @@
   "settings_activity_log_streaming_status_dropped": "{count} dropped",
   "settings_activity_log_streaming_send_test": "Send test entry",
   "settings_activity_log_streaming_test_success": "Test entry delivered",
-  "settings_activity_log_streaming_test_failed": "The test entry was not delivered"
+  "settings_activity_log_streaming_test_failed": "The test entry was not delivered",
+  "settings_openid_page_title": "OpenID Connect sign-in",
+  "settings_openid_page_subtitle": "Let users sign in with an external OpenID Connect provider, such as Google, Microsoft Entra ID, Okta or Keycloak.",
+  "settings_openid_label_kind": "Provider",
+  "settings_openid_label_issuer": "Issuer URL",
+  "settings_openid_helper_issuer": "The provider's issuer, for example https://accounts.google.com. XGuard reads its configuration from /.well-known/openid-configuration.",
+  "settings_openid_helper_secret_kept": "Leave empty to keep the stored secret.",
+  "settings_openid_helper_redirect": "Register {url} as the redirect URI at the provider.",
+  "settings_openid_helper_display_name": "Shown on the sign-in button.",
+  "settings_openid_label_create_accounts": "Create XGuard accounts for new users with a verified email",
+  "settings_openid_label_disable_password_management": "Users without an XGuard password cannot set one",
+  "settings_openid_label_enabled": "Enable sign-in with this provider",
+  "settings_openid_button_test": "Test",
+  "settings_openid_test_success": "The provider answered correctly",
+  "settings_openid_test_failed": "The provider could not be reached",
+  "settings_openid_delete_title": "Remove the provider",
+  "settings_openid_delete_body": "Users will no longer be able to sign in with it. Their XGuard accounts are kept."
 }

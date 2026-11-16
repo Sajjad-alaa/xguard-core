@@ -685,6 +685,35 @@ export interface AuthKey {
   yubikey_serial: string | null;
 }
 
+export interface OpenIdAuthInfo {
+  url: string;
+  button_display_name?: string | null;
+  provider_kind: OpenIdProviderKindValue;
+}
+
+/** The external OpenID provider; the client secret is never returned. */
+export interface ExternalOpenIdProvider {
+  id: number;
+  kind: OpenIdProviderKindValue;
+  issuer: string;
+  client_id: string;
+  enabled: boolean;
+  display_name: string | null;
+  disable_password_management: boolean;
+  client_secret_set: boolean;
+}
+
+export interface ExternalOpenIdProviderInput {
+  kind: OpenIdProviderKindValue;
+  issuer: string;
+  client_id: string;
+  /** Leave it out to keep the stored secret. */
+  client_secret?: string;
+  enabled: boolean;
+  display_name: string | null;
+  disable_password_management: boolean;
+}
+
 export interface LdapMembership {
   group: string;
   username: string;

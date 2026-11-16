@@ -49,6 +49,8 @@ import type {
   EditNetworkLocationRequest,
   EditOpenIdClientActiveStateRequest,
   EnableMfaMethodResponse,
+  ExternalOpenIdProvider,
+  ExternalOpenIdProviderInput,
   FirewallRule,
   FirewallRuleInput,
   Gateway,
@@ -85,6 +87,7 @@ import type {
   MigrationWizardStateResponse,
   NetworkDevice,
   NetworkLocation,
+  OpenIdAuthInfo,
   OpenIdClient,
   PublicKeyCredentialJSON,
   RenameApiTokenRequest,
@@ -453,6 +456,16 @@ const api = {
       client.post(`/device/user/${username}/ip`, data),
     validateUserDeviceIp: (username: string, data: ValidateIpAssignmentRequest) =>
       client.post(`/device/user/${username}/ip/validate`, data),
+  },
+  openid: {
+    authInfo: () => client.get<OpenIdAuthInfo>('/openid/auth_info'),
+    callback: (data: unknown) => client.post<LoginResponse>('/openid/callback', data),
+    getProvider: () => client.get<ExternalOpenIdProvider>('/openid/provider'),
+    setProvider: (data: ExternalOpenIdProviderInput) =>
+      client.put<ExternalOpenIdProvider>('/openid/provider', data),
+    deleteProvider: () => client.delete('/openid/provider'),
+    testProvider: (data: ExternalOpenIdProviderInput) =>
+      client.post('/openid/provider/test', data),
   },
   activityLogStream: {
     getStreams: () => client.get<ActivityLogStream[]>('/activity_log_stream'),

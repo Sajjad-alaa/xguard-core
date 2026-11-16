@@ -17,8 +17,8 @@ use super::handlers::{
     auth, component_setup, core_certs, directory, firewall, forward_auth, gateway,
     group::{self, BulkAssignToGroupsRequest},
     location_stats, log_stream, mail, mfa_flow, network_devices, openid_clients, openid_flow,
-    proxy, reserved, resource_display, session_info, settings, ssh_authorized_keys, static_ips,
-    support, updates,
+    proxy, reserved, resource_display, session_info, settings, ssh_authorized_keys, sso,
+    static_ips, support, updates,
     user::{self, UserDetails},
     webhooks, wireguard as device, wireguard as network,
     wireguard::AddDeviceResult,
@@ -174,6 +174,13 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         webhooks::get_webhook,
         webhooks::change_enabled,
         webhooks::change_webhook,
+        // external OpenID provider
+        sso::auth_info,
+        sso::callback,
+        sso::get_provider,
+        sso::set_provider,
+        sso::delete_provider,
+        sso::test_provider,
         // activity log streaming
         log_stream::list_streams,
         log_stream::create_stream,
@@ -250,7 +257,9 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
             api_tokens::CreatedApiToken, api_tokens::RenameApiToken,
             directory::SyncRequest, directory::ConnectionTest,
             log_stream::StreamWithStatus, crate::log_stream::StreamInput,
-            crate::log_stream::StreamType, crate::log_stream::sender::StreamStatus
+            crate::log_stream::StreamType, crate::log_stream::sender::StreamStatus,
+            sso::AuthInfo, sso::CallbackRequest, crate::sso::provider::OpenIdProvider,
+            crate::sso::provider::ProviderInput, crate::sso::provider::ProviderKind
         ),
     ),
     tags(

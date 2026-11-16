@@ -106,7 +106,8 @@ pub async fn create_session(
             "User {} has MFA disabled, returning user info for login.",
             user.username
         );
-        let oidc_disable_password_management = false;
+        let oidc_disable_password_management =
+            crate::sso::provider::disables_password_management(pool).await?;
         let user_info =
             UserInfo::from_user(pool, user.clone(), oidc_disable_password_management).await?;
 
@@ -122,6 +123,31 @@ pub async fn create_session(
 
         Ok((session, Some(user_info), None))
     }
+}
+
+/// The session cookie for a signed-in session.
+pub(crate) fn session_cookie(session_id: &str) -> Result<Cookie<'static>, WebError> {
+    let settings = Settings::get_current_settings();
+    let timeout = settings.authentication_timeout();
+    let max_age = Duration::try_from(timeout).map_err(|err| {
+        error!("Failed to convert authentication timeout for cookie max-age: {err}");
+        WebError::Http(StatusCode::INTERNAL_SERVER_ERROR)
+    })?;
+    let config = server_config();
+    let mut auth_cookie = Cookie::build((SESSION_COOKIE_NAME, session_id.to_owned()))
+        .path("/")
+        .http_only(true)
+        .secure(
+            config
+                .cookie_insecure
+                .map_or(settings.cookie_secure()?, |insecure| !insecure),
+        )
+        .same_site(SameSite::Lax)
+        .max_age(max_age);
+    if let Some(cookie_domain) = cookie_domain() {
+        auth_cookie = auth_cookie.domain(cookie_domain);
+    }
+    Ok(auth_cookie.build())
 }
 
 /// Authenticate a user
@@ -246,27 +272,7 @@ pub async fn authenticate(
     let (session, user_info, mfa_info) =
         create_session(&appstate.pool, ip_addr, user_agent.as_str(), &mut user).await?;
 
-    let settings = Settings::get_current_settings();
-    let timeout = settings.authentication_timeout();
-    let max_age = Duration::try_from(timeout).map_err(|err| {
-        error!("Failed to convert authentication timeout for cookie max-age: {err}");
-        WebError::Http(StatusCode::INTERNAL_SERVER_ERROR)
-    })?;
-    let config = server_config();
-    let mut auth_cookie = Cookie::build((SESSION_COOKIE_NAME, session.id.clone()))
-        .path("/")
-        .http_only(true)
-        .secure(
-            config
-                .cookie_insecure
-                .map_or(settings.cookie_secure()?, |insecure| !insecure),
-        )
-        .same_site(SameSite::Lax)
-        .max_age(max_age);
-    if let Some(cookie_domain) = cookie_domain() {
-        auth_cookie = auth_cookie.domain(cookie_domain);
-    }
-    let cookies = cookies.add(auth_cookie);
+    let cookies = cookies.add(session_cookie(&session.id)?);
 
     if let Some(mfa_info) = mfa_info {
         return Ok((
@@ -702,7 +708,8 @@ pub async fn webauthn_end(
 
                 return if let Some(user) = User::find_by_id(&appstate.pool, session.user_id).await?
                 {
-                    let oidc_disable_password_management = false;
+                    let oidc_disable_password_management =
+                        crate::sso::provider::disables_password_management(&appstate.pool).await?;
                     let user_info = UserInfo::from_user(
                         &appstate.pool,
                         user.clone(),
@@ -933,7 +940,8 @@ pub async fn totp_code(
             session
                 .set_state(&appstate.pool, SessionState::MultiFactorVerified)
                 .await?;
-            let oidc_disable_password_management = false;
+            let oidc_disable_password_management =
+                crate::sso::provider::disables_password_management(&appstate.pool).await?;
             let user_info =
                 UserInfo::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
             info!("Verified TOTP for user {username}");
@@ -1229,7 +1237,8 @@ pub async fn email_mfa_code(
             session
                 .set_state(&appstate.pool, SessionState::MultiFactorVerified)
                 .await?;
-            let oidc_disable_password_management = false;
+            let oidc_disable_password_management =
+                crate::sso::provider::disables_password_management(&appstate.pool).await?;
             let user_info =
                 UserInfo::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
             info!("Verified email MFA code for user {username}");
@@ -1337,7 +1346,8 @@ pub async fn recovery_code(
             session
                 .set_state(&appstate.pool, SessionState::MultiFactorVerified)
                 .await?;
-            let oidc_disable_password_management = false;
+            let oidc_disable_password_management =
+                crate::sso::provider::disables_password_management(&appstate.pool).await?;
             let user_info = UserInfo::from_user(
                 &appstate.pool,
                 user.clone(),

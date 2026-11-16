@@ -256,6 +256,12 @@ pub enum ApiEventType {
         webhook: WebHook<Id>,
         enabled: bool,
     },
+    OpenIdProviderModified {
+        provider: crate::sso::provider::OpenIdProvider,
+    },
+    OpenIdProviderRemoved {
+        provider: crate::sso::provider::OpenIdProvider,
+    },
     ActivityLogStreamCreated {
         stream: crate::log_stream::ActivityLogStream,
     },

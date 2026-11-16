@@ -222,6 +222,12 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
             key.key_type,
             key.name.clone().unwrap_or_default()
         )),
+        ApiEventType::OpenIdProviderModified { provider } => {
+            Some(format!("Set the OpenID provider to {}", provider.issuer))
+        }
+        ApiEventType::OpenIdProviderRemoved { provider } => {
+            Some(format!("Removed the OpenID provider {}", provider.issuer))
+        }
         ApiEventType::ActivityLogStreamCreated { stream } => Some(format!(
             "Added activity log stream {} to {}",
             stream.name, stream.url

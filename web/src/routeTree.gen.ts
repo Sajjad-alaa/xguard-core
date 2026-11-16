@@ -21,6 +21,7 @@ import { Route as WizardSetupRouteImport } from './routes/_wizard/setup'
 import { Route as WizardSetupGatewayRouteImport } from './routes/_wizard/setup-gateway'
 import { Route as WizardSetupLoginRouteImport } from './routes/_wizard/setup-login'
 import { Route as AuthIndexRouteImport } from './routes/auth/index'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AuthLoadingRouteImport } from './routes/auth/loading'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthMfaRouteImport } from './routes/auth/mfa'
@@ -54,6 +55,7 @@ import { Route as AuthorizedDefaultSettingsCertsRouteImport } from './routes/_au
 import { Route as AuthorizedDefaultSettingsGatewayNotificationsRouteImport } from './routes/_authorized/_default/settings/gateway-notifications'
 import { Route as AuthorizedDefaultSettingsInstanceRouteImport } from './routes/_authorized/_default/settings/instance'
 import { Route as AuthorizedDefaultSettingsLdapRouteImport } from './routes/_authorized/_default/settings/ldap'
+import { Route as AuthorizedDefaultSettingsOpenidRouteImport } from './routes/_authorized/_default/settings/openid'
 import { Route as AuthorizedDefaultSettingsSmtpRouteImport } from './routes/_authorized/_default/settings/smtp'
 import { Route as AuthorizedDefaultUserUsernameRouteImport } from './routes/_authorized/_default/user/$username'
 import { Route as AuthorizedDefaultVpnOverviewIndexRouteImport } from './routes/_authorized/_default/vpn-overview/index'
@@ -119,6 +121,11 @@ const WizardSetupLoginRoute = WizardSetupLoginRouteImport.update({
 const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthLoadingRoute = AuthLoadingRouteImport.update({
@@ -306,6 +313,12 @@ const AuthorizedDefaultSettingsLdapRoute =
     path: '/settings/ldap',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
+const AuthorizedDefaultSettingsOpenidRoute =
+  AuthorizedDefaultSettingsOpenidRouteImport.update({
+    id: '/settings/openid',
+    path: '/settings/openid',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
 const AuthorizedDefaultSettingsSmtpRoute =
   AuthorizedDefaultSettingsSmtpRouteImport.update({
     id: '/settings/smtp',
@@ -365,6 +378,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof WizardSetupRoute
   '/setup-gateway': typeof WizardSetupGatewayRoute
   '/setup-login': typeof WizardSetupLoginRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/auth/loading': typeof AuthLoadingRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/mfa': typeof AuthMfaRouteWithChildren
@@ -396,6 +410,7 @@ export interface FileRoutesByFullPath {
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
+  '/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -417,6 +432,7 @@ export interface FileRoutesByTo {
   '/setup': typeof WizardSetupRoute
   '/setup-gateway': typeof WizardSetupGatewayRoute
   '/setup-login': typeof WizardSetupLoginRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/auth/loading': typeof AuthLoadingRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/mfa': typeof AuthMfaRouteWithChildren
@@ -448,6 +464,7 @@ export interface FileRoutesByTo {
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
+  '/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -473,6 +490,7 @@ export interface FileRoutesById {
   '/_wizard/setup': typeof WizardSetupRoute
   '/_wizard/setup-gateway': typeof WizardSetupGatewayRoute
   '/_wizard/setup-login': typeof WizardSetupLoginRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/auth/loading': typeof AuthLoadingRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/mfa': typeof AuthMfaRouteWithChildren
@@ -504,6 +522,7 @@ export interface FileRoutesById {
   '/_authorized/_default/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/_authorized/_default/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/_authorized/_default/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
+  '/_authorized/_default/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
   '/_authorized/_default/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/_authorized/_default/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/_authorized/_default/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -528,6 +547,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/setup-gateway'
     | '/setup-login'
+    | '/auth/callback'
     | '/auth/loading'
     | '/auth/login'
     | '/auth/mfa'
@@ -559,6 +579,7 @@ export interface FileRouteTypes {
     | '/settings/gateway-notifications'
     | '/settings/instance'
     | '/settings/ldap'
+    | '/settings/openid'
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
@@ -580,6 +601,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/setup-gateway'
     | '/setup-login'
+    | '/auth/callback'
     | '/auth/loading'
     | '/auth/login'
     | '/auth/mfa'
@@ -611,6 +633,7 @@ export interface FileRouteTypes {
     | '/settings/gateway-notifications'
     | '/settings/instance'
     | '/settings/ldap'
+    | '/settings/openid'
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
@@ -635,6 +658,7 @@ export interface FileRouteTypes {
     | '/_wizard/setup'
     | '/_wizard/setup-gateway'
     | '/_wizard/setup-login'
+    | '/auth/callback'
     | '/auth/loading'
     | '/auth/login'
     | '/auth/mfa'
@@ -666,6 +690,7 @@ export interface FileRouteTypes {
     | '/_authorized/_default/settings/gateway-notifications'
     | '/_authorized/_default/settings/instance'
     | '/_authorized/_default/settings/ldap'
+    | '/_authorized/_default/settings/openid'
     | '/_authorized/_default/settings/smtp'
     | '/_authorized/_default/user/$username'
     | '/_authorized/_default/vpn-overview/$locationId'
@@ -778,6 +803,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/auth/'
       preLoaderRoute: typeof AuthIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof AuthRoute
     }
     '/auth/loading': {
@@ -1011,6 +1043,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultSettingsLdapRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
+    '/_authorized/_default/settings/openid': {
+      id: '/_authorized/_default/settings/openid'
+      path: '/settings/openid'
+      fullPath: '/settings/openid'
+      preLoaderRoute: typeof AuthorizedDefaultSettingsOpenidRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
     '/_authorized/_default/settings/smtp': {
       id: '/_authorized/_default/settings/smtp'
       path: '/settings/smtp'
@@ -1087,6 +1126,7 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultSettingsGatewayNotificationsRoute: typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   AuthorizedDefaultSettingsInstanceRoute: typeof AuthorizedDefaultSettingsInstanceRoute
   AuthorizedDefaultSettingsLdapRoute: typeof AuthorizedDefaultSettingsLdapRoute
+  AuthorizedDefaultSettingsOpenidRoute: typeof AuthorizedDefaultSettingsOpenidRoute
   AuthorizedDefaultSettingsSmtpRoute: typeof AuthorizedDefaultSettingsSmtpRoute
   AuthorizedDefaultUserUsernameRoute: typeof AuthorizedDefaultUserUsernameRoute
   AuthorizedDefaultVpnOverviewLocationIdRoute: typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -1119,6 +1159,7 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
   AuthorizedDefaultSettingsInstanceRoute:
     AuthorizedDefaultSettingsInstanceRoute,
   AuthorizedDefaultSettingsLdapRoute: AuthorizedDefaultSettingsLdapRoute,
+  AuthorizedDefaultSettingsOpenidRoute: AuthorizedDefaultSettingsOpenidRoute,
   AuthorizedDefaultSettingsSmtpRoute: AuthorizedDefaultSettingsSmtpRoute,
   AuthorizedDefaultUserUsernameRoute: AuthorizedDefaultUserUsernameRoute,
   AuthorizedDefaultVpnOverviewLocationIdRoute:
@@ -1181,6 +1222,7 @@ const AuthMfaRouteWithChildren =
   AuthMfaRoute._addFileChildren(AuthMfaRouteChildren)
 
 interface AuthRouteChildren {
+  AuthCallbackRoute: typeof AuthCallbackRoute
   AuthLoadingRoute: typeof AuthLoadingRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthMfaRoute: typeof AuthMfaRouteWithChildren
@@ -1188,6 +1230,7 @@ interface AuthRouteChildren {
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthCallbackRoute: AuthCallbackRoute,
   AuthLoadingRoute: AuthLoadingRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthMfaRoute: AuthMfaRouteWithChildren,

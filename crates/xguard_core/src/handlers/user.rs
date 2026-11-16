@@ -333,7 +333,8 @@ pub(crate) async fn list_users(
 
     // Map [`User`] to [`UserInfo`].
     // TODO: too many queries – optimise.
-    let oidc_disable_password_management = false;
+    let oidc_disable_password_management =
+        crate::sso::provider::disables_password_management(&appstate.pool).await?;
     let mut users = Vec::with_capacity(all_users.len());
     for user in all_users {
         users.push(
@@ -462,7 +463,8 @@ pub(crate) async fn get_user(
     Path(username): Path<String>,
 ) -> ApiResult {
     let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
-    let oidc_disable_password_management = false;
+    let oidc_disable_password_management =
+        crate::sso::provider::disables_password_management(&appstate.pool).await?;
     let user_details =
         UserDetails::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
     Ok(ApiResponse::json(user_details, StatusCode::OK))
@@ -566,7 +568,8 @@ pub(crate) async fn add_user(
     .save(&appstate.pool)
     .await?;
 
-    let oidc_disable_password_management = false;
+    let oidc_disable_password_management =
+        crate::sso::provider::disables_password_management(&appstate.pool).await?;
     let user_info = UserInfo::from_user(
         &appstate.pool,
         user.clone(),
@@ -853,7 +856,8 @@ pub(crate) async fn modify_user(
 ) -> ApiResult {
     debug!("User {} updating user {username}", session.user.username);
     let mut user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
-    let oidc_disable_password_management = false;
+    let oidc_disable_password_management =
+        crate::sso::provider::disables_password_management(&appstate.pool).await?;
     let groups_before = UserInfo::from_user(
         &appstate.pool,
         user.clone(),
@@ -1049,7 +1053,7 @@ pub(crate) async fn delete_user(
 /// management (set/change/reset) is disabled for `user`.
 async fn user_password_management_disabled(pool: &PgPool, user: &User<Id>) -> sqlx::Result<bool> {
     let settings = Settings::get_current_settings();
-    let oidc_disabled = false;
+    let oidc_disabled = crate::sso::provider::disables_password_management(pool).await?;
     let is_admin = user.is_admin(pool).await?;
     Ok(user.password_management_disabled(is_admin, &settings, oidc_disabled))
 }
@@ -1392,7 +1396,8 @@ pub(crate) async fn delete_security_key(
     )
 ))]
 pub async fn me(session: SessionInfo, State(appstate): State<AppState>) -> ApiResult {
-    let oidc_disable_password_management = false;
+    let oidc_disable_password_management =
+        crate::sso::provider::disables_password_management(&appstate.pool).await?;
     let user_info = UserInfo::from_user(
         &appstate.pool,
         session.user,

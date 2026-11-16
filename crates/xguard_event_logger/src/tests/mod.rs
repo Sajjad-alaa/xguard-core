@@ -339,6 +339,16 @@ fn api_event_cases() -> Vec<EventTestCase> {
         created_at: chrono::NaiveDateTime::default(),
         updated_at: chrono::NaiveDateTime::default(),
     };
+    let provider = xguard_core::sso::provider::OpenIdProvider {
+        id: 1,
+        kind: xguard_core::sso::provider::ProviderKind::Google,
+        issuer: "https://accounts.google.com".into(),
+        client_id: "client".into(),
+        enabled: true,
+        display_name: None,
+        disable_password_management: false,
+        client_secret_set: true,
+    };
     let log_stream = xguard_core::log_stream::ActivityLogStream {
         id: 1,
         name: "siem".into(),
@@ -920,6 +930,22 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::WebHookStateChanged,
             module: ActivityLogModule::XGuard,
             description_contains: Some("Disabled"),
+        },
+        EventTestCase {
+            name: "OpenIdProviderModified",
+            message: api_message(ApiEventType::OpenIdProviderModified {
+                provider: provider.clone(),
+            }),
+            event_type: EventType::OpenIdProviderModified,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("https://accounts.google.com"),
+        },
+        EventTestCase {
+            name: "OpenIdProviderRemoved",
+            message: api_message(ApiEventType::OpenIdProviderRemoved { provider }),
+            event_type: EventType::OpenIdProviderRemoved,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Removed the OpenID provider"),
         },
         EventTestCase {
             name: "ActivityLogStreamCreated",

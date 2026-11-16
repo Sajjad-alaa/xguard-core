@@ -141,6 +141,7 @@ use crate::{
             update_settings,
         },
         ssh_authorized_keys::get_authorized_keys,
+        sso::{auth_info, callback, delete_provider, get_provider, set_provider, test_provider},
         static_ips::{
             assign_static_ips, get_all_user_device_ips, get_device_ips, validate_ip_assignment,
         },
@@ -191,6 +192,7 @@ pub mod log_stream;
 pub mod mail;
 pub mod mfa_engine;
 pub mod setup_logs;
+pub mod sso;
 pub mod support;
 pub mod updates;
 pub mod user_management;
@@ -412,6 +414,13 @@ pub fn build_webapp(
                 get(list_streams).post(create_stream),
             )
             .route("/activity_log_stream/test", post(test_stream))
+            .route("/openid/auth_info", get(auth_info))
+            .route("/openid/callback", post(callback))
+            .route(
+                "/openid/provider",
+                get(get_provider).put(set_provider).delete(delete_provider),
+            )
+            .route("/openid/provider/test", post(test_provider))
             .route(
                 "/activity_log_stream/{id}",
                 put(update_stream).delete(delete_stream),

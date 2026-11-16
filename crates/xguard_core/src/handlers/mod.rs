@@ -51,6 +51,7 @@ pub mod resource_display;
 pub mod session_info;
 pub mod settings;
 pub(crate) mod ssh_authorized_keys;
+pub(crate) mod sso;
 pub(crate) mod static_ips;
 pub(crate) mod support;
 pub(crate) mod updates;
