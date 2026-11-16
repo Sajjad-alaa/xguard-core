@@ -1499,444 +1499,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "092966b41edc516079bdf31ec78a2e0588d1d0c08f78b91d8307215928642b2b"
 
 [[package]]
-name = "defguard"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "bytes",
- "defguard_common",
- "defguard_core",
- "defguard_event_logger",
- "defguard_gateway_manager",
- "defguard_proxy_manager",
- "defguard_session_manager",
- "defguard_setup",
- "defguard_version",
- "defguard_vpn_stats_purge",
- "dotenvy",
- "rustls",
- "secrecy",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "defguard_certs"
-version = "0.0.0"
-dependencies = [
- "base64 0.23.1",
- "chrono",
- "rcgen",
- "rustls-pki-types",
- "thiserror 2.0.21",
- "time",
- "x509-parser 0.18.1",
-]
-
-[[package]]
-name = "defguard_common"
-version = "2.2.0"
-dependencies = [
- "anyhow",
- "argon2 0.6.0",
- "base32",
- "base64 0.23.1",
- "chrono",
- "claims",
- "clap",
- "ctap-hid-fido2",
- "defguard_certs",
- "ed25519-dalek 3.0.0",
- "getrandom 0.4.3",
- "humantime",
- "ipnetwork",
- "jsonwebtoken",
- "model_derive",
- "openidconnect",
- "rand 0.8.8",
- "reqwest 0.12.28",
- "rsa",
- "secrecy",
- "serde",
- "serde_cbor_2",
- "serde_json",
- "sha2 0.11.1",
- "sqlx",
- "struct-patch",
- "thiserror 2.0.21",
- "tokio",
- "totp-lite",
- "tracing",
- "url",
- "utoipa",
- "uuid",
- "vergen-git2",
- "webauthn-rs",
- "x25519-dalek 3.0.0",
-]
-
-[[package]]
-name = "defguard_core"
-version = "0.0.0"
-dependencies = [
- "ammonia",
- "anyhow",
- "async-stream",
- "axum",
- "axum-client-ip",
- "axum-extra",
- "axum-server",
- "base32",
- "base64 0.23.1",
- "bytes",
- "chrono",
- "claims",
- "css-inline",
- "ctap-hid-fido2",
- "defguard_certs",
- "defguard_common",
- "defguard_grpc_tls",
- "defguard_proto",
- "defguard_static_ip",
- "defguard_version",
- "defguard_web_ui",
- "ed25519-dalek 3.0.0",
- "futures",
- "getrandom 0.4.3",
- "humantime",
- "hyper-util",
- "image",
- "ipnetwork",
- "jsonwebkey",
- "jsonwebtoken",
- "ldap3",
- "lettre",
- "md4",
- "model_derive",
- "mrml",
- "nix",
- "openidconnect",
- "parse_link_header",
- "pgp",
- "prost",
- "pulldown-cmark",
- "qrcode",
- "rand 0.8.8",
- "rcgen",
- "regex",
- "reqwest 0.12.28",
- "rsa",
- "rust-ini",
- "rustls",
- "secrecy",
- "semver",
- "serde",
- "serde-saphyr",
- "serde_cbor_2",
- "serde_json",
- "serde_qs",
- "serde_urlencoded",
- "sha-1",
- "sha2 0.11.1",
- "sha256",
- "sqlx",
- "ssh-key",
- "struct-patch",
- "strum",
- "strum_macros",
- "tera",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
- "tonic-health",
- "tonic-prost-build",
- "totp-lite",
- "tower",
- "tower-http 0.7.1",
- "tower_governor",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "trait-variant",
- "ua-parser",
- "utoipa",
- "utoipa-swagger-ui",
- "uuid",
- "webauthn-authenticator-rs",
- "webauthn-rs",
- "webauthn-rs-proto",
- "wiremock",
- "x25519-dalek 3.0.0",
- "x509-parser 0.18.1",
-]
-
-[[package]]
-name = "defguard_event_logger"
-version = "0.0.0"
-dependencies = [
- "bytes",
- "chrono",
- "defguard_common",
- "defguard_core",
- "defguard_session_manager",
- "ipnetwork",
- "serde_json",
- "sqlx",
- "strum",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "defguard_fido_mds"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "base64 0.23.1",
- "reqwest 0.12.28",
- "rustls-pki-types",
- "rustls-webpki",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "defguard_gateway_manager"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "chrono",
- "defguard_common",
- "defguard_core",
- "defguard_grpc_tls",
- "defguard_proto",
- "defguard_version",
- "hyper-rustls",
- "hyper-util",
- "prost-types",
- "reqwest 0.12.28",
- "semver",
- "serde_json",
- "sqlx",
- "thiserror 2.0.21",
- "tokio",
- "tokio-stream",
- "tonic",
- "tower",
- "tracing",
-]
-
-[[package]]
-name = "defguard_generator"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "defguard_common",
- "defguard_core",
- "defguard_event_logger",
- "dotenvy",
- "rand 0.8.8",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "defguard_grpc_tls"
-version = "0.0.0"
-dependencies = [
- "http",
- "hyper-rustls",
- "rustls",
- "thiserror 2.0.21",
- "tokio",
- "tonic",
- "tower-service",
- "tracing",
- "x509-parser 0.18.1",
-]
-
-[[package]]
-name = "defguard_load_generator"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "argon2 0.6.0",
- "base64 0.23.1",
- "chrono",
- "clap",
- "defguard_proto",
- "humantime",
- "ipnetwork",
- "ldap3",
- "prost",
- "rand 0.8.8",
- "reqwest 0.12.28",
- "secrecy",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "totp-lite",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "defguard_proto"
-version = "0.0.0"
-dependencies = [
- "defguard_common",
- "prost",
- "prost-types",
- "serde",
- "tonic",
- "tonic-prost",
- "tonic-prost-build",
-]
-
-[[package]]
-name = "defguard_proxy_manager"
-version = "0.0.0"
-dependencies = [
- "axum",
- "axum-extra",
- "base32",
- "base64 0.23.1",
- "chrono",
- "defguard_certs",
- "defguard_common",
- "defguard_core",
- "defguard_grpc_tls",
- "defguard_proto",
- "defguard_version",
- "ed25519-dalek 3.0.0",
- "getrandom 0.4.3",
- "hyper-util",
- "ipnetwork",
- "jsonwebkey",
- "jsonwebtoken",
- "openidconnect",
- "rand 0.8.8",
- "reqwest 0.12.28",
- "rsa",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "sqlx",
- "thiserror 2.0.21",
- "tokio",
- "tokio-stream",
- "tonic",
- "totp-lite",
- "tower",
- "tracing",
- "webauthn-authenticator-rs",
- "webauthn-rs",
-]
-
-[[package]]
-name = "defguard_session_manager"
-version = "0.0.0"
-dependencies = [
- "chrono",
- "defguard_common",
- "defguard_core",
- "ipnetwork",
- "sqlx",
- "strum",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "defguard_setup"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "axum",
- "axum-extra",
- "chrono",
- "defguard_certs",
- "defguard_common",
- "defguard_core",
- "defguard_proto",
- "defguard_version",
- "defguard_web_ui",
- "ipnetwork",
- "rcgen",
- "reqwest 0.12.28",
- "semver",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tonic",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "defguard_static_ip"
-version = "0.0.0"
-dependencies = [
- "defguard_common",
- "serde",
- "sqlx",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "defguard_version"
-version = "0.0.0"
-dependencies = [
- "axum",
- "http",
- "os_info",
- "semver",
- "serde",
- "thiserror 2.0.21",
- "tonic",
- "tower",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "defguard_vpn_stats_purge"
-version = "0.0.0"
-dependencies = [
- "chrono",
- "defguard_common",
- "humantime",
- "sqlx",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "defguard_web_ui"
-version = "0.0.0"
-dependencies = [
- "axum",
- "mime_guess",
- "rust-embed",
-]
-
-[[package]]
 name = "defmt"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8095,6 +7657,444 @@ dependencies = [
  "rusticata-macros",
  "thiserror 2.0.21",
  "time",
+]
+
+[[package]]
+name = "xguard"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "dotenvy",
+ "rustls",
+ "secrecy",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "xguard_common",
+ "xguard_core",
+ "xguard_event_logger",
+ "xguard_gateway_manager",
+ "xguard_proxy_manager",
+ "xguard_session_manager",
+ "xguard_setup",
+ "xguard_version",
+ "xguard_vpn_stats_purge",
+]
+
+[[package]]
+name = "xguard_certs"
+version = "0.0.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "rcgen",
+ "rustls-pki-types",
+ "thiserror 2.0.21",
+ "time",
+ "x509-parser 0.18.1",
+]
+
+[[package]]
+name = "xguard_common"
+version = "2.2.0"
+dependencies = [
+ "anyhow",
+ "argon2 0.6.0",
+ "base32",
+ "base64 0.23.1",
+ "chrono",
+ "claims",
+ "clap",
+ "ctap-hid-fido2",
+ "ed25519-dalek 3.0.0",
+ "getrandom 0.4.3",
+ "humantime",
+ "ipnetwork",
+ "jsonwebtoken",
+ "model_derive",
+ "openidconnect",
+ "rand 0.8.8",
+ "reqwest 0.12.28",
+ "rsa",
+ "secrecy",
+ "serde",
+ "serde_cbor_2",
+ "serde_json",
+ "sha2 0.11.1",
+ "sqlx",
+ "struct-patch",
+ "thiserror 2.0.21",
+ "tokio",
+ "totp-lite",
+ "tracing",
+ "url",
+ "utoipa",
+ "uuid",
+ "vergen-git2",
+ "webauthn-rs",
+ "x25519-dalek 3.0.0",
+ "xguard_certs",
+]
+
+[[package]]
+name = "xguard_core"
+version = "0.0.0"
+dependencies = [
+ "ammonia",
+ "anyhow",
+ "async-stream",
+ "axum",
+ "axum-client-ip",
+ "axum-extra",
+ "axum-server",
+ "base32",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "claims",
+ "css-inline",
+ "ctap-hid-fido2",
+ "ed25519-dalek 3.0.0",
+ "futures",
+ "getrandom 0.4.3",
+ "humantime",
+ "hyper-util",
+ "image",
+ "ipnetwork",
+ "jsonwebkey",
+ "jsonwebtoken",
+ "ldap3",
+ "lettre",
+ "md4",
+ "model_derive",
+ "mrml",
+ "nix",
+ "openidconnect",
+ "parse_link_header",
+ "pgp",
+ "prost",
+ "pulldown-cmark",
+ "qrcode",
+ "rand 0.8.8",
+ "rcgen",
+ "regex",
+ "reqwest 0.12.28",
+ "rsa",
+ "rust-ini",
+ "rustls",
+ "secrecy",
+ "semver",
+ "serde",
+ "serde-saphyr",
+ "serde_cbor_2",
+ "serde_json",
+ "serde_qs",
+ "serde_urlencoded",
+ "sha-1",
+ "sha2 0.11.1",
+ "sha256",
+ "sqlx",
+ "ssh-key",
+ "struct-patch",
+ "strum",
+ "strum_macros",
+ "tera",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-health",
+ "tonic-prost-build",
+ "totp-lite",
+ "tower",
+ "tower-http 0.7.1",
+ "tower_governor",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "trait-variant",
+ "ua-parser",
+ "utoipa",
+ "utoipa-swagger-ui",
+ "uuid",
+ "webauthn-authenticator-rs",
+ "webauthn-rs",
+ "webauthn-rs-proto",
+ "wiremock",
+ "x25519-dalek 3.0.0",
+ "x509-parser 0.18.1",
+ "xguard_certs",
+ "xguard_common",
+ "xguard_grpc_tls",
+ "xguard_proto",
+ "xguard_static_ip",
+ "xguard_version",
+ "xguard_web_ui",
+]
+
+[[package]]
+name = "xguard_event_logger"
+version = "0.0.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "ipnetwork",
+ "serde_json",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "xguard_common",
+ "xguard_core",
+ "xguard_session_manager",
+]
+
+[[package]]
+name = "xguard_fido_mds"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "base64 0.23.1",
+ "reqwest 0.12.28",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "xguard_gateway_manager"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "hyper-rustls",
+ "hyper-util",
+ "prost-types",
+ "reqwest 0.12.28",
+ "semver",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tower",
+ "tracing",
+ "xguard_common",
+ "xguard_core",
+ "xguard_grpc_tls",
+ "xguard_proto",
+ "xguard_version",
+]
+
+[[package]]
+name = "xguard_generator"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "dotenvy",
+ "rand 0.8.8",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "xguard_common",
+ "xguard_core",
+ "xguard_event_logger",
+]
+
+[[package]]
+name = "xguard_grpc_tls"
+version = "0.0.0"
+dependencies = [
+ "http",
+ "hyper-rustls",
+ "rustls",
+ "thiserror 2.0.21",
+ "tokio",
+ "tonic",
+ "tower-service",
+ "tracing",
+ "x509-parser 0.18.1",
+]
+
+[[package]]
+name = "xguard_load_generator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argon2 0.6.0",
+ "base64 0.23.1",
+ "chrono",
+ "clap",
+ "humantime",
+ "ipnetwork",
+ "ldap3",
+ "prost",
+ "rand 0.8.8",
+ "reqwest 0.12.28",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "totp-lite",
+ "tracing",
+ "tracing-subscriber",
+ "xguard_proto",
+]
+
+[[package]]
+name = "xguard_proto"
+version = "0.0.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "serde",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "xguard_common",
+]
+
+[[package]]
+name = "xguard_proxy_manager"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "base32",
+ "base64 0.23.1",
+ "chrono",
+ "ed25519-dalek 3.0.0",
+ "getrandom 0.4.3",
+ "hyper-util",
+ "ipnetwork",
+ "jsonwebkey",
+ "jsonwebtoken",
+ "openidconnect",
+ "rand 0.8.8",
+ "reqwest 0.12.28",
+ "rsa",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "totp-lite",
+ "tower",
+ "tracing",
+ "webauthn-authenticator-rs",
+ "webauthn-rs",
+ "xguard_certs",
+ "xguard_common",
+ "xguard_core",
+ "xguard_grpc_tls",
+ "xguard_proto",
+ "xguard_version",
+]
+
+[[package]]
+name = "xguard_session_manager"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "ipnetwork",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "xguard_common",
+ "xguard_core",
+]
+
+[[package]]
+name = "xguard_setup"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "ipnetwork",
+ "rcgen",
+ "reqwest 0.12.28",
+ "semver",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+ "xguard_certs",
+ "xguard_common",
+ "xguard_core",
+ "xguard_proto",
+ "xguard_version",
+ "xguard_web_ui",
+]
+
+[[package]]
+name = "xguard_static_ip"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tracing",
+ "xguard_common",
+]
+
+[[package]]
+name = "xguard_version"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "http",
+ "os_info",
+ "semver",
+ "serde",
+ "thiserror 2.0.21",
+ "tonic",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "xguard_vpn_stats_purge"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "humantime",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "xguard_common",
+]
+
+[[package]]
+name = "xguard_web_ui"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "mime_guess",
+ "rust-embed",
 ]
 
 [[package]]
