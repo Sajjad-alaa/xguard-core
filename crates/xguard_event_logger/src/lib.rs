@@ -27,7 +27,8 @@ use xguard_core::{
             UserMfaDisabledMetadata, UserModifiedMetadata, VpnClientMetadata,
             VpnClientMfaAbortedMetadata, VpnClientMfaFailedMetadata, VpnClientMfaMetadata,
             VpnLocationMetadata, VpnLocationModifiedMetadata, WebHookMetadata,
-            WebHookModifiedMetadata, WebHookStateChangedMetadata,
+            WebHookModifiedMetadata, WebHookStateChangedMetadata, FirewallRuleMetadata,
+            FirewallRuleModifiedMetadata, SnatBindingMetadata, SnatBindingModifiedMetadata,
         },
     },
     events::{
@@ -483,6 +484,30 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 ApiEventType::WebHookStateChanged { webhook, enabled } => (
                     EventType::WebHookStateChanged,
                     serde_json::to_value(WebHookStateChangedMetadata { webhook, enabled }).ok(),
+                ),
+                ApiEventType::FirewallRuleAdded { rule } => (
+                    EventType::FirewallRuleAdded,
+                    serde_json::to_value(FirewallRuleMetadata { rule }).ok(),
+                ),
+                ApiEventType::FirewallRuleModified { before, after } => (
+                    EventType::FirewallRuleModified,
+                    serde_json::to_value(FirewallRuleModifiedMetadata { before, after }).ok(),
+                ),
+                ApiEventType::FirewallRuleRemoved { rule } => (
+                    EventType::FirewallRuleRemoved,
+                    serde_json::to_value(FirewallRuleMetadata { rule }).ok(),
+                ),
+                ApiEventType::UserSnatBindingAdded { binding } => (
+                    EventType::UserSnatBindingAdded,
+                    serde_json::to_value(SnatBindingMetadata { binding }).ok(),
+                ),
+                ApiEventType::UserSnatBindingModified { before, after } => (
+                    EventType::UserSnatBindingModified,
+                    serde_json::to_value(SnatBindingModifiedMetadata { before, after }).ok(),
+                ),
+                ApiEventType::UserSnatBindingRemoved { binding } => (
+                    EventType::UserSnatBindingRemoved,
+                    serde_json::to_value(SnatBindingMetadata { binding }).ok(),
                 ),
                 ApiEventType::PasswordReset { user } => (
                     EventType::PasswordReset,

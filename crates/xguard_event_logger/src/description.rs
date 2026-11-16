@@ -191,6 +191,27 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
             let state = if *enabled { "Enabled" } else { "Disabled" };
             Some(format!("{} webhook with URL {}", state, webhook.url))
         }
+        ApiEventType::FirewallRuleAdded { rule } => {
+            Some(format!("Added firewall rule {}", rule.name))
+        }
+        ApiEventType::FirewallRuleModified { before: _, after } => {
+            Some(format!("Modified firewall rule {}", after.name))
+        }
+        ApiEventType::FirewallRuleRemoved { rule } => {
+            Some(format!("Removed firewall rule {}", rule.name))
+        }
+        ApiEventType::UserSnatBindingAdded { binding } => Some(format!(
+            "Added SNAT to {} for user {} at location {}",
+            binding.public_ip, binding.user_id, binding.location_id
+        )),
+        ApiEventType::UserSnatBindingModified { before, after } => Some(format!(
+            "Changed SNAT for user {} at location {} from {} to {}",
+            after.user_id, after.location_id, before.public_ip, after.public_ip
+        )),
+        ApiEventType::UserSnatBindingRemoved { binding } => Some(format!(
+            "Removed SNAT to {} for user {} at location {}",
+            binding.public_ip, binding.user_id, binding.location_id
+        )),
         ApiEventType::AuthenticationKeyAdded { key } => Some(format!(
             "Added {} authentication key {}",
             key.key_type,

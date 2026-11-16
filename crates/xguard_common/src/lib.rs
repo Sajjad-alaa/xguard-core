@@ -7,6 +7,7 @@ pub mod config;
 pub mod csv;
 pub mod db;
 pub mod device_config_gen;
+pub mod firewall;
 pub mod gateway_event;
 pub mod gateway_types;
 pub mod globals;

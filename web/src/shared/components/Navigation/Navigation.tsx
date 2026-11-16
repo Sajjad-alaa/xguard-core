@@ -59,6 +59,12 @@ const navigationConfig: NavGroupProps[] = [
         label: m.cmp_nav_item_locations(),
         link: '/locations',
       },
+      {
+        id: 'firewall',
+        icon: 'protection',
+        label: m.firewall_nav(),
+        link: '/firewall',
+      },
     ],
   },
   {

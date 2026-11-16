@@ -256,6 +256,26 @@ pub enum ApiEventType {
         webhook: WebHook<Id>,
         enabled: bool,
     },
+    FirewallRuleAdded {
+        rule: xguard_common::firewall::FirewallRule,
+    },
+    FirewallRuleModified {
+        before: xguard_common::firewall::FirewallRule,
+        after: xguard_common::firewall::FirewallRule,
+    },
+    FirewallRuleRemoved {
+        rule: xguard_common::firewall::FirewallRule,
+    },
+    UserSnatBindingAdded {
+        binding: xguard_common::firewall::SnatBinding,
+    },
+    UserSnatBindingModified {
+        before: xguard_common::firewall::SnatBinding,
+        after: xguard_common::firewall::SnatBinding,
+    },
+    UserSnatBindingRemoved {
+        binding: xguard_common::firewall::SnatBinding,
+    },
     AuthenticationKeyAdded {
         key: AuthenticationKey<Id>,
     },

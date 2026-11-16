@@ -9,8 +9,10 @@ import type {
   OpenAssignUserIPModal,
   OpenAssignUsersToGroupsModal,
   OpenAuthKeyRenameModal,
+  OpenCEFirewallRuleModal,
   OpenCEGroupModal,
   OpenCEOpenIdClientModal,
+  OpenCESnatBindingModal,
   OpenCEWebhookModal,
   OpenConfirmActionModal,
   OpenDeleteAliasDestinationBlockedModal,
@@ -56,6 +58,8 @@ export const ModalName = {
   EditUserModal: 'editUserModal',
   CEOpenIdClient: 'createEditOpenIdClient',
   CEWebhook: 'createEditWebhook',
+  CEFirewallRule: 'createEditFirewallRule',
+  CESnatBinding: 'createEditSnatBinding',
   AssignGroupsToUsers: 'assignGroupsToUsers',
   AddNetworkDevice: 'addNetworkDevice',
   EditNetworkDevice: 'editNetworkDevice',
@@ -135,6 +139,14 @@ const modalOpenArgsSchema = z.discriminatedUnion('name', [
   z.object({
     name: z.literal(ModalName.CEWebhook),
     data: z.custom<OpenCEWebhookModal>(),
+  }),
+  z.object({
+    name: z.literal(ModalName.CEFirewallRule),
+    data: z.custom<OpenCEFirewallRuleModal>(),
+  }),
+  z.object({
+    name: z.literal(ModalName.CESnatBinding),
+    data: z.custom<OpenCESnatBindingModal>(),
   }),
   z.object({
     name: z.literal(ModalName.AssignGroupsToUsers),

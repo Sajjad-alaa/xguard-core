@@ -124,6 +124,10 @@ pub enum EventType {
     WebHookModified,
     WebHookRemoved,
     WebHookStateChanged,
+    // Firewall management
+    FirewallRuleAdded,
+    FirewallRuleModified,
+    FirewallRuleRemoved,
     // Authentication key management
     AuthenticationKeyAdded,
     AuthenticationKeyRemoved,

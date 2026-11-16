@@ -1828,3 +1828,53 @@ export interface UserListParams extends PaginationParams {
   sort_by?: UserSortKey;
   sort_order?: SortDirectionValue;
 }
+
+export const FirewallRuleAction = {
+  Allow: 'allow',
+  Deny: 'deny',
+  Reject: 'reject',
+} as const;
+
+export type FirewallRuleActionValue =
+  (typeof FirewallRuleAction)[keyof typeof FirewallRuleAction];
+
+/** What the API accepts when creating or replacing a firewall rule. */
+export interface FirewallRuleInput {
+  name: string;
+  description: string;
+  enabled: boolean;
+  priority: number;
+  action: FirewallRuleActionValue;
+  all_locations: boolean;
+  locations: number[];
+  any_source: boolean;
+  all_users: boolean;
+  all_network_devices: boolean;
+  users: number[];
+  groups: number[];
+  devices: number[];
+  any_destination: boolean;
+  destinations: string[];
+  protocols: number[];
+  ports: string[];
+  expires_at: string | null;
+}
+
+export interface FirewallRule extends FirewallRuleInput {
+  id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SnatBinding {
+  id: number;
+  user_id: number;
+  location_id: number;
+  public_ip: string;
+}
+
+export interface SnatBindingInput {
+  user_id: number;
+  location_id: number;
+  public_ip: string;
+}

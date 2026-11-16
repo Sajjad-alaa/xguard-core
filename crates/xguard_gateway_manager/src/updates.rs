@@ -8,12 +8,13 @@ use xguard_common::{
         Id,
         models::{DeviceNetworkInfo, WireguardNetwork, wireguard::DEFAULT_WIREGUARD_MTU},
     },
+    firewall,
     gateway_event::GatewayCommand,
     gateway_types::WireguardPeer,
     secret::SecretStringWrapper,
 };
 use xguard_proto::gateway::{
-    Configuration, CoreResponse, Peer, Update, UpdateType, core_response, update,
+    Configuration, CoreResponse, FirewallPolicy, Peer, Update, UpdateType, core_response, update,
 };
 
 /// Helper struct for handling gateway events.
@@ -23,6 +24,10 @@ pub(crate) struct GatewayUpdatesHandler<'a> {
     pool: Option<&'a PgPool>,
     session_authorization_required: bool,
     tx: UnboundedSender<CoreResponse>,
+    /// The firewall policy the gateway has, `None` when it has none.
+    firewall_policy: Option<FirewallPolicy>,
+    /// Something changed that may change the firewall policy.
+    firewall_dirty: bool,
 }
 
 impl<'a> GatewayUpdatesHandler<'a> {
@@ -41,6 +46,113 @@ impl<'a> GatewayUpdatesHandler<'a> {
             pool,
             session_authorization_required,
             tx,
+            firewall_policy: None,
+            firewall_dirty: false,
+        }
+    }
+
+    /// Records the firewall policy sent with the initial configuration.
+    pub(crate) fn set_firewall_policy(&mut self, policy: Option<FirewallPolicy>) {
+        self.firewall_policy = policy;
+    }
+
+    fn firewall_revision(&self) -> Option<&str> {
+        self.firewall_policy.as_ref().map(|p| p.revision.as_str())
+    }
+
+    /// The policy to send with a network update. If it can't be compiled right now, the gateway
+    /// keeps the one it has (never an unfiltered window) and a refresh retries shortly.
+    async fn policy_for_network_update(
+        &mut self,
+        network: &WireguardNetwork<Id>,
+    ) -> Option<FirewallPolicy> {
+        match self.compile_firewall(network).await {
+            Ok(policy) => policy.as_ref().map(FirewallPolicy::from),
+            Err(_) => {
+                self.firewall_dirty = true;
+                self.firewall_policy.clone()
+            }
+        }
+    }
+
+    pub(crate) fn firewall_dirty(&self) -> bool {
+        self.firewall_dirty
+    }
+
+    pub(crate) fn mark_firewall_dirty(&mut self) {
+        self.firewall_dirty = true;
+    }
+
+    /// Compiles the firewall policy for `network`. Without a database (tests) there is none.
+    async fn compile_firewall(
+        &self,
+        network: &WireguardNetwork<Id>,
+    ) -> Result<Option<firewall::CompiledPolicy>, Status> {
+        let Some(pool) = self.pool else {
+            return Ok(None);
+        };
+        let mut conn = pool.acquire().await.map_err(|err| {
+            Status::internal(format!("Failed to get a database connection: {err}"))
+        })?;
+        firewall::compile(&mut conn, network).await.map_err(|err| {
+            let msg = format!("Failed to compile the firewall for {network}: {err}");
+            error!(msg);
+            Status::internal(msg)
+        })
+    }
+
+    /// Recompiles the firewall policy and sends it if its revision changed.
+    pub(crate) async fn refresh_firewall(&mut self) -> Result<(), Status> {
+        self.firewall_dirty = false;
+        let policy = self.compile_firewall(&self.network).await?;
+        let revision = policy.as_ref().map(|p| p.revision.clone());
+        if revision.as_deref() == self.firewall_revision() {
+            debug!("Firewall policy for {} is unchanged", self.network);
+            return Ok(());
+        }
+        let wire = policy.as_ref().map(FirewallPolicy::from);
+        let update = match &wire {
+            Some(wire) => update::Update::Firewall(wire.clone()),
+            None => update::Update::DisableFirewall(()),
+        };
+        self.send_update(Update {
+            update_type: UpdateType::Modify as i32,
+            update: Some(update),
+        })?;
+        info!(
+            "Sent firewall policy {} to gateway {} for {}",
+            revision.as_deref().unwrap_or("(off)"),
+            self.gateway_name,
+            self.network
+        );
+        self.firewall_policy = wire;
+        Ok(())
+    }
+
+    fn send_update(&self, update: Update) -> Result<(), Status> {
+        self.tx
+            .send(CoreResponse {
+                id: 0,
+                payload: Some(core_response::Payload::Update(update)),
+            })
+            .map_err(|err| {
+                let msg = format!("Failed to send an update for {}: {err}", self.network);
+                error!(msg);
+                Status::internal(msg)
+            })
+    }
+
+    /// Whether `command` can change this location's firewall policy (device addresses, the
+    /// location's firewall settings or the rules themselves).
+    fn affects_firewall(&self, command: &GatewayCommand) -> bool {
+        let here =
+            |info: &[DeviceNetworkInfo]| info.iter().any(|i| i.network_id == self.network.id);
+        match command {
+            GatewayCommand::FirewallRulesChanged => true,
+            GatewayCommand::DeviceCreated(device)
+            | GatewayCommand::DeviceModified(device)
+            | GatewayCommand::DeviceDeleted(device) => here(&device.network_info),
+            _ => false,
         }
     }
 
@@ -156,17 +268,37 @@ impl<'a> GatewayUpdatesHandler<'a> {
     /// Every handler receives all events, so it must skip those for other networks.
     pub(crate) async fn handle_event(&mut self, update: GatewayCommand) -> Result<(), Status> {
         debug!("Received WireGuard update: {update:?}");
+        if self.affects_firewall(&update) {
+            self.firewall_dirty = true;
+        }
         match update {
             GatewayCommand::NetworkCreated(network) => {
                 if network.id == self.network.id {
-                    self.send_network_update(&network, Vec::new(), UpdateType::Create)
+                    let policy = self.policy_for_network_update(&network).await;
+                    let result = self.send_network_update(
+                        &network,
+                        Vec::new(),
+                        policy.clone(),
+                        UpdateType::Create,
+                    );
+                    self.firewall_policy = policy;
+                    result
                 } else {
                     Ok(())
                 }
             }
             GatewayCommand::NetworkModified(network, peers) => {
                 if network.id == self.network.id {
-                    let result = self.send_network_update(&network, peers, UpdateType::Modify);
+                    // A network update replaces the gateway's whole configuration, firewall
+                    // included, so it carries the current policy: never a window without it.
+                    let policy = self.policy_for_network_update(&network).await;
+                    let result = self.send_network_update(
+                        &network,
+                        peers,
+                        policy.clone(),
+                        UpdateType::Modify,
+                    );
+                    self.firewall_policy = policy;
                     // update stored network data
                     self.network = network;
                     self.refresh_session_authorization_required().await;
@@ -175,6 +307,7 @@ impl<'a> GatewayUpdatesHandler<'a> {
                     Ok(())
                 }
             }
+            GatewayCommand::FirewallRulesChanged => Ok(()),
             GatewayCommand::NetworkDeleted(network_id, network_name) => {
                 if network_id == self.network.id {
                     self.send_network_delete(&network_name)
@@ -260,6 +393,7 @@ impl<'a> GatewayUpdatesHandler<'a> {
         &self,
         network: &WireguardNetwork<Id>,
         peers: Vec<WireguardPeer>,
+        firewall: Option<FirewallPolicy>,
         update_type: UpdateType,
     ) -> Result<(), Status> {
         debug!("Sending network update for network {network}");
@@ -276,6 +410,7 @@ impl<'a> GatewayUpdatesHandler<'a> {
                     peers,
                     mtu: network.mtu.cast_unsigned(),
                     fwmark: network.fwmark as u32,
+                    firewall,
                 })),
             })),
         }) {
@@ -309,6 +444,7 @@ impl<'a> GatewayUpdatesHandler<'a> {
                     peers: Vec::new(),
                     mtu: DEFAULT_WIREGUARD_MTU.cast_unsigned(),
                     fwmark: 0,
+                    firewall: None,
                 })),
             })),
         }) {

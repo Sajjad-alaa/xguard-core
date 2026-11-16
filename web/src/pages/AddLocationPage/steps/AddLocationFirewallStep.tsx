@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { cloneDeep, omit } from 'lodash-es';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
 import { ActionCard } from '../../../shared/components/ActionCard/ActionCard';
@@ -9,12 +9,23 @@ import { Controls } from '../../../shared/components/Controls/Controls';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { Checkbox } from '../../../shared/xguard-ui/components/Checkbox/Checkbox';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { Radio } from '../../../shared/xguard-ui/components/Radio/Radio';
+import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
+import { ThemeSpacing } from '../../../shared/xguard-ui/types';
 import { useGatewayWizardStore } from '../../GatewaySetupPage/useGatewayWizardStore';
 import actionCardImage from '../assets/gateway-setup-action-card.png';
 import { AddLocationPageStep } from '../types';
 import { useAddLocationStore } from '../useAddLocationStore';
 
+type Choice = 'disable' | 'enabled-allowed' | 'enabled-denied';
+
 export const AddLocationFirewallStep = () => {
+  const [state, setState] = useState<Choice>(() => {
+    const { acl_enabled, acl_default_allow } = useAddLocationStore.getState();
+    if (!acl_enabled) return 'disable';
+    return acl_default_allow ? 'enabled-allowed' : 'enabled-denied';
+  });
   const [showGateway, setShowGateway] = useState(true);
   const navigate = useNavigate();
 
@@ -41,9 +52,15 @@ export const AddLocationFirewallStep = () => {
     },
   });
 
+  const saveChanges = useCallback((value: Choice) => {
+    useAddLocationStore.setState({
+      acl_enabled: value !== 'disable',
+      acl_default_allow: value === 'enabled-allowed',
+    });
+  }, []);
+
   const handleSubmit = () => {
-    // XGuard has no firewall (ACL) support: locations are created with it disabled.
-    useAddLocationStore.setState({ acl_enabled: false, acl_default_allow: false });
+    saveChanges(state);
     const storageState = cloneDeep(
       omit(useAddLocationStore.getState(), [
         'start',
@@ -57,6 +74,24 @@ export const AddLocationFirewallStep = () => {
 
   return (
     <WizardCard>
+      <Radio
+        active={state === 'disable'}
+        onClick={() => setState('disable')}
+        text={m.location_firewall_option_disabled()}
+      />
+      <SizedBox height={ThemeSpacing.Md} />
+      <Radio
+        active={state === 'enabled-allowed'}
+        onClick={() => setState('enabled-allowed')}
+        text={m.location_firewall_option_default_allow()}
+      />
+      <SizedBox height={ThemeSpacing.Md} />
+      <Radio
+        active={state === 'enabled-denied'}
+        onClick={() => setState('enabled-denied')}
+        text={m.location_firewall_option_default_deny()}
+      />
+      <Divider spacing={ThemeSpacing.Xl2} />
       <ActionCard
         imageSrc={actionCardImage}
         title={m.add_location_firewall_gateway_activation_title()}
@@ -75,6 +110,7 @@ export const AddLocationFirewallStep = () => {
           variant="outlined"
           text={m.controls_back()}
           onClick={() => {
+            saveChanges(state);
             useAddLocationStore.setState({
               activeStep: AddLocationPageStep.AccessControl,
             });

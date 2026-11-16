@@ -43,6 +43,8 @@ import type {
   EditNetworkLocationRequest,
   EditOpenIdClientActiveStateRequest,
   EnableMfaMethodResponse,
+  FirewallRule,
+  FirewallRuleInput,
   Gateway,
   GatewayInfo,
   GetCAResponse,
@@ -93,6 +95,8 @@ import type {
   Settings,
   SettingsEssentials,
   SetupAutoAdoptionResponse,
+  SnatBinding,
+  SnatBindingInput,
   StartEnrollmentRequest,
   StartEnrollmentResponse,
   TotpInitResponse,
@@ -247,6 +251,20 @@ const api = {
         disable: (username: string) => client.delete(`/user/${username}/email`),
       },
     },
+  },
+  firewall: {
+    getRules: () => client.get<FirewallRule[]>('/firewall/rule'),
+    addRule: (data: FirewallRuleInput) =>
+      client.post<FirewallRule>('/firewall/rule', data),
+    editRule: ({ id, ...data }: FirewallRuleInput & { id: number }) =>
+      client.put<FirewallRule>(`/firewall/rule/${id}`, data),
+    deleteRule: (id: number) => client.delete(`/firewall/rule/${id}`),
+    getSnatBindings: () => client.get<SnatBinding[]>('/firewall/snat'),
+    addSnatBinding: (data: SnatBindingInput) =>
+      client.post<SnatBinding>('/firewall/snat', data),
+    editSnatBinding: ({ id, public_ip }: { id: number; public_ip: string }) =>
+      client.put<SnatBinding>(`/firewall/snat/${id}`, { public_ip }),
+    deleteSnatBinding: (id: number) => client.delete(`/firewall/snat/${id}`),
   },
   webhook: {
     addWebhook: (data: AddWebhookRequest) => client.post('/webhook', data),

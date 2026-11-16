@@ -148,6 +148,11 @@ use crate::{
         webhooks::{
             add_webhook, change_enabled, change_webhook, delete_webhook, get_webhook, list_webhooks,
         },
+        firewall::{
+            create_firewall_rule, create_snat_binding, delete_firewall_rule, delete_snat_binding,
+            get_firewall_rule, list_firewall_rules, list_snat_bindings, location_firewall_policy,
+            update_firewall_rule, update_snat_binding,
+        },
         wireguard::{
             add_device, add_user_devices, count_networks, create_network, delete_device,
             delete_network, download_config, gateway_status, get_device, import_network,
@@ -392,6 +397,26 @@ pub fn build_webapp(
                     .put(change_webhook)
                     .delete(delete_webhook)
                     .post(change_enabled),
+            )
+            // firewall
+            .route(
+                "/firewall/rule",
+                get(list_firewall_rules).post(create_firewall_rule),
+            )
+            .route(
+                "/firewall/rule/{id}",
+                get(get_firewall_rule)
+                    .put(update_firewall_rule)
+                    .delete(delete_firewall_rule),
+            )
+            .route(
+                "/firewall/location/{id}/policy",
+                get(location_firewall_policy),
+            )
+            .route("/firewall/snat", get(list_snat_bindings).post(create_snat_binding))
+            .route(
+                "/firewall/snat/{id}",
+                put(update_snat_binding).delete(delete_snat_binding),
             )
             // activity log
             .route("/activity_log", get(get_activity_log_events))

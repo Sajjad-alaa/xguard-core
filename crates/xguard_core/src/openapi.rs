@@ -14,7 +14,7 @@ use xguard_common::{
 use super::handlers::{
     ApiErrorResponse, Auth, EditGroupInfo, GroupInfo, PasswordChange, PasswordChangeSelf,
     SESSION_COOKIE_NAME, StartEnrollmentRequest, Username, activity_log, app_info, auth,
-    component_setup, core_certs, forward_auth, gateway,
+    component_setup, core_certs, firewall, forward_auth, gateway,
     group::{self, BulkAssignToGroupsRequest},
     location_stats, mail, mfa_flow, network_devices, openid_clients, openid_flow, proxy, reserved,
     resource_display, session_info, settings, ssh_authorized_keys, static_ips, support, updates,
@@ -168,6 +168,17 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         webhooks::get_webhook,
         webhooks::change_enabled,
         webhooks::change_webhook,
+        // firewall
+        firewall::list_firewall_rules,
+        firewall::get_firewall_rule,
+        firewall::create_firewall_rule,
+        firewall::update_firewall_rule,
+        firewall::delete_firewall_rule,
+        firewall::location_firewall_policy,
+        firewall::list_snat_bindings,
+        firewall::create_snat_binding,
+        firewall::update_snat_binding,
+        firewall::delete_snat_binding,
         // settings
         settings::get_settings,
         settings::patch_settings,
@@ -209,7 +220,10 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
             ApiErrorResponse, Auth, UserInfo, UserDetails, UserDevice, Username,
             StartEnrollmentRequest, PasswordChangeSelf, PasswordChange, AddDevice, AddDeviceResult,
             Device, ModifyDevice, BulkAssignToGroupsRequest, GroupInfo, EditGroupInfo,
-            user::SortKey, user::SortOrder, reserved::CheckResource
+            user::SortKey, user::SortOrder, reserved::CheckResource,
+            xguard_common::firewall::FirewallRule, xguard_common::firewall::FirewallRuleInput,
+            xguard_common::firewall::FirewallRuleAction, xguard_common::firewall::SnatBinding,
+            xguard_common::firewall::SnatBindingInput
         ),
     ),
     tags(
@@ -227,6 +241,7 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         (name = "certificates", description = "Internal (core) and external (edge) URL certificates."),
         (name = "SSH key", description = "SSH and GPG authentication keys of users."),
         (name = "webhook", description = "Webhooks triggered by user and provisioning events."),
+        (name = "firewall", description = "XGuard firewall rules and the policies compiled from them."),
         (name = "settings", description = "Instance settings."),
         (name = "activity log", description = "Activity log events."),
         (name = "OAuth2", description = "xguard acting as an OAuth2 / OpenID Connect provider for other applications."),

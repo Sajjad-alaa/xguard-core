@@ -245,6 +245,8 @@ impl Configuration {
             peers: peers.into_iter().map(Into::into).collect(),
             mtu: location.mtu.cast_unsigned(),
             fwmark: location.fwmark as u32,
+            // Set by callers that compiled the location's firewall policy.
+            firewall: None,
         }
     }
 }

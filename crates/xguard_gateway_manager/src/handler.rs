@@ -21,7 +21,7 @@ use tokio::{
         watch,
     },
     task::JoinHandle,
-    time::sleep,
+    time::{Instant, MissedTickBehavior, interval_at, sleep, sleep_until},
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{
@@ -34,6 +34,7 @@ use xguard_common::{
         Id,
         models::{Certificates, Settings, WireguardNetwork, gateway::Gateway},
     },
+    firewall,
     gateway_event::GatewayCommand,
     messages::peer_stats_update::PeerStatsUpdate,
 };
@@ -44,13 +45,21 @@ use xguard_core::{
 };
 use xguard_grpc_tls::{certs as tls_certs, connector::HttpsSchemeConnector};
 use xguard_proto::gateway::{
-    Configuration, CoreResponse, PeerStats, core_request, core_response, gateway_client,
+    Configuration, CoreResponse, FirewallPolicy, PeerStats, core_request, core_response,
+    gateway_client,
 };
 use xguard_version::client::ClientVersionInterceptor;
 
 #[cfg(test)]
 use crate::GatewayManagerTestSupport;
 use crate::{Client, TEN_SECS, error::GatewayError, updates::GatewayUpdatesHandler};
+
+/// How long a firewall refresh waits for more changes before compiling.
+const FIREWALL_DEBOUNCE: Duration = Duration::from_millis(250);
+/// How often the firewall policy is recompiled even without a known change.
+const FIREWALL_RECHECK_INTERVAL: Duration = Duration::from_secs(60);
+/// How long to wait before retrying a firewall refresh that failed.
+const FIREWALL_RETRY_DELAY: Duration = Duration::from_secs(5);
 
 /// One instance per connected Gateway.
 pub(crate) struct GatewayHandler {
@@ -198,7 +207,7 @@ impl GatewayHandler {
     async fn send_configuration(
         &self,
         tx: &UnboundedSender<CoreResponse>,
-    ) -> Result<WireguardNetwork<Id>, GatewayError> {
+    ) -> Result<(WireguardNetwork<Id>, Option<FirewallPolicy>), GatewayError> {
         debug!("Sending configuration to Gateway");
         let network_id = self.gateway.location_id;
 
@@ -223,15 +232,21 @@ impl GatewayHandler {
 
         let peers = get_location_allowed_peers(&network, &mut conn).await?;
 
-        let payload = Some(core_response::Payload::Config(Configuration::new(
-            &network, peers,
-        )));
+        let mut config = Configuration::new(&network, peers);
+        // Without its policy a gateway would run the location unfiltered, so a compile error
+        // fails the configuration and the gateway asks again.
+        let policy = firewall::compile(&mut conn, &network)
+            .await?
+            .as_ref()
+            .map(FirewallPolicy::from);
+        config.firewall.clone_from(&policy);
+        let payload = Some(core_response::Payload::Config(config));
         let id = self.message_id.fetch_add(1, Ordering::Relaxed);
         let req = CoreResponse { id, payload };
         match tx.send(req) {
             Ok(()) => {
                 info!("Configuration sent to {}, network {network}", self.gateway);
-                Ok(network)
+                Ok((network, policy))
             }
             Err(err) => {
                 error!("Failed to send configuration sent to {}", self.gateway);
@@ -520,17 +535,53 @@ impl GatewayHandler {
         let mut resp_stream = response.into_inner();
         let mut config_sent = false;
         let mut updates_handler: Option<GatewayUpdatesHandler> = None;
+        // Firewall refreshes wait briefly so a burst of changes produces one push, and a slow
+        // periodic check catches changes no event announces (group membership, disabled users).
+        let mut firewall_deadline: Option<Instant> = None;
+        // The policy was just compiled for the configuration, so the first check is a full
+        // interval away (a plain `interval` would fire at once).
+        let mut firewall_recheck = interval_at(
+            Instant::now() + FIREWALL_RECHECK_INTERVAL,
+            FIREWALL_RECHECK_INTERVAL,
+        );
+        firewall_recheck.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         loop {
+            let deadline = firewall_deadline.unwrap_or_else(Instant::now);
             let message = tokio::select! {
                 message = resp_stream.message() => message,
                 Some(event) = self.events_rx.recv() => {
                     // Events are discarded until configuration has been sent.
+                    if let Some(handler) = updates_handler.as_mut() {
+                        if handler.handle_event(event).await.is_err() {
+                            error!("Closing update stream to {}", self.gateway);
+                            updates_handler = None;
+                        } else if handler.firewall_dirty() && firewall_deadline.is_none() {
+                            firewall_deadline = Some(Instant::now() + FIREWALL_DEBOUNCE);
+                        }
+                    }
+                    continue;
+                }
+                () = sleep_until(deadline), if firewall_deadline.is_some() => {
+                    firewall_deadline = None;
                     if let Some(handler) = updates_handler.as_mut()
-                        && handler.handle_event(event).await.is_err()
+                        && let Err(err) = handler.refresh_firewall().await
                     {
-                        error!("Closing update stream to {}", self.gateway);
-                        updates_handler = None;
+                        // The gateway keeps enforcing its current policy meanwhile.
+                        warn!(
+                            "Firewall refresh for {} failed, retrying in {}s: {err}",
+                            self.gateway,
+                            FIREWALL_RETRY_DELAY.as_secs()
+                        );
+                        handler.mark_firewall_dirty();
+                        firewall_deadline = Some(Instant::now() + FIREWALL_RETRY_DELAY);
+                    }
+                    continue;
+                }
+                _ = firewall_recheck.tick() => {
+                    if let Some(handler) = updates_handler.as_mut() {
+                        handler.mark_firewall_dirty();
+                        firewall_deadline.get_or_insert_with(Instant::now);
                     }
                     continue;
                 }
@@ -561,7 +612,7 @@ impl GatewayHandler {
                             }
 
                             match self.send_configuration(&tx).await {
-                                Ok(network) => {
+                                Ok((network, firewall_policy)) => {
                                     info!("Sent configuration to {}", self.gateway);
                                     config_sent = true;
                                     self.mark_connected_and_maybe_notify(&network.name).await;
@@ -571,6 +622,7 @@ impl GatewayHandler {
                                         Some(&self.pool),
                                         tx.clone(),
                                     );
+                                    handler.set_firewall_policy(firewall_policy);
                                     handler.start().await;
                                     updates_handler = Some(handler);
                                 }

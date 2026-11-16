@@ -198,6 +198,18 @@ export const getOpenIdClientQueryOptions = queryOptions({
   queryKey: ['oauth'],
 });
 
+export const getFirewallRulesQueryOptions = queryOptions({
+  queryFn: api.firewall.getRules,
+  queryKey: ['firewall', 'rule'],
+  select: (resp) => resp.data,
+});
+
+export const getSnatBindingsQueryOptions = queryOptions({
+  queryFn: api.firewall.getSnatBindings,
+  queryKey: ['firewall', 'snat'],
+  select: (resp) => resp.data,
+});
+
 export const getWebhooksQueryOptions = queryOptions({
   queryFn: api.webhook.getWebhooks,
   queryKey: ['webhook'],

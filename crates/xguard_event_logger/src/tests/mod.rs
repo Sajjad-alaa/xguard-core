@@ -316,6 +316,35 @@ fn api_event_cases() -> Vec<EventTestCase> {
         id: 2,
         ..gateway.clone()
     };
+    let firewall_rule = xguard_common::firewall::FirewallRule {
+        id: 1,
+        name: "web".into(),
+        description: String::new(),
+        enabled: true,
+        priority: 1000,
+        action: xguard_common::firewall::FirewallRuleAction::Allow,
+        all_locations: true,
+        locations: Vec::new(),
+        any_source: true,
+        all_users: false,
+        all_network_devices: false,
+        users: Vec::new(),
+        groups: Vec::new(),
+        devices: Vec::new(),
+        any_destination: true,
+        destinations: Vec::new(),
+        protocols: Vec::new(),
+        ports: Vec::new(),
+        expires_at: None,
+        created_at: chrono::NaiveDateTime::default(),
+        updated_at: chrono::NaiveDateTime::default(),
+    };
+    let snat_binding = xguard_common::firewall::SnatBinding {
+        id: 1,
+        user_id: 1,
+        location_id: 1,
+        public_ip: std::net::IpAddr::from([203, 0, 113, 7]),
+    };
     let webhook = WebHook {
         id: 1,
         url: "http://x".into(),
@@ -871,6 +900,62 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::WebHookStateChanged,
             module: ActivityLogModule::XGuard,
             description_contains: Some("Disabled"),
+        },
+        EventTestCase {
+            name: "FirewallRuleAdded",
+            message: api_message(ApiEventType::FirewallRuleAdded {
+                rule: firewall_rule.clone(),
+            }),
+            event_type: EventType::FirewallRuleAdded,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Added firewall rule web"),
+        },
+        EventTestCase {
+            name: "FirewallRuleModified",
+            message: api_message(ApiEventType::FirewallRuleModified {
+                before: firewall_rule.clone(),
+                after: firewall_rule.clone(),
+            }),
+            event_type: EventType::FirewallRuleModified,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Modified firewall rule web"),
+        },
+        EventTestCase {
+            name: "FirewallRuleRemoved",
+            message: api_message(ApiEventType::FirewallRuleRemoved {
+                rule: firewall_rule,
+            }),
+            event_type: EventType::FirewallRuleRemoved,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Removed firewall rule web"),
+        },
+        EventTestCase {
+            name: "UserSnatBindingAdded",
+            message: api_message(ApiEventType::UserSnatBindingAdded {
+                binding: snat_binding.clone(),
+            }),
+            event_type: EventType::UserSnatBindingAdded,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Added SNAT to 203.0.113.7"),
+        },
+        EventTestCase {
+            name: "UserSnatBindingModified",
+            message: api_message(ApiEventType::UserSnatBindingModified {
+                before: snat_binding.clone(),
+                after: snat_binding.clone(),
+            }),
+            event_type: EventType::UserSnatBindingModified,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Changed SNAT"),
+        },
+        EventTestCase {
+            name: "UserSnatBindingRemoved",
+            message: api_message(ApiEventType::UserSnatBindingRemoved {
+                binding: snat_binding,
+            }),
+            event_type: EventType::UserSnatBindingRemoved,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Removed SNAT"),
         },
         EventTestCase {
             name: "AuthenticationKeyAdded",

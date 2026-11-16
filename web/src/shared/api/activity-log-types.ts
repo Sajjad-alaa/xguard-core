@@ -104,6 +104,10 @@ export const ActivityLogEventType = {
   WebHookRemoved: 'web_hook_removed',
   WebHookStateChanged: 'web_hook_state_changed',
 
+  FirewallRuleAdded: 'firewall_rule_added',
+  FirewallRuleModified: 'firewall_rule_modified',
+  FirewallRuleRemoved: 'firewall_rule_removed',
+
   AuthenticationKeyAdded: 'authentication_key_added',
   AuthenticationKeyRemoved: 'authentication_key_removed',
   AuthenticationKeyRenamed: 'authentication_key_renamed',

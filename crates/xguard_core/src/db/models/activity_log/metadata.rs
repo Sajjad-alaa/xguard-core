@@ -478,6 +478,28 @@ pub struct WebHookMetadata {
 }
 
 #[derive(Serialize)]
+pub struct FirewallRuleMetadata {
+    pub rule: xguard_common::firewall::FirewallRule,
+}
+
+#[derive(Serialize)]
+pub struct SnatBindingMetadata {
+    pub binding: xguard_common::firewall::SnatBinding,
+}
+
+#[derive(Serialize)]
+pub struct SnatBindingModifiedMetadata {
+    pub before: xguard_common::firewall::SnatBinding,
+    pub after: xguard_common::firewall::SnatBinding,
+}
+
+#[derive(Serialize)]
+pub struct FirewallRuleModifiedMetadata {
+    pub before: xguard_common::firewall::FirewallRule,
+    pub after: xguard_common::firewall::FirewallRule,
+}
+
+#[derive(Serialize)]
 pub struct WebHookModifiedMetadata {
     pub before: WebHook<Id>,
     pub after: WebHook<Id>,

@@ -209,5 +209,8 @@
   "activity_log_field_smtp_password": "Server password",
   "activity_log_field_smtp_oauth_client_secret": "OAuth client secret",
   "activity_log_field_smtp_oauth_refresh_token": "OAuth refresh token",
-  "activity_log_field_ldap_bind_password": "Bind password"
+  "activity_log_field_ldap_bind_password": "Bind password",
+  "activity_event_firewall_rule_added": "Firewall rule added",
+  "activity_event_firewall_rule_modified": "Firewall rule modified",
+  "activity_event_firewall_rule_removed": "Firewall rule removed"
 }

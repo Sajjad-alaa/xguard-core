@@ -4,6 +4,7 @@ import type {
   AvailableLocationIpResponse,
   Device,
   DeviceLocationIpsResponse,
+  FirewallRule,
   GroupInfo,
   LicenseInfo,
   LicenseTierValue,
@@ -11,6 +12,7 @@ import type {
   NetworkDevice,
   NetworkLocation,
   OpenIdClient,
+  SnatBinding,
   StartEnrollmentResponse,
   UpdateInfo,
   User,
@@ -90,6 +92,14 @@ export interface OpenAddNewDeviceModal {
 
 export interface OpenCEWebhookModal {
   webhook?: Webhook;
+}
+
+export interface OpenCEFirewallRuleModal {
+  rule?: FirewallRule;
+}
+
+export interface OpenCESnatBindingModal {
+  binding?: SnatBinding;
 }
 
 export interface OpenAssignUsersToGroupsModal {

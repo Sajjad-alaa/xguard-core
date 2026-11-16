@@ -1,0 +1,12 @@
+.ce-firewall-rule-form {
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-xl, 16px);
+  }
+
+  .label {
+    margin-bottom: var(--spacing-sm, 8px);
+    font-weight: 600;
+  }
+}

@@ -108,6 +108,32 @@ impl From<StatusCode> for WebError {
     }
 }
 
+impl From<xguard_common::firewall::FirewallRuleError> for WebError {
+    fn from(err: xguard_common::firewall::FirewallRuleError) -> Self {
+        use xguard_common::firewall::FirewallRuleError;
+        match err {
+            FirewallRuleError::Invalid(_) | FirewallRuleError::UnknownReference => {
+                Self::BadRequest(err.to_string())
+            }
+            FirewallRuleError::NotFound => Self::ObjectNotFound(err.to_string()),
+            FirewallRuleError::Database(err) => err.into(),
+        }
+    }
+}
+
+impl From<xguard_common::firewall::SnatError> for WebError {
+    fn from(err: xguard_common::firewall::SnatError) -> Self {
+        use xguard_common::firewall::SnatError;
+        match err {
+            SnatError::Invalid(_) | SnatError::Duplicate | SnatError::UnknownReference => {
+                Self::BadRequest(err.to_string())
+            }
+            SnatError::NotFound => Self::ObjectNotFound(err.to_string()),
+            SnatError::Database(err) => err.into(),
+        }
+    }
+}
+
 impl From<sqlx::Error> for WebError {
     fn from(error: sqlx::Error) -> Self {
         Self::DbError(error.to_string())

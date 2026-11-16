@@ -32,6 +32,9 @@ pub enum GatewayCommand {
     DeviceDeleted(DeviceInfo),
     VpnSessionAuthorized(Id, Device<Id>, DeviceNetworkInfo),
     VpnSessionDeauthorized(Id, Device<Id>),
+    /// Firewall rules or SNAT bindings changed: every location's policy is recompiled, and
+    /// gateways get it only if it actually changed.
+    FirewallRulesChanged,
 }
 
 /// Sends a [`GatewayCommand`] to the gateway manager service.

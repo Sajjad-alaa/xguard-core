@@ -426,3 +426,147 @@ async fn test_send_configuration_includes_mfa_peers_with_session_preshared_key(
         ]
     );
 }
+
+async fn firewall_location(pool: &sqlx::PgPool, acl_enabled: bool) -> WireguardNetwork<Id> {
+    WireguardNetwork::new(
+        "firewalled".into(),
+        51820,
+        "127.0.0.1".into(),
+        None,
+        Vec::new(),
+        true,
+        acl_enabled,
+        false,
+        false,
+        false,
+        ServiceLocationMode::Disabled,
+    )
+    .save(pool)
+    .await
+    .unwrap()
+}
+
+fn sent_update(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<xguard_proto::gateway::CoreResponse>,
+) -> Option<xguard_proto::gateway::update::Update> {
+    match rx.try_recv().ok()?.payload? {
+        core_response::Payload::Update(update) => update.update,
+        _ => None,
+    }
+}
+
+#[sqlx::test]
+async fn test_firewall_refresh_sends_only_changes(_: PgPoolOptions, options: PgConnectOptions) {
+    use xguard_proto::gateway::{FirewallAction, update::Update};
+
+    let pool = setup_pool(options).await;
+    let network = firewall_location(&pool, true).await;
+    let (tx, mut rx) = unbounded_channel();
+    let mut handler = GatewayUpdatesHandler::new(network.clone(), "gateway", Some(&pool), tx);
+
+    // A rules change marks the policy for a re-check; the first one sends it.
+    handler
+        .handle_event(GatewayCommand::FirewallRulesChanged)
+        .await
+        .unwrap();
+    assert!(handler.firewall_dirty());
+    handler.refresh_firewall().await.unwrap();
+    assert!(!handler.firewall_dirty());
+    let Some(Update::Firewall(policy)) = sent_update(&mut rx) else {
+        panic!("expected a firewall policy");
+    };
+    assert_eq!(policy.default_action, FirewallAction::Drop as i32);
+    assert_eq!(policy.revision.len(), 32);
+
+    // Nothing changed: nothing is sent.
+    handler.refresh_firewall().await.unwrap();
+    assert!(rx.try_recv().is_err());
+
+    // Turning the firewall off on the location: the network update itself carries no policy,
+    // and the follow-up refresh has nothing left to send.
+    let mut off = network.clone();
+    off.acl_enabled = false;
+    handler
+        .handle_event(GatewayCommand::NetworkModified(off, Vec::new()))
+        .await
+        .unwrap();
+    let Some(Update::Network(config)) = sent_update(&mut rx) else {
+        panic!("expected a network update");
+    };
+    assert!(config.firewall.is_none());
+    handler.refresh_firewall().await.unwrap();
+    assert!(rx.try_recv().is_err());
+
+    // And back on: the network update carries the policy, so there is no unfiltered window.
+    handler
+        .handle_event(GatewayCommand::NetworkModified(network, Vec::new()))
+        .await
+        .unwrap();
+    let Some(Update::Network(config)) = sent_update(&mut rx) else {
+        panic!("expected a network update");
+    };
+    assert_eq!(config.firewall.unwrap().revision, policy.revision);
+    handler.refresh_firewall().await.unwrap();
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn test_unrelated_events_do_not_touch_the_firewall() {
+    let mut handler = test_handler(false);
+    let device = Device::new(
+        "elsewhere".to_owned(),
+        "pubkey".to_owned(),
+        1,
+        DeviceType::User,
+        None,
+        true,
+    )
+    .with_id(1);
+    let other_location = DeviceInfo {
+        device,
+        network_info: vec![DeviceNetworkInfo {
+            network_id: 999,
+            device_wireguard_ips: Vec::new(),
+            preshared_key: None,
+            is_authorized: true,
+        }],
+    };
+    handler
+        .handle_event(GatewayCommand::DeviceCreated(other_location))
+        .await
+        .unwrap();
+    assert!(!handler.firewall_dirty());
+}
+
+#[sqlx::test]
+async fn test_network_update_keeps_last_policy_when_compile_fails(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    use xguard_proto::gateway::{FirewallPolicy, update::Update};
+
+    let pool = setup_pool(options).await;
+    let network = firewall_location(&pool, true).await;
+    let (tx, mut rx) = unbounded_channel();
+    let mut handler = GatewayUpdatesHandler::new(network.clone(), "gateway", Some(&pool), tx);
+    let installed = FirewallPolicy {
+        revision: "installed".into(),
+        ..FirewallPolicy::default()
+    };
+    handler.set_firewall_policy(Some(installed.clone()));
+
+    // The database goes away: the policy can't be compiled.
+    pool.close().await;
+    handler
+        .handle_event(GatewayCommand::NetworkModified(network, Vec::new()))
+        .await
+        .unwrap();
+    let Some(Update::Network(config)) = sent_update(&mut rx) else {
+        panic!("expected a network update");
+    };
+    // The gateway keeps what it enforces, and a refresh is scheduled to retry.
+    assert_eq!(config.firewall, Some(installed));
+    assert!(handler.firewall_dirty());
+    assert!(handler.refresh_firewall().await.is_err());
+    assert!(rx.try_recv().is_err());
+}
