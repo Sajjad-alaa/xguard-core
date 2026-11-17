@@ -4,6 +4,8 @@
 //! - [`provider`]: the provider settings (one at a time).
 //! - [`flow`]: the authorization code flow with PKCE and full ID token verification.
 //! - [`resolve_user`]: which XGuard account the verified identity belongs to.
+//! - [`edge`]: the same flow through Edge, for the enrollment portal and the desktop client's
+//!   OpenID MFA steps.
 //!
 //! Account linking is deliberately strict:
 //! - An identity is linked by its subject identifier.
@@ -12,6 +14,7 @@
 //! - New accounts are created only when the "create accounts" setting is on.
 //! - XGuard's own MFA still applies after an external sign-in.
 
+pub mod edge;
 pub mod flow;
 pub mod provider;
 #[cfg(test)]
@@ -47,7 +50,7 @@ pub enum LinkError {
 }
 
 /// Compares secrets without leaking where they differ through timing.
-pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 

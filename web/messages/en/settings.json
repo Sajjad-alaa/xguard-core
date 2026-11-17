@@ -411,7 +411,7 @@
   "settings_openid_label_issuer": "Issuer URL",
   "settings_openid_helper_issuer": "The provider's issuer, for example https://accounts.google.com. XGuard reads its configuration from /.well-known/openid-configuration.",
   "settings_openid_helper_secret_kept": "Leave empty to keep the stored secret.",
-  "settings_openid_helper_redirect": "Register {url} as the redirect URI at the provider.",
+  "settings_openid_helper_redirect": "Register {url} as a redirect URI at the provider. For sign-in through Edge (enrollment portal and VPN MFA), also register <Edge URL>/openid/callback and <Edge URL>/openid/mfa/callback.",
   "settings_openid_helper_display_name": "Shown on the sign-in button.",
   "settings_openid_label_create_accounts": "Create XGuard accounts for new users with a verified email",
   "settings_openid_label_disable_password_management": "Users without an XGuard password cannot set one",

@@ -23,6 +23,19 @@ pub enum ProviderKind {
     Zitadel,
 }
 
+impl From<ProviderKind> for xguard_proto::client_types::OpenIdProviderKind {
+    fn from(kind: ProviderKind) -> Self {
+        match kind {
+            ProviderKind::Custom => Self::Custom,
+            ProviderKind::Google => Self::Google,
+            ProviderKind::Microsoft => Self::Microsoft,
+            ProviderKind::Okta => Self::Okta,
+            ProviderKind::JumpCloud => Self::Jumpcloud,
+            ProviderKind::Zitadel => Self::Zitadel,
+        }
+    }
+}
+
 /// The provider as the API shows it: the client secret and directory credentials are never
 /// returned.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]

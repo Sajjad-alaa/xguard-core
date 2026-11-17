@@ -51,6 +51,7 @@ pub mod error;
 pub mod legacy;
 pub mod method;
 pub mod multi_step;
+pub mod oidc;
 pub mod types;
 
 /// Whether this method uses the device/location code-attempt throttle.
@@ -246,16 +247,15 @@ impl MfaEngine {
         })
     }
 
-    /// OIDC MFA needs an external identity provider integration, which XGuard does not include.
-    #[allow(clippy::unused_async)]
+    /// Whether OpenID MFA can run: a provider is enabled and Edge has a public URL for the
+    /// browser round trip.
     async fn oidc_available(&self) -> sqlx::Result<bool> {
-        Ok(false)
+        crate::sso::edge::available(&self.pool).await
     }
 
     /// See [`Self::oidc_available`].
-    #[allow(clippy::unused_async)]
     async fn oidc_provider_configured(&self) -> sqlx::Result<bool> {
-        Ok(false)
+        self.oidc_available().await
     }
 
     /// Load an active session only when it belongs to the contract selected by the caller.

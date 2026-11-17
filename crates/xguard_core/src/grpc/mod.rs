@@ -23,6 +23,10 @@ use crate::{
     db::AppEvent,
     features::{is_service_location, supported_mfa_authorize_methods, supported_mfa_setup_methods},
     grpc::{interceptor::JwtInterceptor, worker::WorkerServer},
+    sso::{
+        edge::edge_public_url,
+        provider::{ProviderConfig, ProviderKind},
+    },
 };
 
 pub mod client_version;
@@ -33,7 +37,9 @@ pub mod worker;
 
 use tonic::transport::{Identity, Server, ServerTlsConfig, server::Router};
 use xguard_proto::{
-    client_types::{ClientTrafficPolicy, MfaCapabilities, MfaMethod, MfaUserState},
+    client_types::{
+        ClientTrafficPolicy, MfaCapabilities, MfaMethod, MfaUserState, OpenIdProviderKind,
+    },
     worker::worker_service_server::WorkerServiceServer,
 };
 
@@ -147,6 +153,8 @@ pub struct InstanceInfo {
     proxy_url: Url,
     username: String,
     smtp_configured: bool,
+    /// The provider users can sign in with through Edge (display name and kind).
+    openid: Option<(Option<String>, ProviderKind)>,
     pub configured_methods: Vec<VpnClientMfaMethod>,
 }
 
@@ -168,10 +176,17 @@ impl InstanceInfo {
         device_id: Option<Id>,
     ) -> Result<Self, InstanceInfoBuildError> {
         let smtp_configured = settings.smtp_configured();
+        let openid = if edge_public_url().is_ok() {
+            ProviderConfig::enabled(pool)
+                .await?
+                .map(|config| (config.provider.display_name, config.provider.kind))
+        } else {
+            None
+        };
         let mut configured_methods = Vec::with_capacity(VpnClientMfaMethod::ALL.len());
         for method in VpnClientMfaMethod::ALL {
             if method
-                .is_configured(pool, user, device_id, smtp_configured, false)
+                .is_configured(pool, user, device_id, smtp_configured, openid.is_some())
                 .await?
             {
                 configured_methods.push(method);
@@ -186,6 +201,7 @@ impl InstanceInfo {
             proxy_url,
             username: user.username.clone(),
             smtp_configured,
+            openid,
             configured_methods,
         })
     }
@@ -204,11 +220,14 @@ impl From<InstanceInfo> for xguard_proto::client_types::InstanceInfo {
             disable_all_traffic: false,
             client_traffic_policy: Some(ClientTrafficPolicy::None as i32),
             enterprise_enabled: false,
-            openid_display_name: None,
-            openid_provider_kind: None,
+            openid_display_name: instance.openid.as_ref().and_then(|(name, _)| name.clone()),
+            openid_provider_kind: instance
+                .openid
+                .as_ref()
+                .map(|(_, kind)| OpenIdProviderKind::from(*kind) as i32),
             disable_tunnels: Some(false),
             smtp_configured: Some(instance.smtp_configured),
-            openid_available: Some(false),
+            openid_available: Some(instance.openid.is_some()),
             mfa_user_state: Some(MfaUserState {
                 configured_methods: instance
                     .configured_methods

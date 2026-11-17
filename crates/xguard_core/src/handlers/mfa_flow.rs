@@ -389,7 +389,7 @@ async fn validate_flow_request(
     title: &str,
     step_methods: &[Vec<VpnClientMfaMethod>],
     before_methods: &[Option<HashSet<VpnClientMfaMethod>>],
-    _pool: &PgPool,
+    pool: &PgPool,
 ) -> Result<Option<ApiResponse>, WebError> {
     if let Some(resp) = check_flow_license_gates(step_methods) {
         return Ok(Some(resp));
@@ -403,7 +403,7 @@ async fn validate_flow_request(
     if let Some(resp) = check_method_prerequisites(
         step_methods,
         Settings::get_current_settings().smtp_configured(),
-        false,
+        crate::sso::edge::available(pool).await?,
         before_methods,
     ) {
         return Ok(Some(resp));
@@ -449,7 +449,7 @@ pub async fn list_mfa_flows(
             .push(location);
     }
     let smtp_configured = Settings::get_current_settings().smtp_configured();
-    let oidc_configured = false;
+    let oidc_configured = crate::sso::edge::available(&appstate.pool).await?;
     let gates = MethodGates::current(smtp_configured, oidc_configured);
     let availability = compute_method_availability(gates);
     let response: Vec<MfaFlowListItemResponse> = items
@@ -973,14 +973,14 @@ fn compute_method_availability(gates: MethodGates) -> Vec<MethodAvailabilityResp
 pub async fn get_method_availability(
     _admin: AdminRole,
     session: SessionInfo,
-    State(_appstate): State<AppState>,
+    State(appstate): State<AppState>,
 ) -> ApiResult {
     debug!(
         "User {} fetching MFA method availability",
         session.user.username
     );
     let smtp_configured = Settings::get_current_settings().smtp_configured();
-    let oidc_configured = false;
+    let oidc_configured = crate::sso::edge::available(&appstate.pool).await?;
     let gates = MethodGates::current(smtp_configured, oidc_configured);
     Ok(ApiResponse::json(
         compute_method_availability(gates),

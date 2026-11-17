@@ -174,6 +174,18 @@ pub async fn finish(
     if !super::constant_time_eq(pending.state.as_bytes(), state.as_bytes()) {
         return Err(FlowError::BadState);
     }
+    exchange(config, redirect_url, pending, code).await
+}
+
+/// Exchanges the code with the PKCE verifier and verifies the ID token.
+///
+/// The caller must already have matched the returned `state` to `pending` (see [`finish`]).
+pub(crate) async fn exchange(
+    config: &ProviderConfig,
+    redirect_url: &str,
+    pending: PendingLogin,
+    code: &str,
+) -> Result<Identity, FlowError> {
     let client = client(config, redirect_url, false).await?;
     let http = http_client()?;
     let response = client

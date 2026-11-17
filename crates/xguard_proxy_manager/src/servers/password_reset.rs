@@ -14,6 +14,7 @@ use xguard_core::{
     mail::templates::{
         password_reset_disabled_mail, password_reset_mail, password_reset_success_mail,
     },
+    sso::provider::disables_password_management,
 };
 use xguard_proto::proxy::{
     DeviceInfo, PasswordResetInitializeRequest, PasswordResetRequest, PasswordResetStartRequest,
@@ -146,7 +147,12 @@ impl PasswordResetServer {
                 Status::internal("unexpected error")
             })?;
             let settings = Settings::get_current_settings();
-            let oidc_disable_password_management = false;
+            let oidc_disable_password_management = disables_password_management(&self.pool)
+                .await
+                .map_err(|err| {
+                error!("Failed to check the OpenID password management setting: {err}");
+                Status::internal("unexpected error")
+            })?;
 
             if user.password_management_disabled(
                 is_admin,

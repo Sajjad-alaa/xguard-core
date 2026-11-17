@@ -59,7 +59,7 @@ use xguard_version::{
 use crate::ProxyManagerTestSupport;
 use crate::{
     HandlerTxMap, ProxyError, ProxyTxSet, TEN_SECS,
-    servers::{EnrollmentServer, MfaConfigServer, PasswordResetServer},
+    servers::{EnrollmentServer, MfaConfigServer, OpenIdServer, PasswordResetServer},
 };
 
 const VERSION_ZERO: Version = Version::new(0, 0, 0);
@@ -885,11 +885,22 @@ impl ProxyHandler {
                     }
                 }
             }
-            Some(core_request::Payload::ClientMfaOidcAuthenticate(_)) => {
-                // OpenID MFA needs an external identity provider integration (not in XGuard).
-                Some(core_response::Payload::CoreError(
-                    Status::unimplemented("OpenID MFA is not supported").into(),
+            // rpc ClientMfaOidcAuthenticate (ClientMfaOidcAuthenticateRequest) returns (google.protobuf.Empty)
+            Some(core_request::Payload::ClientMfaOidcAuthenticate(request)) => {
+                match boxed(services.openid.mfa_authenticate(
+                    request,
+                    received.device_info,
+                    &services.client_mfa,
+                    &services.mfa_config,
                 ))
+                .await
+                {
+                    Ok(()) => Some(core_response::Payload::Empty(())),
+                    Err(err) => {
+                        warn!("OpenID MFA sign-in through Edge failed: {}", err.message);
+                        Some(core_response::Payload::CoreError(err))
+                    }
+                }
             }
             // rpc LocationInfo (LocationInfoRequest) returns (LocationInfoResponse)
             Some(core_request::Payload::InstanceInfo(_)) => {
@@ -900,11 +911,35 @@ impl ProxyHandler {
                     Status::failed_precondition("instance config polling is not supported").into(),
                 ))
             }
-            Some(core_request::Payload::AuthInfo(_) | core_request::Payload::AuthCallback(_)) => {
-                // Login through an external OpenID provider is not part of XGuard.
-                Some(core_response::Payload::CoreError(
-                    Status::unimplemented("external OpenID login is not supported").into(),
+            // rpc AuthInfo (AuthInfoRequest) returns (AuthInfoResponse)
+            Some(core_request::Payload::AuthInfo(request)) => {
+                match boxed(services.openid.auth_info(
+                    request,
+                    received.device_info,
+                    &services.client_mfa,
+                    &services.mfa_config,
                 ))
+                .await
+                {
+                    Ok(response) => Some(core_response::Payload::AuthInfo(response)),
+                    Err(err) => {
+                        debug!("OpenID sign-in through Edge not started: {}", err.message);
+                        Some(core_response::Payload::CoreError(err))
+                    }
+                }
+            }
+            // rpc AuthCallback (AuthCallbackRequest) returns (AuthCallbackResponse)
+            Some(core_request::Payload::AuthCallback(request)) => {
+                match boxed(services.openid.auth_callback(request, received.device_info)).await {
+                    Ok(response) => Some(core_response::Payload::AuthCallback(response)),
+                    Err(err) => {
+                        warn!(
+                            "OpenID enrollment sign-in through Edge failed: {}",
+                            err.message
+                        );
+                        Some(core_response::Payload::CoreError(err))
+                    }
+                }
             }
             None => None,
             Some(core_request::Payload::AcmeCertificate(cert)) => {
@@ -1218,6 +1253,7 @@ struct ProxyServices {
     password_reset: PasswordResetServer,
     client_mfa: ClientMfaServer,
     mfa_config: MfaConfigServer,
+    openid: OpenIdServer,
     // Directory-sync channels are reserved for the XGuard LDAP / directory sync rebuild.
     #[allow(dead_code)]
     ldap: UnboundedSender<LdapSyncEventType>,
@@ -1245,12 +1281,14 @@ impl ProxyServices {
             remote_mfa_responses,
         );
         let mfa_config = MfaConfigServer::new(pool.clone(), tx.event_tx.clone());
+        let openid = OpenIdServer::new(pool.clone());
 
         Self {
             enrollment,
             password_reset,
             client_mfa,
             mfa_config,
+            openid,
             ldap: tx.ldap.clone(),
             dirsync: tx.dirsync.clone(),
             event_tx: tx.event_tx.clone(),

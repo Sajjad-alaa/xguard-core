@@ -573,8 +573,10 @@ async fn test_device_config_matrix(_: PgPoolOptions, options: PgConnectOptions) 
         Some(LocationMfaMode::External as i32)
     );
     assert_eq!(config.steps.len(), 1);
-    // OIDC MFA is not supported by XGuard, so the OIDC-only step offers no method.
-    assert_eq!(config.steps[0].methods.len(), 0);
+    // The OIDC-only step offers OIDC, not configured for this unlinked user.
+    assert_eq!(config.steps[0].methods.len(), 1);
+    assert_eq!(config.steps[0].methods[0].method, MfaMethod::Oidc as i32);
+    assert!(!config.steps[0].methods[0].configured);
 
     let config = response
         .configs
@@ -696,12 +698,14 @@ async fn test_build_wire_steps_computes_configured_flags(
     assert_eq!(wire[0].methods[1].method, MfaMethod::Email as i32);
     assert!(!wire[0].methods[1].configured);
 
-    // OIDC is filtered out: XGuard does not support OIDC MFA.
-    assert_eq!(wire[1].methods.len(), 2);
-    assert_eq!(wire[1].methods[0].method, MfaMethod::Biometric as i32);
-    assert!(wire[1].methods[0].configured);
-    assert_eq!(wire[1].methods[1].method, MfaMethod::MobileApprove as i32);
+    // OIDC is offered, but not configured while no provider is enabled.
+    assert_eq!(wire[1].methods.len(), 3);
+    assert_eq!(wire[1].methods[0].method, MfaMethod::Oidc as i32);
+    assert!(!wire[1].methods[0].configured);
+    assert_eq!(wire[1].methods[1].method, MfaMethod::Biometric as i32);
     assert!(wire[1].methods[1].configured);
+    assert_eq!(wire[1].methods[2].method, MfaMethod::MobileApprove as i32);
+    assert!(wire[1].methods[2].configured);
 
     let instance = xguard_proto::client_types::InstanceInfo::from(instance_info);
     let configured_from_instance = instance
@@ -715,6 +719,37 @@ async fn test_build_wire_steps_computes_configured_flags(
         .map(|method| method.method)
         .collect::<Vec<_>>();
     assert_eq!(configured_from_instance, configured_from_steps);
+    assert_eq!(instance.openid_available, Some(false));
+
+    // With an enabled provider, the linked user has OIDC configured.
+    let mut conn = pool.acquire().await.unwrap();
+    crate::sso::provider::ProviderConfig::save(
+        &mut conn,
+        crate::sso::provider::ProviderInput {
+            kind: crate::sso::provider::ProviderKind::Okta,
+            issuer: "http://localhost:9".into(),
+            client_id: "client".into(),
+            client_secret: Some("secret".into()),
+            enabled: true,
+            display_name: Some("Okta".into()),
+            disable_password_management: false,
+            directory_sync: Default::default(),
+        },
+    )
+    .await
+    .expect("failed to save provider");
+    let instance_info = InstanceInfo::build(&pool, &settings, &user, Some(device.id))
+        .await
+        .expect("failed to build instance info");
+    let wire = build_wire_steps(&steps, &instance_info.configured_methods);
+    assert!(wire[1].methods[0].configured);
+    let instance = xguard_proto::client_types::InstanceInfo::from(instance_info);
+    assert_eq!(instance.openid_available, Some(true));
+    assert_eq!(instance.openid_display_name.as_deref(), Some("Okta"));
+    assert_eq!(
+        instance.openid_provider_kind,
+        Some(xguard_proto::client_types::OpenIdProviderKind::Okta as i32)
+    );
 }
 
 #[test]

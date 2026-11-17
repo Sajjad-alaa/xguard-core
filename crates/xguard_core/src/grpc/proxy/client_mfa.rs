@@ -39,8 +39,8 @@ use xguard_proto::{
     },
     proxy::{
         self, AwaitRemoteMfaFinishRequest, AwaitRemoteMfaFinishResponse,
-        ClientMfaTokenValidationRequest, ClientMfaTokenValidationResponse, CoreResponse,
-        core_response::Payload,
+        ClientMfaTokenValidationRequest, ClientMfaTokenValidationResponse, CoreError,
+        CoreErrorCode, CoreResponse, core_response::Payload,
     },
 };
 
@@ -57,8 +57,10 @@ use crate::{
             Fido2Assertion, MobileApprovalProof, StartRejectionReason, StartResult, StepCredential,
             StepError, StepFinishError, StepProof, StepRejection,
         },
+        oidc::OidcMfaError,
         types::{FinishOutcome, LegacyFinishOutcome, LegacyStartOutcome, MultiStepStartOutcome},
     },
+    sso::{edge::VpnMfaTarget, flow::Identity},
 };
 
 // Must cover the client's MOBILE_APPROVE_TIMEOUT.
@@ -1316,6 +1318,56 @@ impl ClientMfaServer {
             ip,
         )
         .await
+    }
+}
+
+/// The OpenID step of VPN MFA, completed in the browser through Edge.
+impl ClientMfaServer {
+    /// The VPN MFA attempt an Edge sign-in is for; `None` when no VPN MFA session has `token`.
+    pub async fn oidc_begin(
+        &self,
+        token: &str,
+        attempt_id: Option<&str>,
+    ) -> Result<Option<VpnMfaTarget>, CoreError> {
+        Ok(self.engine.begin_oidc(token, attempt_id).await?)
+    }
+
+    /// Completes the attempt once the provider confirmed the device owner's identity.
+    pub async fn oidc_complete(
+        &self,
+        target: &VpnMfaTarget,
+        identity: &Identity,
+        ip: IpAddr,
+    ) -> Result<(), CoreError> {
+        Ok(self.engine.complete_oidc(target, identity, ip).await?)
+    }
+
+    /// Audits a sign-in for this attempt that could not be verified.
+    pub async fn oidc_failed(&self, target: &VpnMfaTarget, ip: IpAddr, reason: &str) {
+        if let Err(err) = self
+            .engine
+            .oidc_verification_failed(target, ip, reason)
+            .await
+        {
+            error!("Failed to record a failed OpenID MFA sign-in: {err}");
+        }
+    }
+}
+
+impl From<OidcMfaError> for CoreError {
+    fn from(error: OidcMfaError) -> Self {
+        match error {
+            OidcMfaError::SessionExpired => CoreError::unauthenticated(error.to_string())
+                .with_code(CoreErrorCode::MfaSessionExpired),
+            OidcMfaError::Unavailable => {
+                CoreError::from(Status::permission_denied(error.to_string()))
+            }
+            OidcMfaError::AccountMismatch => CoreError::unauthenticated("unauthorized")
+                .with_code(CoreErrorCode::OidcAccountMismatch),
+            OidcMfaError::Internal | OidcMfaError::Event(_) => {
+                CoreError::internal("unexpected error")
+            }
+        }
     }
 }
 
