@@ -1,0 +1,13 @@
+#settings-openid-page {
+  .directory-sync-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+  }
+
+  .directory-sync-status {
+    color: var(--fg-muted);
+    font: var(--t-body-sm-400);
+    margin: 0 0 var(--spacing-md);
+  }
+}

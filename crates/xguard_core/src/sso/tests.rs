@@ -136,8 +136,10 @@ fn config(issuer: &str) -> ProviderConfig {
             display_name: None,
             disable_password_management: false,
             client_secret_set: true,
+            directory_sync: crate::dirsync::settings::DirectorySyncSettings::default(),
         },
         client_secret: "secret".into(),
+        directory_secrets: crate::dirsync::settings::DirectorySyncSecrets::default(),
     }
 }
 
@@ -322,6 +324,7 @@ async fn test_provider_settings(_: PgPoolOptions, options: PgConnectOptions) {
         enabled: true,
         display_name: Some("Google".into()),
         disable_password_management: false,
+        directory_sync: Default::default(),
     };
     let mut conn = pool.acquire().await.unwrap();
     // Plain HTTP is only accepted for a provider on this machine; a secret is required.

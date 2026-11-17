@@ -6,6 +6,7 @@ mod core_certs;
 mod enrollment;
 mod api_tokens;
 mod firewall;
+mod dirsync;
 mod sso;
 mod forward_auth;
 mod gateway;

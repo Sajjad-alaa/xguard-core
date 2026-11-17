@@ -483,6 +483,18 @@ pub struct OpenIdProviderMetadata {
 }
 
 #[derive(Serialize)]
+pub struct DirectorySyncTestedMetadata {
+    pub provider: String,
+    pub success: bool,
+}
+
+#[derive(Serialize)]
+pub struct DirectorySyncStartedMetadata {
+    pub provider: String,
+    pub dry_run: bool,
+}
+
+#[derive(Serialize)]
 pub struct ActivityLogStreamMetadata {
     pub stream: crate::log_stream::ActivityLogStream,
 }

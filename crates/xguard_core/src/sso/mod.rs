@@ -53,7 +53,7 @@ pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 
 /// A username from `source`: lowercase, only letters, digits, `.`, `-` and `_`, starting with a
 /// letter or digit.
-fn username_base(source: &str) -> Option<String> {
+pub(crate) fn username_base(source: &str) -> Option<String> {
     let local = source.split('@').next().unwrap_or_default();
     let cleaned: String = local
         .to_lowercase()

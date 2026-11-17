@@ -85,6 +85,8 @@ export const ActivityLogEventType = {
   OpenIdAppStateChanged: 'open_id_app_state_changed',
   OpenIdProviderRemoved: 'open_id_provider_removed',
   OpenIdProviderModified: 'open_id_provider_modified',
+  DirectorySyncTested: 'directory_sync_tested',
+  DirectorySyncStarted: 'directory_sync_started',
 
   SettingsUpdated: 'settings_updated',
   SettingsUpdatedPartial: 'settings_updated_partial',

@@ -15,6 +15,7 @@ use xguard_core::{
             ActivityLogStreamMetadata, ActivityLogStreamModifiedMetadata, ApiTokenMetadata,
             ApiTokenRenamedMetadata, AuthenticationKeyMetadata, AuthenticationKeyRenamedMetadata,
             ClientConfigurationTokenMetadata, DeviceMetadata, DeviceModifiedMetadata,
+            DirectorySyncStartedMetadata, DirectorySyncTestedMetadata,
             EnrollmentDeviceAddedMetadata, EnrollmentTokenMetadata, FirewallRuleMetadata,
             FirewallRuleModifiedMetadata, GatewayDeletedMetadata, GatewayModifiedMetadata,
             GroupAssignedMetadata, GroupMembersModifiedMetadata, GroupMetadata,
@@ -309,6 +310,14 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 ApiEventType::OpenIdProviderRemoved { provider } => (
                     EventType::OpenIdProviderRemoved,
                     serde_json::to_value(OpenIdProviderMetadata { provider }).ok(),
+                ),
+                ApiEventType::DirectorySyncTested { provider, success } => (
+                    EventType::DirectorySyncTested,
+                    serde_json::to_value(DirectorySyncTestedMetadata { provider, success }).ok(),
+                ),
+                ApiEventType::DirectorySyncStarted { provider, dry_run } => (
+                    EventType::DirectorySyncStarted,
+                    serde_json::to_value(DirectorySyncStartedMetadata { provider, dry_run }).ok(),
                 ),
                 ApiEventType::ActivityLogStreamCreated { stream } => (
                     EventType::ActivityLogStreamCreated,

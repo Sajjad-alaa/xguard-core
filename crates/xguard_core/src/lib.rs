@@ -141,6 +141,10 @@ use crate::{
             update_settings,
         },
         ssh_authorized_keys::get_authorized_keys,
+        dirsync::{
+            directory_sync_status, preview_directory_sync as preview_cloud_directory_sync,
+            sync_directory_now, test_directory_sync,
+        },
         sso::{auth_info, callback, delete_provider, get_provider, set_provider, test_provider},
         static_ips::{
             assign_static_ips, get_all_user_device_ips, get_device_ips, validate_ip_assignment,
@@ -177,6 +181,7 @@ pub mod cert_settings;
 pub mod db;
 pub mod device_access;
 pub mod directory;
+pub mod dirsync;
 pub mod enrollment_management;
 
 pub mod error;
@@ -421,6 +426,13 @@ pub fn build_webapp(
                 get(get_provider).put(set_provider).delete(delete_provider),
             )
             .route("/openid/provider/test", post(test_provider))
+            .route("/openid/provider/sync", post(sync_directory_now))
+            .route("/openid/provider/sync/test", post(test_directory_sync))
+            .route(
+                "/openid/provider/sync/dry_run",
+                post(preview_cloud_directory_sync),
+            )
+            .route("/openid/provider/sync/status", get(directory_sync_status))
             .route(
                 "/activity_log_stream/{id}",
                 put(update_stream).delete(delete_stream),

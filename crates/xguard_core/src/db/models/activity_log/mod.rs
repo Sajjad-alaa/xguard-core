@@ -79,6 +79,8 @@ pub enum EventType {
     // OpenID provider management
     OpenIdProviderRemoved,
     OpenIdProviderModified,
+    DirectorySyncTested,
+    DirectorySyncStarted,
     // VPN location management
     VpnLocationAdded,
     VpnLocationRemoved,
