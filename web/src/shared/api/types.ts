@@ -691,8 +691,26 @@ export interface OpenIdAuthInfo {
   provider_kind: OpenIdProviderKindValue;
 }
 
+/** Directory sync settings of the provider; secrets only say whether they are set. */
+export interface DirectorySyncSettings {
+  directory_sync_enabled: boolean;
+  directory_sync_interval: number;
+  directory_sync_user_behavior: DirectorySyncBehaviorValue;
+  directory_sync_admin_behavior: DirectorySyncBehaviorValue;
+  directory_sync_target: DirectorySyncTargetValue;
+  directory_sync_group_match: string[];
+  directory_sync_user_groups: string[];
+  prefetch_users: boolean;
+  admin_email: string | null;
+  google_service_account_email: string | null;
+  google_service_account_key_set: boolean;
+  okta_dirsync_client_id: string | null;
+  okta_private_jwk_set: boolean;
+  jumpcloud_api_key_set: boolean;
+}
+
 /** The external OpenID provider; the client secret is never returned. */
-export interface ExternalOpenIdProvider {
+export interface ExternalOpenIdProvider extends Partial<DirectorySyncSettings> {
   id: number;
   kind: OpenIdProviderKindValue;
   issuer: string;
@@ -712,6 +730,81 @@ export interface ExternalOpenIdProviderInput {
   enabled: boolean;
   display_name: string | null;
   disable_password_management: boolean;
+  directory_sync_enabled?: boolean;
+  directory_sync_interval?: number;
+  directory_sync_user_behavior?: DirectorySyncBehaviorValue;
+  directory_sync_admin_behavior?: DirectorySyncBehaviorValue;
+  directory_sync_target?: DirectorySyncTargetValue;
+  directory_sync_group_match?: string[];
+  directory_sync_user_groups?: string[];
+  prefetch_users?: boolean;
+  admin_email?: string | null;
+  google_service_account_email?: string | null;
+  /** The JSON key file or PEM key; leave it out to keep the stored one. */
+  google_service_account_key?: string;
+  okta_dirsync_client_id?: string | null;
+  /** Leave it out to keep the stored key. */
+  okta_private_jwk?: string;
+  /** Leave it out to keep the stored key. */
+  jumpcloud_api_key?: string;
+}
+
+export interface DirectorySyncAccountChange {
+  username: string;
+  reason: string;
+}
+
+export interface DirectorySyncPlan {
+  link_users: { username: string; external_id: string }[];
+  create_users: {
+    username: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    external_id: string;
+  }[];
+  update_users: {
+    username: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  }[];
+  enable_users: DirectorySyncAccountChange[];
+  disable_users: DirectorySyncAccountChange[];
+  delete_users: DirectorySyncAccountChange[];
+  create_groups: string[];
+  add_members: LdapMembership[];
+  remove_members: LdapMembership[];
+  skipped: string[];
+  stats: {
+    directory_users: number;
+    directory_users_in_scope: number;
+    directory_groups: number;
+    synced_groups: number;
+    matched_users: number;
+    linked_users: number;
+  };
+}
+
+export interface DirectorySyncReport {
+  plan: DirectorySyncPlan;
+  applied: boolean;
+  errors: string[];
+}
+
+export interface DirectorySyncConnectionTest {
+  users: number;
+  groups: number;
+}
+
+export interface DirectorySyncStatus {
+  enabled: boolean;
+  last_run: {
+    finished: string;
+    success: boolean;
+    message: string | null;
+    changes: number;
+  } | null;
 }
 
 export interface LdapMembership {

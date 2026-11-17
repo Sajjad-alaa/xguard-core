@@ -212,5 +212,7 @@
   "activity_log_field_ldap_bind_password": "Bind password",
   "activity_event_firewall_rule_added": "Firewall rule added",
   "activity_event_firewall_rule_modified": "Firewall rule modified",
-  "activity_event_firewall_rule_removed": "Firewall rule removed"
+  "activity_event_firewall_rule_removed": "Firewall rule removed",
+  "activity_event_directory_sync_tested": "Directory sync tested",
+  "activity_event_directory_sync_started": "Directory sync started"
 }

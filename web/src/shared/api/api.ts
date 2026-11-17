@@ -42,6 +42,9 @@ import type {
   DeleteAuthKeyRequest,
   Device,
   DeviceLocationIpsResponse,
+  DirectorySyncConnectionTest,
+  DirectorySyncReport,
+  DirectorySyncStatus,
   Edge,
   EdgeInfo,
   EditGroupRequest,
@@ -466,6 +469,14 @@ const api = {
     deleteProvider: () => client.delete('/openid/provider'),
     testProvider: (data: ExternalOpenIdProviderInput) =>
       client.post('/openid/provider/test', data),
+    testDirectorySync: (data: ExternalOpenIdProviderInput) =>
+      client.post<DirectorySyncConnectionTest>('/openid/provider/sync/test', data),
+    directorySyncDryRun: (data: ExternalOpenIdProviderInput) =>
+      client.post<DirectorySyncReport>('/openid/provider/sync/dry_run', data),
+    directorySync: (data: { confirm_revocations?: boolean }) =>
+      client.post<DirectorySyncReport>('/openid/provider/sync', data),
+    directorySyncStatus: () =>
+      client.get<DirectorySyncStatus>('/openid/provider/sync/status'),
   },
   activityLogStream: {
     getStreams: () => client.get<ActivityLogStream[]>('/activity_log_stream'),
