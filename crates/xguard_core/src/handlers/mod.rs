@@ -32,6 +32,7 @@ pub mod app_info;
 pub mod auth;
 pub mod component_setup;
 pub mod core_certs;
+pub mod dirsync;
 pub(crate) mod directory;
 pub(crate) mod firewall;
 pub(crate) mod forward_auth;

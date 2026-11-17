@@ -414,6 +414,11 @@ async fn main() -> Result<(), anyhow::Error> {
             ldap_tx.clone(),
             gateway_tx.clone()
         ) => bail!("Directory sync worker returned early"),
+        () = xguard_core::dirsync::worker::run_worker(
+            pool.clone(),
+            dirsync_tx.clone(),
+            gateway_tx.clone()
+        ) => bail!("Cloud directory sync worker returned early"),
         res = run_session_manager(
             pool.clone(),
             peer_stats_rx,

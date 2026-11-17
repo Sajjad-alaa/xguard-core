@@ -348,6 +348,7 @@ fn api_event_cases() -> Vec<EventTestCase> {
         display_name: None,
         disable_password_management: false,
         client_secret_set: true,
+        directory_sync: Default::default(),
     };
     let log_stream = xguard_core::log_stream::ActivityLogStream {
         id: 1,
@@ -946,6 +947,26 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::OpenIdProviderRemoved,
             module: ActivityLogModule::XGuard,
             description_contains: Some("Removed the OpenID provider"),
+        },
+        EventTestCase {
+            name: "DirectorySyncTested",
+            message: api_message(ApiEventType::DirectorySyncTested {
+                provider: "Okta".into(),
+                success: true,
+            }),
+            event_type: EventType::DirectorySyncTested,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Tested the directory sync with Okta: connected"),
+        },
+        EventTestCase {
+            name: "DirectorySyncStarted",
+            message: api_message(ApiEventType::DirectorySyncStarted {
+                provider: "Okta".into(),
+                dry_run: true,
+            }),
+            event_type: EventType::DirectorySyncStarted,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Previewed a directory sync with Okta"),
         },
         EventTestCase {
             name: "ActivityLogStreamCreated",

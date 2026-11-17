@@ -262,6 +262,16 @@ pub enum ApiEventType {
     OpenIdProviderRemoved {
         provider: crate::sso::provider::OpenIdProvider,
     },
+    /// An admin tested the directory sync settings of the OpenID provider.
+    DirectorySyncTested {
+        provider: String,
+        success: bool,
+    },
+    /// An admin started a directory sync (or a dry run of one).
+    DirectorySyncStarted {
+        provider: String,
+        dry_run: bool,
+    },
     ActivityLogStreamCreated {
         stream: crate::log_stream::ActivityLogStream,
     },

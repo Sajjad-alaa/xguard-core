@@ -14,7 +14,7 @@ use xguard_common::{
 use super::handlers::{
     ApiErrorResponse, Auth, EditGroupInfo, GroupInfo, PasswordChange, PasswordChangeSelf,
     SESSION_COOKIE_NAME, StartEnrollmentRequest, Username, activity_log, api_tokens, app_info,
-    auth, component_setup, core_certs, directory, firewall, forward_auth, gateway,
+    auth, component_setup, core_certs, directory, dirsync, firewall, forward_auth, gateway,
     group::{self, BulkAssignToGroupsRequest},
     location_stats, log_stream, mail, mfa_flow, network_devices, openid_clients, openid_flow,
     proxy, reserved, resource_display, session_info, settings, ssh_authorized_keys, sso,
@@ -181,6 +181,10 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         sso::set_provider,
         sso::delete_provider,
         sso::test_provider,
+        dirsync::test_directory_sync,
+        dirsync::preview_directory_sync,
+        dirsync::sync_directory_now,
+        dirsync::directory_sync_status,
         // activity log streaming
         log_stream::list_streams,
         log_stream::create_stream,
@@ -259,7 +263,12 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
             log_stream::StreamWithStatus, crate::log_stream::StreamInput,
             crate::log_stream::StreamType, crate::log_stream::sender::StreamStatus,
             sso::AuthInfo, sso::CallbackRequest, crate::sso::provider::OpenIdProvider,
-            crate::sso::provider::ProviderInput, crate::sso::provider::ProviderKind
+            crate::sso::provider::ProviderInput, crate::sso::provider::ProviderKind,
+            crate::dirsync::settings::DirectorySyncSettings,
+            crate::dirsync::settings::DirectorySyncInput,
+            crate::dirsync::settings::MissingUserAction, crate::dirsync::settings::SyncTarget,
+            crate::dirsync::ConnectionTest, crate::dirsync::sync::LastRun,
+            dirsync::DirectorySyncRequest, dirsync::DirectorySyncStatus
         ),
     ),
     tags(

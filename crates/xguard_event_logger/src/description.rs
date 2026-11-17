@@ -228,6 +228,15 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::OpenIdProviderRemoved { provider } => {
             Some(format!("Removed the OpenID provider {}", provider.issuer))
         }
+        ApiEventType::DirectorySyncTested { provider, success } => Some(format!(
+            "Tested the directory sync with {provider}: {}",
+            if *success { "connected" } else { "failed" }
+        )),
+        ApiEventType::DirectorySyncStarted { provider, dry_run } => Some(if *dry_run {
+            format!("Previewed a directory sync with {provider}")
+        } else {
+            format!("Started a directory sync with {provider}")
+        }),
         ApiEventType::ActivityLogStreamCreated { stream } => Some(format!(
             "Added activity log stream {} to {}",
             stream.name, stream.url

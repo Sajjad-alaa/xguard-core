@@ -266,6 +266,7 @@ pub(crate) async fn set_provider(
     let mut transaction = appstate.pool.begin().await?;
     let provider = ProviderConfig::save(&mut transaction, input).await?;
     transaction.commit().await?;
+    crate::dirsync::worker::settings_changed();
     info!(
         "User {} set the OpenID provider to {}",
         session.user.username, provider.issuer
@@ -297,6 +298,7 @@ pub(crate) async fn delete_provider(
     State(appstate): State<AppState>,
 ) -> ApiResult {
     let provider = ProviderConfig::delete(&appstate.pool).await?;
+    crate::dirsync::worker::settings_changed();
     info!("User {} removed the OpenID provider", session.user.username);
     appstate.emit_event(ApiEvent {
         context,
@@ -324,23 +326,8 @@ pub(crate) async fn test_provider(
     State(appstate): State<AppState>,
     Json(input): Json<ProviderInput>,
 ) -> ApiResult {
-    let stored = ProviderConfig::current(&appstate.pool)
-        .await?
-        .map(|config| config.client_secret);
-    let (input, client_secret) = input.validate(stored)?;
-    let config = ProviderConfig {
-        provider: OpenIdProvider {
-            id: 0,
-            kind: input.kind,
-            issuer: input.issuer,
-            client_id: input.client_id,
-            enabled: input.enabled,
-            display_name: input.display_name,
-            disable_password_management: input.disable_password_management,
-            client_secret_set: true,
-        },
-        client_secret,
-    };
+    let stored = ProviderConfig::current(&appstate.pool).await?;
+    let config = input.into_config(stored.as_ref())?;
     match flow::check(&config).await {
         Ok(()) => Ok(ApiResponse::default()),
         Err(err) => Ok(ApiResponse::new(
