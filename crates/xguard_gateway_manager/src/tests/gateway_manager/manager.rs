@@ -255,6 +255,13 @@ async fn test_delete_notification_purges_and_aborts_gateway_connection(
     context
         .wait_for_gateway_notification_count(gateway.id, initial_notification_count + 1)
         .await;
+    // The handshake saves the gateway, and its Update notification can arrive after the count
+    // above was taken, so the notification just awaited may be that one. Wait for the Delete to
+    // be processed instead of asserting immediately.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    while context.has_event_sender(gateway.id) && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
     assert!(
         !context.has_event_sender(gateway.id),
         "deleting the gateway should drop its event sender"
