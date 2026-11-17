@@ -616,6 +616,16 @@ impl Token {
             context.insert("admin_last_name", &admin.last_name);
             context.insert("admin_email", &admin.email);
             context.insert("admin_phone", &admin.phone);
+        } else {
+            // Self-service tokens (OpenID sign-in on the enrollment portal) may have no admin.
+            for key in [
+                "admin_first_name",
+                "admin_last_name",
+                "admin_email",
+                "admin_phone",
+            ] {
+                context.insert(key, "");
+            }
         }
 
         Ok(context)

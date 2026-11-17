@@ -411,13 +411,44 @@ async fn test_method_availability_basic(_: PgPoolOptions, options: PgConnectOpti
         find("email")["reason"].as_str(),
         Some("smtp_not_configured")
     );
+    // OpenID MFA works through Edge once an external provider is enabled.
     assert_eq!(find("oidc")["available"].as_bool(), Some(false));
-    assert_eq!(find("oidc")["reason"].as_str(), Some("not_supported"));
+    assert_eq!(
+        find("oidc")["reason"].as_str(),
+        Some("oidc_provider_missing")
+    );
     assert_eq!(find("biometric")["available"].as_bool(), Some(true));
     assert_eq!(find("mobileapprove")["available"].as_bool(), Some(true));
     // FIDO2 VPN MFA is not supported by XGuard.
     assert_eq!(find("fido2")["available"].as_bool(), Some(false));
     assert_eq!(find("fido2")["reason"].as_str(), Some("not_supported"));
+
+    // With an enabled provider, OpenID can be used in MFA flows.
+    let response = client
+        .put("/api/v1/openid/provider")
+        .json(&json!({
+            "kind": "Google",
+            "issuer": "https://accounts.google.com",
+            "client_id": "client",
+            "client_secret": "very-secret",
+            "enabled": true,
+        }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = client
+        .get("/api/v1/mfa-flow/method-availability")
+        .send()
+        .await;
+    let items = response.json::<Value>().await;
+    let oidc = items
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["method"].as_str() == Some("oidc"))
+        .unwrap();
+    assert_eq!(oidc["available"].as_bool(), Some(true));
+    assert_eq!(oidc["reason"].as_str(), Some("available"));
 }
 
 /// Updating a flow that already contains email (e.g. backfilled from a

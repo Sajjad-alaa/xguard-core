@@ -40,9 +40,9 @@ async fn test_bidi_processes_concurrent_requests_with_their_request_ids(
     let mut ids = [first.id, second.id];
     ids.sort_unstable();
     assert_eq!(ids, [101, 202]);
-    // External OpenID login is not supported by XGuard.
-    assert_eq!(assert_error_response(&first), Code::Unimplemented);
-    assert_eq!(assert_error_response(&second), Code::Unimplemented);
+    // No external OpenID provider is configured.
+    assert_eq!(assert_error_response(&first), Code::NotFound);
+    assert_eq!(assert_error_response(&second), Code::NotFound);
 
     context.finish().await.expect_server_finished().await;
 }
@@ -82,12 +82,12 @@ async fn test_bidi_request_errors_do_not_prevent_later_requests(
     context.mock_proxy().send_request(auth_info_request(401));
     let failed = context.mock_proxy_mut().recv_outbound().await;
     assert_eq!(failed.id, 401);
-    assert_eq!(assert_error_response(&failed), Code::Unimplemented);
+    assert_eq!(assert_error_response(&failed), Code::NotFound);
 
     context.mock_proxy().send_request(auth_info_request(402));
     let subsequent = context.mock_proxy_mut().recv_outbound().await;
     assert_eq!(subsequent.id, 402);
-    assert_eq!(assert_error_response(&subsequent), Code::Unimplemented);
+    assert_eq!(assert_error_response(&subsequent), Code::NotFound);
 
     context.finish().await.expect_server_finished().await;
 }

@@ -1,12 +1,15 @@
 use sqlx::PgPool;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
-use xguard_common::db::{
-    Id,
-    models::{
-        Device, MFAMethod, Settings, User, polling_token::PollingToken,
-        vpn_client_session::VpnClientMfaMethod,
+use xguard_common::{
+    db::{
+        Id,
+        models::{
+            Device, MFAMethod, Settings, User, polling_token::PollingToken,
+            vpn_client_session::VpnClientMfaMethod,
+        },
     },
+    random::gen_alphanumeric,
 };
 use xguard_core::{
     db::models::enrollment::{
@@ -14,6 +17,10 @@ use xguard_core::{
     },
     events::{ApiEvent, ApiEventType},
     mail::templates::mfa_code_mail,
+    sso::{
+        edge::{self, MfaConfigTarget, subject_matches},
+        flow::Identity,
+    },
 };
 use xguard_proto::{
     client_types::{
@@ -21,10 +28,15 @@ use xguard_proto::{
         MfaConfigFido2ChallengeRequest, MfaConfigFido2ChallengeResponse, MfaConfigSendCodeRequest,
         MfaConfigSendCodeResponse, MfaConfigStartRequest, MfaConfigStartResponse, MfaMethod,
     },
-    proxy::DeviceInfo,
+    proxy::{CoreError, CoreErrorCode, DeviceInfo},
 };
 
 use super::mfa_setup::{RecoveryCodesPolicy, finalize_mfa_factor};
+
+fn session_expired() -> CoreError {
+    CoreError::unauthenticated("MFA session not found or expired")
+        .with_code(CoreErrorCode::MfaSessionExpired)
+}
 
 /// An unauthorized MFA configuration session and its user's current factor state.
 struct MfaConfigSession {
@@ -48,10 +60,12 @@ impl MfaConfigSession {
     }
 }
 
-/// OIDC authorization needs an external identity provider integration (not in XGuard).
-#[allow(clippy::unused_async)]
-async fn oidc_available(_pool: &PgPool) -> Result<bool, Status> {
-    Ok(false)
+/// OIDC authorization runs through Edge with the external provider.
+async fn oidc_available(pool: &PgPool) -> Result<bool, Status> {
+    edge::available(pool).await.map_err(|err| {
+        error!("MFA config: failed to read the OpenID provider: {err}");
+        Status::internal("unexpected error")
+    })
 }
 
 async fn is_configured(
@@ -472,6 +486,100 @@ impl MfaConfigServer {
             deadline_timestamp: deadline.and_utc().timestamp(),
             recovery_codes,
         })
+    }
+
+    /// Starts an OpenID authorization of the MFA configuration session `session_token`, for a
+    /// browser sign-in through Edge. Returns `None` when there is no such session.
+    ///
+    /// Each start supersedes the previous attempt, so only the latest browser sign-in counts.
+    pub(crate) async fn oidc_begin(
+        &self,
+        session_token: &str,
+    ) -> Result<Option<MfaConfigTarget>, CoreError> {
+        match Token::find_by_id(&self.pool, session_token).await {
+            Ok(token) if token.token_type.as_deref() == Some(MFA_CONFIG_TOKEN_TYPE) => {}
+            Ok(_) | Err(TokenError::NotFound) => return Ok(None),
+            Err(err) => return Err(Status::from(err).into()),
+        }
+        let session =
+            load_session(&self.pool, session_token)
+                .await
+                .map_err(|status| match status.code() {
+                    tonic::Code::Unauthenticated => session_expired(),
+                    _ => status.into(),
+                })?;
+        if !session.oidc_configured {
+            error!(
+                "MFA config OIDC: user {} cannot authorize with OpenID",
+                session.user.username
+            );
+            return Err(Status::permission_denied("method not configured").into());
+        }
+        let mut token = session.token;
+        let attempt_id = gen_alphanumeric(32);
+        let replaced = token
+            .replace_mfa_config_auth_state(
+                &self.pool,
+                &MfaConfigAuthState::Oidc {
+                    attempt_id: attempt_id.clone(),
+                    completed: false,
+                },
+            )
+            .await
+            .map_err(Status::from)?;
+        if !replaced {
+            debug!(
+                "MFA config OIDC: user {} already completed the OpenID sign-in",
+                session.user.username
+            );
+            return Err(Status::failed_precondition("OpenID sign-in already completed").into());
+        }
+        Ok(Some(MfaConfigTarget {
+            token_id: token.id,
+            attempt_id,
+            user_id: session.user.id,
+        }))
+    }
+
+    /// Completes the OpenID authorization once the provider confirmed the user's identity.
+    ///
+    /// A sign-in as anyone else ends the configuration session.
+    pub(crate) async fn oidc_complete(
+        &self,
+        target: &MfaConfigTarget,
+        identity: &Identity,
+    ) -> Result<(), CoreError> {
+        let mut token = match Token::find_by_id(&self.pool, &target.token_id).await {
+            Ok(token) if token.user_id == target.user_id && !token.is_expired() => token,
+            Ok(_) | Err(TokenError::NotFound) => return Err(session_expired()),
+            Err(err) => return Err(Status::from(err).into()),
+        };
+        let user = token.fetch_user(&self.pool).await.map_err(Status::from)?;
+        if !user.is_active || !subject_matches(user.openid_sub.as_deref(), identity) {
+            warn!(
+                "MFA config OIDC: the OpenID sign-in for user {} was another identity; ending \
+                 the session",
+                user.username
+            );
+            token
+                .delete_pending_mfa_config_oidc_attempt(&self.pool, &target.attempt_id)
+                .await
+                .map_err(Status::from)?;
+            return Err(CoreError::unauthenticated("unauthorized")
+                .with_code(CoreErrorCode::OidcAccountMismatch));
+        }
+        if !token
+            .mark_mfa_config_oidc_completed(&self.pool, &target.attempt_id)
+            .await
+            .map_err(Status::from)?
+        {
+            return Err(session_expired());
+        }
+        info!(
+            "User {} completed the OpenID sign-in for MFA configuration",
+            user.username
+        );
+        Ok(())
     }
 
     /// Ends the user's MFA configuration session.

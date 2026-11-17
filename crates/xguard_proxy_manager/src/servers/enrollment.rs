@@ -35,6 +35,7 @@ use xguard_core::{
     mail::templates::{
         TemplateLocation, enrollment_admin_notification, mfa_activation_mail, new_device_added_mail,
     },
+    sso::provider::disables_password_management,
 };
 use xguard_proto::{
     client_types::{
@@ -462,7 +463,12 @@ impl EnrollmentServer {
         // disabled. Externally-managed users (LDAP/AD or OIDC with the flag enabled)
         // are allowed to skip the password; local users must supply one.
         if request.password.is_none() {
-            let oidc_disable_password_management = false;
+            let oidc_disable_password_management = disables_password_management(&self.pool)
+                .await
+                .map_err(|err| {
+                error!("Failed to check the OpenID password management setting: {err}");
+                Status::internal("unexpected error")
+            })?;
             let settings = Settings::get_current_settings();
             let is_admin = user.is_admin(&self.pool).await.map_err(|err| {
                 error!("Failed to check if user is admin: {err}");
@@ -1140,7 +1146,7 @@ async fn initial_info_from_user(
     let devices = user.user_devices(pool).await?;
     let device_names = devices.into_iter().map(|dev| dev.device.name).collect();
     let is_admin = user.is_admin(pool).await?;
-    let oidc_disable_password_management = false;
+    let oidc_disable_password_management = disables_password_management(pool).await?;
     let settings = Settings::get_current_settings();
     let password_management_disabled =
         user.password_management_disabled(is_admin, &settings, oidc_disable_password_management);

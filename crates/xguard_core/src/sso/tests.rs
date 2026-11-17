@@ -380,3 +380,181 @@ async fn test_provider_settings(_: PgPoolOptions, options: PgConnectOptions) {
     ProviderConfig::delete(&pool).await.unwrap();
     assert!(ProviderConfig::current(&pool).await.unwrap().is_none());
 }
+
+fn expect_grant(mock: &MockProvider, url: &str) {
+    let mut expected = mock.expected.lock().unwrap();
+    expected.challenge = query_param(url, "code_challenge");
+    expected.nonce = query_param(url, "nonce");
+    expected.forge = false;
+}
+
+#[tokio::test]
+async fn test_edge_sign_in_is_bound_and_single_use() {
+    use super::edge::{self, EdgeError, Purpose, VpnMfaTarget};
+    use xguard_common::types::AuthFlowType;
+
+    const EDGE: &str = "http://localhost:8080/openid/callback";
+    const EDGE_MFA: &str = "http://localhost:8080/openid/mfa/callback";
+    let mock = start_mock().await;
+    let config = config(&mock.issuer);
+
+    // Enrollment: the binding is not part of the authorization URL.
+    let started = edge::start_at(&config, Purpose::Enrollment, None, EDGE.into())
+        .await
+        .unwrap();
+    assert_eq!(query_param(&started.url, "redirect_uri"), EDGE);
+    assert_eq!(query_param(&started.url, "state"), started.state);
+    assert_eq!(query_param(&started.url, "code_challenge_method"), "S256");
+    assert!(!started.url.contains(&started.binding));
+    expect_grant(&mock, &started.url);
+
+    // An unknown binding is refused before anything is sent to the provider.
+    let wrong = "x".repeat(started.binding.len());
+    let err = edge::finish(&config, AuthFlowType::Enrollment, &wrong, None, "the-code")
+        .await
+        .unwrap_err();
+    assert!(matches!(err.error, EdgeError::Expired));
+
+    let (identity, purpose) = edge::finish(
+        &config,
+        AuthFlowType::Enrollment,
+        &started.binding,
+        None,
+        "the-code",
+    )
+    .await
+    .unwrap();
+    assert_eq!(identity.subject, "subject-1");
+    assert_eq!(purpose, Purpose::Enrollment);
+    // The same sign-in cannot be finished twice.
+    let err = edge::finish(
+        &config,
+        AuthFlowType::Enrollment,
+        &started.binding,
+        None,
+        "the-code",
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err.error, EdgeError::Expired));
+
+    // MFA: the state is checked too, and a wrong state uses the sign-in up.
+    let target = VpnMfaTarget {
+        session_id: 7,
+        token_hash: "hash".into(),
+        attempt_id: "attempt".into(),
+        user_id: 3,
+    };
+    let started = edge::start_at(
+        &config,
+        Purpose::VpnMfa(target.clone()),
+        None,
+        EDGE_MFA.into(),
+    )
+    .await
+    .unwrap();
+    expect_grant(&mock, &started.url);
+    let err = edge::finish(
+        &config,
+        AuthFlowType::Mfa,
+        &started.binding,
+        Some("not-the-state"),
+        "the-code",
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err.error, EdgeError::Expired));
+    assert_eq!(err.purpose, Some(Purpose::VpnMfa(target.clone())));
+    let err = edge::finish(
+        &config,
+        AuthFlowType::Mfa,
+        &started.binding,
+        Some(&started.state),
+        "the-code",
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err.error, EdgeError::Expired));
+
+    // An MFA sign-in cannot be finished as an enrollment.
+    let started = edge::start_at(
+        &config,
+        Purpose::VpnMfa(target.clone()),
+        None,
+        EDGE_MFA.into(),
+    )
+    .await
+    .unwrap();
+    let err = edge::finish(
+        &config,
+        AuthFlowType::Enrollment,
+        &started.binding,
+        None,
+        "the-code",
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err.error, EdgeError::Expired));
+
+    // A token signed with another key reports what the sign-in was for, for the audit log.
+    let started = edge::start_at(
+        &config,
+        Purpose::VpnMfa(target.clone()),
+        None,
+        EDGE_MFA.into(),
+    )
+    .await
+    .unwrap();
+    expect_grant(&mock, &started.url);
+    mock.expected.lock().unwrap().forge = true;
+    let err = edge::finish(
+        &config,
+        AuthFlowType::Mfa,
+        &started.binding,
+        Some(&started.state),
+        "the-code",
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err.error, EdgeError::Flow(FlowError::Token(_))));
+    assert_eq!(err.purpose, Some(Purpose::VpnMfa(target.clone())));
+
+    // The happy MFA path, with the state.
+    let started = edge::start_at(
+        &config,
+        Purpose::VpnMfa(target.clone()),
+        None,
+        EDGE_MFA.into(),
+    )
+    .await
+    .unwrap();
+    expect_grant(&mock, &started.url);
+    let (identity, purpose) = edge::finish(
+        &config,
+        AuthFlowType::Mfa,
+        &started.binding,
+        Some(&started.state),
+        "the-code",
+    )
+    .await
+    .unwrap();
+    assert_eq!(identity.subject, "subject-1");
+    assert_eq!(purpose, Purpose::VpnMfa(target));
+
+    // A sign-in started with another provider cannot be finished with this one.
+    let started = edge::start_at(&config, Purpose::Enrollment, None, EDGE.into())
+        .await
+        .unwrap();
+    let mut other = config.clone();
+    other.provider.id = 2;
+    let err = edge::finish(
+        &other,
+        AuthFlowType::Enrollment,
+        &started.binding,
+        None,
+        "the-code",
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err.error, EdgeError::Expired));
+}

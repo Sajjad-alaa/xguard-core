@@ -808,4 +808,231 @@ pub(crate) fn build_proxy_with_enabled(enabled: bool) -> Proxy<NoId> {
 // MockOidcProvider - a minimal OIDC identity provider for tests
 // ---------------------------------------------------------------------------
 
-// axum handlers
+/// Who signs in at the mock provider.
+#[derive(Clone)]
+pub(crate) struct MockIdentity {
+    pub(crate) sub: String,
+    pub(crate) email: String,
+    /// `None` leaves the claim out.
+    pub(crate) email_verified: Option<bool>,
+}
+
+impl MockIdentity {
+    pub(crate) fn new(sub: &str, email: &str) -> Self {
+        Self {
+            sub: sub.to_owned(),
+            email: email.to_owned(),
+            email_verified: Some(true),
+        }
+    }
+}
+
+struct MockGrant {
+    identity: MockIdentity,
+    challenge: String,
+    nonce: String,
+    redirect_uri: String,
+}
+
+#[derive(Clone)]
+struct MockOidcState {
+    issuer: String,
+    client_id: String,
+    client_secret: String,
+    key: Arc<rsa::RsaPrivateKey>,
+    grants: Arc<Mutex<HashMap<String, MockGrant>>>,
+}
+
+/// A mock OpenID Connect provider speaking the real protocol: discovery, JWKS, and a token
+/// endpoint that checks the client credentials, the redirect URI and PKCE (S256), and answers
+/// with an RS256-signed ID token carrying the nonce of the authorization request.
+///
+/// [`Self::sign_in`] plays the browser and the user at the authorization endpoint.
+pub(crate) struct MockOidcProvider {
+    pub(crate) base_url: String,
+    pub(crate) client_id: String,
+    pub(crate) client_secret: String,
+    state: MockOidcState,
+    server_task: JoinHandle<()>,
+}
+
+fn url_param(url: &str, name: &str) -> String {
+    reqwest::Url::parse(url)
+        .expect("invalid authorization URL")
+        .query_pairs()
+        .find(|(key, _)| key == name)
+        .map(|(_, value)| value.into_owned())
+        .unwrap_or_else(|| panic!("authorization URL has no {name}"))
+}
+
+impl MockOidcProvider {
+    pub(crate) async fn start() -> Self {
+        use axum::{
+            Router,
+            routing::{get, post},
+        };
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("failed to bind mock OIDC server");
+        let base_url = format!("http://{}", listener.local_addr().expect("no local addr"));
+        let mut rng = rand::thread_rng();
+        let state = MockOidcState {
+            issuer: base_url.clone(),
+            client_id: "test-client".to_owned(),
+            client_secret: "test-secret".to_owned(),
+            key: Arc::new(rsa::RsaPrivateKey::new(&mut rng, 2048).expect("RSA key")),
+            grants: Arc::default(),
+        };
+        let app = Router::new()
+            .route("/.well-known/openid-configuration", get(oidc_discovery))
+            .route("/keys", get(oidc_jwks))
+            .route("/token", post(oidc_token))
+            .with_state(state.clone());
+        let server_task = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("mock OIDC server error");
+        });
+        Self {
+            base_url,
+            client_id: state.client_id.clone(),
+            client_secret: state.client_secret.clone(),
+            state,
+            server_task,
+        }
+    }
+
+    /// Signs `identity` in at the authorization URL Core built and returns the authorization
+    /// code and state the provider sends back to the redirect URI.
+    pub(crate) fn sign_in(&self, auth_url: &str, identity: &MockIdentity) -> (String, String) {
+        assert!(
+            auth_url.starts_with(&format!("{}/authorize?", self.base_url)),
+            "unexpected authorization URL {auth_url}"
+        );
+        assert_eq!(url_param(auth_url, "client_id"), self.client_id);
+        assert_eq!(url_param(auth_url, "response_type"), "code");
+        assert_eq!(url_param(auth_url, "code_challenge_method"), "S256");
+        assert!(
+            url_param(auth_url, "scope")
+                .split(' ')
+                .any(|s| s == "openid")
+        );
+        let code = xguard_common::random::gen_alphanumeric(24);
+        self.state.grants.lock().unwrap().insert(
+            code.clone(),
+            MockGrant {
+                identity: identity.clone(),
+                challenge: url_param(auth_url, "code_challenge"),
+                nonce: url_param(auth_url, "nonce"),
+                redirect_uri: url_param(auth_url, "redirect_uri"),
+            },
+        );
+        (code, url_param(auth_url, "state"))
+    }
+}
+
+impl Drop for MockOidcProvider {
+    fn drop(&mut self) {
+        self.server_task.abort();
+    }
+}
+
+async fn oidc_discovery(
+    axum::extract::State(state): axum::extract::State<MockOidcState>,
+) -> axum::Json<serde_json::Value> {
+    let base = &state.issuer;
+    axum::Json(serde_json::json!({
+        "issuer": base,
+        "authorization_endpoint": format!("{base}/authorize"),
+        "token_endpoint": format!("{base}/token"),
+        "jwks_uri": format!("{base}/keys"),
+        "response_types_supported": ["code"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["RS256"],
+    }))
+}
+
+async fn oidc_jwks(
+    axum::extract::State(state): axum::extract::State<MockOidcState>,
+) -> axum::Json<serde_json::Value> {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    use rsa::traits::PublicKeyParts;
+
+    let public = state.key.to_public_key();
+    axum::Json(serde_json::json!({ "keys": [{
+        "kty": "RSA", "use": "sig", "alg": "RS256", "kid": "mock-1",
+        "n": URL_SAFE_NO_PAD.encode(public.n().to_bytes_be()),
+        "e": URL_SAFE_NO_PAD.encode(public.e().to_bytes_be()),
+    }]}))
+}
+
+async fn oidc_token(
+    axum::extract::State(state): axum::extract::State<MockOidcState>,
+    headers: axum::http::HeaderMap,
+    axum::Form(form): axum::Form<HashMap<String, String>>,
+) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, axum::Json<serde_json::Value>)>
+{
+    use base64::{
+        Engine,
+        engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    };
+    use rsa::pkcs1::EncodeRsaPrivateKey;
+    use sha2::{Digest, Sha256};
+
+    let refuse = |error: &str| {
+        Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({ "error": error })),
+        ))
+    };
+    let basic = format!(
+        "Basic {}",
+        STANDARD.encode(format!("{}:{}", state.client_id, state.client_secret))
+    );
+    let form_credentials = form.get("client_id") == Some(&state.client_id)
+        && form.get("client_secret") == Some(&state.client_secret);
+    if headers.get("authorization").and_then(|v| v.to_str().ok()) != Some(basic.as_str())
+        && !form_credentials
+    {
+        return refuse("invalid_client");
+    }
+    // Codes work once.
+    let Some(grant) = form
+        .get("code")
+        .and_then(|code| state.grants.lock().unwrap().remove(code))
+    else {
+        return refuse("invalid_grant");
+    };
+    let verifier = form.get("code_verifier").cloned().unwrap_or_default();
+    if URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes())) != grant.challenge
+        || form.get("redirect_uri") != Some(&grant.redirect_uri)
+    {
+        return refuse("invalid_grant");
+    }
+    let now = chrono::Utc::now().timestamp();
+    let mut claims = serde_json::json!({
+        "iss": state.issuer, "sub": grant.identity.sub, "aud": state.client_id,
+        "iat": now, "exp": now + 300, "nonce": grant.nonce,
+        "email": grant.identity.email, "given_name": "Test", "family_name": "OidcUser",
+    });
+    if let Some(verified) = grant.identity.email_verified {
+        claims["email_verified"] = serde_json::json!(verified);
+    }
+    let pem = state
+        .key
+        .to_pkcs1_pem(rsa::pkcs1::LineEnding::LF)
+        .expect("PEM key");
+    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+    header.kid = Some("mock-1".to_owned());
+    let id_token = jsonwebtoken::encode(
+        &header,
+        &claims,
+        &jsonwebtoken::EncodingKey::from_rsa_pem(pem.as_bytes()).expect("encoding key"),
+    )
+    .expect("failed to sign ID token");
+    Ok(axum::Json(serde_json::json!({
+        "access_token": "mock-access-token", "token_type": "Bearer", "expires_in": 300,
+        "id_token": id_token,
+    })))
+}
