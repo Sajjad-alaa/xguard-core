@@ -10,6 +10,7 @@ use xguard_common::{
             User, WireguardNetwork,
             device::{DeviceInfo, WireguardNetworkDevice},
             polling_token::PollingToken,
+            webauthn::{AuthenticatorInfo, RegistrationSource, WebAuthn},
             wireguard::ServiceLocationMode,
         },
     },
@@ -1125,8 +1126,86 @@ impl EnrollmentServer {
                     fido2_creation_challenge: None,
                 })
             }
+            MfaMethod::Fido2 => {
+                // Security keys are registered from the desktop client's MFA configuration,
+                // whose origin is the XGuard URL; the enrollment portal runs on Edge.
+                if is_enrollment {
+                    return Err(CoreError::invalid_argument(
+                        "Security keys are registered from the XGuard client after enrollment",
+                    ));
+                }
+                let (options, state) = xguard_core::fido2::start_registration(&self.pool, &user)
+                    .await
+                    .map_err(|err| {
+                        error!("Failed to start FIDO2 registration: {err}");
+                        Status::internal("unexpected error")
+                    })?;
+                let mut token = token;
+                token
+                    .store_fido2_registration(&self.pool, state)
+                    .await
+                    .map_err(Status::from)?;
+                info!("Started security key registration for {}", user.username);
+                Ok(CodeMfaSetupStartResponse {
+                    totp_secret: None,
+                    fido2_creation_challenge: Some(options),
+                })
+            }
             _ => Err(CoreError::invalid_argument("Method not supported")),
         }
+    }
+
+    /// Registers a security key for VPN MFA from an authorized MFA configuration session.
+    async fn finish_fido2_setup(
+        &self,
+        mut token: Token,
+        user: &User<Id>,
+        request: &CodeMfaSetupFinishRequest,
+    ) -> Result<WebAuthn, Status> {
+        let name = request
+            .name
+            .as_deref()
+            .ok_or_else(|| Status::invalid_argument("security key name is required"))
+            .and_then(|name| {
+                xguard_core::fido2::validate_key_name(name)
+                    .map_err(|err| Status::invalid_argument(err.to_string()))
+            })?;
+        let attestation = request
+            .fido2_attestation
+            .as_deref()
+            .ok_or_else(|| Status::invalid_argument("security key response is required"))?;
+        // Taken first: a registration finishes once, whatever the outcome.
+        let state = token
+            .take_fido2_registration(&self.pool)
+            .await
+            .map_err(Status::from)?
+            .ok_or_else(|| Status::invalid_argument("no security key registration in progress"))?;
+        let passkey = xguard_core::fido2::finish_registration(&state, attestation).map_err(
+            |err| match err {
+                xguard_core::fido2::Fido2Error::Malformed(message)
+                | xguard_core::fido2::Fido2Error::Rejected(message) => {
+                    warn!(
+                        "Security key registration of user {} refused: {message}",
+                        user.username
+                    );
+                    Status::invalid_argument(message)
+                }
+                err => {
+                    error!("Failed to finish FIDO2 registration: {err}");
+                    Status::internal("unexpected error")
+                }
+            },
+        )?;
+        WebAuthn::new(
+            user.id,
+            name,
+            &passkey,
+            AuthenticatorInfo::unattested(RegistrationSource::Desktop),
+        )
+        .map_err(|err| {
+            error!("Failed to store a security key: {err}");
+            Status::internal("unexpected error")
+        })
     }
 
     #[instrument(skip_all)]
@@ -1150,12 +1229,40 @@ impl EnrollmentServer {
             return Err(Status::permission_denied("User is already enrolled"));
         }
 
+        // Verified before the transaction; saved and enabled for VPN MFA inside it.
+        let security_key = if method == MfaMethod::Fido2 {
+            if is_enrollment {
+                return Err(Status::invalid_argument("Method not supported"));
+            }
+            Some(self.finish_fido2_setup(token, &user, &request).await?)
+        } else {
+            None
+        };
+
         let mut transaction = self.pool.begin().await.map_err(|err| {
             error!("Failed to begin database transaction: {err}");
             Status::internal("Failed to begin database transaction".to_owned())
         })?;
 
         let (mfa_method, event) = match method {
+            MfaMethod::Fido2 => {
+                let key = security_key
+                    .ok_or_else(|| Status::internal("unexpected error"))?
+                    .save(&mut *transaction)
+                    .await
+                    .map_err(|err| {
+                        error!("Failed to store a security key: {err}");
+                        Status::internal("Enabling method failed.".to_owned())
+                    })?;
+                key.enable_vpn_mfa(&mut *transaction).await.map_err(|err| {
+                    error!("Failed to enable a security key for VPN MFA: {err}");
+                    Status::internal("Enabling method failed.".to_owned())
+                })?;
+                (
+                    MFAMethod::Webauthn,
+                    ApiEventType::MfaSecurityKeyAdded { key },
+                )
+            }
             MfaMethod::Email => {
                 if !user.verify_email_mfa_code(&request.code) {
                     return Err(Status::invalid_argument("Email code invalid".to_owned()));

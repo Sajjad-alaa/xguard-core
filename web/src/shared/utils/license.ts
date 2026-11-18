@@ -18,7 +18,6 @@ export interface LicenseCheckResult {
 const UNSUPPORTED_FEATURES: readonly LicenseFeatureValue[] = [
   LicenseFeature.ServiceLocations,
   LicenseFeature.AclAllowedIps,
-  LicenseFeature.Fido2,
 ];
 
 export const isFeatureSupported = (feature?: LicenseFeatureValue | null): boolean =>

@@ -9,7 +9,10 @@ use xguard_common::db::models::{
 };
 
 use super::types::VerificationProof;
-use crate::mail::templates::{TemplateError, mfa_code_mail};
+use crate::{
+    fido2::{self, Fido2Error, IssuedChallenge},
+    mail::templates::{TemplateError, mfa_code_mail},
+};
 
 /// Outcome of proof verification.
 #[derive(Debug, PartialEq)]
@@ -98,17 +101,55 @@ pub enum InitiateError {
     UnsupportedMethod,
     #[error("Too many MFA requests. Try again later.")]
     TooManyRequests,
+    /// The user has no security key enabled for VPN MFA.
+    #[error("no security key is registered for VPN MFA")]
+    Fido2NotConfigured,
+    #[error("failed to issue a security key challenge: {0}")]
+    Fido2(Fido2Error),
 }
 
-/// Initiate a step: send the email code or mint the biometric / mobile-approve challenge.
+/// What [`initiate`] produced for the new attempt.
+#[derive(Debug, Default)]
+pub struct Initiated {
+    /// Biometric and mobile-approve: the challenge to sign.
+    pub signature: Option<BiometricChallenge>,
+    /// FIDO2: the WebAuthn challenge and its server-side state.
+    pub fido2: Option<IssuedChallenge>,
+}
+
+impl Initiated {
+    /// The challenge string sent to the client, if the method has one.
+    #[must_use]
+    pub fn challenge(&self) -> Option<String> {
+        self.fido2
+            .as_ref()
+            .map(|issued| issued.challenge.clone())
+            .or_else(|| {
+                self.signature
+                    .as_ref()
+                    .map(|challenge| challenge.challenge.clone())
+            })
+    }
+
+    /// FIDO2 only: the credential IDs offered to the security key.
+    #[must_use]
+    pub fn credential_ids(&self) -> Vec<String> {
+        self.fido2
+            .as_ref()
+            .map(|issued| issued.credential_ids.clone())
+            .unwrap_or_default()
+    }
+}
+
+/// Initiate a step: send the email code or mint the biometric / mobile-approve / FIDO2 challenge.
 ///
-/// Returns `None` for methods that need no challenge. The caller binds the returned challenge to a
-/// fresh attempt.
+/// Methods that need no challenge return an empty [`Initiated`]. The caller binds the returned
+/// challenge to a fresh attempt.
 pub async fn initiate(
     pool: &PgPool,
     ctx: &MfaSessionContext,
     method: VpnClientMfaMethod,
-) -> Result<Option<BiometricChallenge>, InitiateError> {
+) -> Result<Initiated, InitiateError> {
     if !ThrottleScope::VpnMfaInitiate
         .hit(pool, &super::throttle_key(ctx.location.id, ctx.device.id))
         .await?
@@ -116,7 +157,7 @@ pub async fn initiate(
         return Err(InitiateError::TooManyRequests);
     }
     match method {
-        VpnClientMfaMethod::Totp | VpnClientMfaMethod::Oidc => Ok(None),
+        VpnClientMfaMethod::Totp | VpnClientMfaMethod::Oidc => Ok(Initiated::default()),
         VpnClientMfaMethod::Email => {
             let code = ctx.user.generate_email_mfa_code()?;
             let mut transaction = pool.begin().await?;
@@ -129,17 +170,30 @@ pub async fn initiate(
                 true,
             )
             .await?;
-            Ok(None)
+            Ok(Initiated::default())
         }
         VpnClientMfaMethod::Biometric => {
             let Some(auth) = BiometricAuth::find_by_device_id(pool, ctx.device.id).await? else {
                 return Err(InitiateError::BiometricNotConfigured);
             };
-            Ok(Some(BiometricChallenge::with_pubkey(auth.pub_key())?))
+            Ok(Initiated {
+                signature: Some(BiometricChallenge::with_pubkey(auth.pub_key())?),
+                fido2: None,
+            })
         }
-        VpnClientMfaMethod::MobileApprove | VpnClientMfaMethod::Fido2 => {
-            Ok(Some(BiometricChallenge::new()))
-        }
+        VpnClientMfaMethod::MobileApprove => Ok(Initiated {
+            signature: Some(BiometricChallenge::new()),
+            fido2: None,
+        }),
+        VpnClientMfaMethod::Fido2 => match fido2::issue_challenge(pool, ctx.user.id).await {
+            Ok(issued) => Ok(Initiated {
+                signature: None,
+                fido2: Some(issued),
+            }),
+            Err(Fido2Error::NotConfigured) => Err(InitiateError::Fido2NotConfigured),
+            Err(Fido2Error::Db(err)) => Err(InitiateError::Database(err)),
+            Err(err) => Err(InitiateError::Fido2(err)),
+        },
     }
 }
 
@@ -242,8 +296,11 @@ pub(super) async fn verify(
         (VpnClientMfaMethod::Biometric, Some(_)) => Err(credential_method_mismatch().into()),
         (VpnClientMfaMethod::Oidc, None) => Ok(verify_oidc(ephemeral)),
         (VpnClientMfaMethod::Oidc, Some(_)) => Err(credential_method_mismatch().into()),
-        (VpnClientMfaMethod::MobileApprove, _) => Err(VerifyError::UnsupportedMethod),
-        (VpnClientMfaMethod::Fido2, _) => Err(VerifyError::UnsupportedMethod),
+        // Mobile approval and FIDO2 have their own verifiers: both change the attempt (approval
+        // mark, single-use challenge), and this verifier is read-only.
+        (VpnClientMfaMethod::MobileApprove | VpnClientMfaMethod::Fido2, _) => {
+            Err(VerifyError::UnsupportedMethod)
+        }
     }
 }
 
@@ -316,15 +373,4 @@ pub fn check_mobile_approval(ephemeral: &EphemeralState) -> Verdict {
     } else {
         Verdict::NotYet
     }
-}
-
-/// FIDO2 credential IDs offered to the client. Always empty: XGuard does not support FIDO2 VPN
-/// MFA.
-#[allow(clippy::unused_async)]
-pub async fn offered_credential_ids(
-    _pool: &PgPool,
-    _ctx: &MfaSessionContext,
-    _method: VpnClientMfaMethod,
-) -> Result<Vec<String>, sqlx::Error> {
-    Ok(Vec::new())
 }

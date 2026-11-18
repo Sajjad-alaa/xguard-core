@@ -16,6 +16,7 @@ use xguard_core::{
         MFA_CONFIG_SESSION_TIMEOUT, MFA_CONFIG_TOKEN_TYPE, MfaConfigAuthState, Token, TokenError,
     },
     events::{ApiEvent, ApiEventType},
+    fido2::{self, Fido2Assertion, Fido2Error},
     mail::templates::mfa_code_mail,
     sso::{
         edge::{self, MfaConfigTarget, subject_matches},
@@ -340,15 +341,103 @@ impl MfaConfigServer {
     }
 
     /// Issues the single-use challenge for authorizing an MFA configuration session with FIDO2.
+    ///
+    /// A new challenge replaces any pending one; it can be answered once, within
+    /// [`fido2::CHALLENGE_TTL`].
     #[instrument(skip_all)]
     pub(crate) async fn mfa_config_fido2_challenge(
         &self,
         request: MfaConfigFido2ChallengeRequest,
     ) -> Result<MfaConfigFido2ChallengeResponse, Status> {
-        // FIDO2 MFA is not supported by XGuard.
-        let _ = request;
-        debug!("Rejecting MFA configuration FIDO2 challenge: FIDO2 MFA is not supported");
-        Err(Status::unimplemented("FIDO2 MFA is not supported"))
+        debug!("Issuing a FIDO2 challenge for MFA configuration");
+        let session = load_session(&self.pool, &request.session_token).await?;
+        if !session.fido2_configured {
+            error!(
+                "MFA config FIDO2 challenge: user {} has no security key for VPN MFA",
+                session.user.username
+            );
+            return Err(Status::permission_denied("method not configured"));
+        }
+        let issued = fido2::issue_challenge(&self.pool, session.user.id)
+            .await
+            .map_err(|err| match err {
+                Fido2Error::NotConfigured => Status::permission_denied("method not configured"),
+                err => {
+                    error!("MFA config FIDO2 challenge: {err}");
+                    Status::internal("unexpected error")
+                }
+            })?;
+        let mut token = session.token;
+        if !token
+            .begin_mfa_config_fido2(&self.pool, issued.state)
+            .await
+            .map_err(Status::from)?
+        {
+            return Err(Status::failed_precondition(
+                "OpenID sign-in already completed",
+            ));
+        }
+        Ok(MfaConfigFido2ChallengeResponse {
+            challenge: issued.challenge,
+            credential_ids: issued.credential_ids,
+        })
+    }
+
+    /// Verifies a FIDO2 assertion against the session's pending challenge, using it up.
+    async fn verify_fido2_authorization(
+        &self,
+        token: &mut Token,
+        user: &User<Id>,
+        request: &MfaConfigAuthorizeRequest,
+    ) -> Result<bool, Status> {
+        let assertion = Fido2Assertion {
+            rp_id_hash: Vec::new(),
+            authenticator_data: request.auth_data.clone().unwrap_or_default(),
+            signature: request.signature.clone().unwrap_or_default(),
+            credential_id: request.credential_id.clone().unwrap_or_default(),
+        };
+        if let Err(err) = assertion.validate() {
+            error!("MFA config authorize: malformed FIDO2 assertion: {err}");
+            return Err(Status::invalid_argument(err.to_string()));
+        }
+        let Some(state) = token
+            .take_mfa_config_fido2(&self.pool)
+            .await
+            .map_err(Status::from)?
+        else {
+            error!(
+                "MFA config authorize: no FIDO2 challenge pending for user {}",
+                user.username
+            );
+            return Err(Status::failed_precondition(
+                "no security key challenge pending",
+            ));
+        };
+        match fido2::verify_assertion(&self.pool, user.id, &state, &assertion).await {
+            Ok(key) => {
+                info!(
+                    "User {} answered the MFA configuration challenge with security key \"{}\"",
+                    user.username, key.name
+                );
+                Ok(true)
+            }
+            Err(Fido2Error::Expired) => Err(Status::failed_precondition(
+                "security key challenge expired",
+            )),
+            Err(Fido2Error::Rejected(message)) => {
+                warn!(
+                    "MFA config authorize: security key of user {} refused: {message}",
+                    user.username
+                );
+                Ok(false)
+            }
+            Err(Fido2Error::NotConfigured) => Ok(false),
+            Err(Fido2Error::Malformed(message)) => Err(Status::invalid_argument(message)),
+            Err(err) => {
+                error!("MFA config authorize: failed to verify a FIDO2 assertion: {err}");
+                Err(Status::internal("unexpected error"))
+            }
+        }
     }
 
     /// Authorizes an MFA configuration session with a TOTP or email code, a FIDO2 assertion
@@ -400,7 +489,8 @@ impl MfaConfigServer {
         let valid = match method {
             MfaMethod::Totp => user.verify_totp_code(&request.code),
             MfaMethod::Fido2 => {
-                return Err(Status::unimplemented("FIDO2 MFA is not supported"));
+                self.verify_fido2_authorization(&mut token, &user, &request)
+                    .await?
             }
             MfaMethod::Oidc => {
                 if !matches!(

@@ -10,12 +10,20 @@ use xguard_common::db::{Id, models::wireguard::ServiceLocationMode};
 
 /// Whether a VPN client MFA method can be used.
 ///
-/// OpenID MFA runs through Edge with the external provider (see [`crate::sso::edge`]); whether
-/// a provider is configured is checked separately. FIDO2 VPN MFA needs the desktop FIDO2 module,
-/// which is not implemented in XGuard.
+/// Every method is implemented: OpenID MFA runs through Edge with the external provider (see
+/// [`crate::sso::edge`]), whether a provider is configured is checked separately; FIDO2 security
+/// keys are verified by [`crate::fido2`].
 #[must_use]
 pub const fn is_mfa_method_supported(method: VpnClientMfaMethod) -> bool {
-    !matches!(method, VpnClientMfaMethod::Fido2)
+    matches!(
+        method,
+        VpnClientMfaMethod::Totp
+            | VpnClientMfaMethod::Email
+            | VpnClientMfaMethod::Oidc
+            | VpnClientMfaMethod::Biometric
+            | VpnClientMfaMethod::MobileApprove
+            | VpnClientMfaMethod::Fido2
+    )
 }
 
 /// MFA methods a client may set up.
@@ -49,16 +57,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unsupported_methods_are_filtered() {
+    fn all_methods_are_supported() {
         assert!(is_mfa_method_supported(VpnClientMfaMethod::Totp));
         assert!(is_mfa_method_supported(VpnClientMfaMethod::Email));
         assert!(is_mfa_method_supported(VpnClientMfaMethod::Biometric));
         assert!(is_mfa_method_supported(VpnClientMfaMethod::MobileApprove));
         assert!(is_mfa_method_supported(VpnClientMfaMethod::Oidc));
-        assert!(!is_mfa_method_supported(VpnClientMfaMethod::Fido2));
-        assert!(!supported_mfa_setup_methods().contains(&VpnClientMfaMethod::Fido2));
+        assert!(is_mfa_method_supported(VpnClientMfaMethod::Fido2));
+        assert!(supported_mfa_setup_methods().contains(&VpnClientMfaMethod::Fido2));
         assert!(!supported_mfa_setup_methods().contains(&VpnClientMfaMethod::Oidc));
         assert!(supported_mfa_authorize_methods().contains(&VpnClientMfaMethod::Oidc));
-        assert!(!supported_mfa_authorize_methods().contains(&VpnClientMfaMethod::Fido2));
+        assert!(supported_mfa_authorize_methods().contains(&VpnClientMfaMethod::Fido2));
     }
 }

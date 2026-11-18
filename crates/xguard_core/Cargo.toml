@@ -87,6 +87,8 @@ ua-parser.workspace = true
 utoipa = { workspace = true, optional = true }
 utoipa-swagger-ui = { workspace = true, optional = true }
 uuid.workspace = true
+# Software FIDO2 authenticator for other crates' tests (`test-support`).
+openssl = { version = "0.10", optional = true }
 webauthn-rs.workspace = true
 webauthn-rs-proto.workspace = true
 x25519-dalek.workspace = true
@@ -104,13 +106,15 @@ default = ["openapi"]
 # every other endpoint keeps working.
 openapi = ["dep:utoipa", "dep:utoipa-swagger-ui", "xguard_common/openapi"]
 # Lets other crates' tests trust a software authenticator's attestation CA.
-test-support = []
+test-support = ["dep:openssl"]
 
 [[example]]
 name = "openapi"
 required-features = ["openapi"]
 
 [dev-dependencies]
+# Software FIDO2 authenticator (`fido2::test_authenticator`).
+openssl = "0.10"
 webauthn-authenticator-rs = { version = "0.5", features = ["softpasskey"] }
 # Enable the shared test-only helpers (mock SMTP server) for the test build.
 xguard_common = { workspace = true, features = ["test-support"] }

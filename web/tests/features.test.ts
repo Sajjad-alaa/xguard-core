@@ -21,6 +21,7 @@ describe('XGuard feature availability (no license tiers)', () => {
     expect(canUseEnterpriseFeature(null).result).toBe(true);
     expect(canUseEnterpriseFeature(null, LicenseFeature.ComponentHa).result).toBe(true);
     expect(canUseEnterpriseFeature(null, LicenseFeature.MfaFlow).result).toBe(true);
+    expect(canUseEnterpriseFeature(null, LicenseFeature.Fido2).result).toBe(true);
     expect(canUseEnterpriseFeature(null, LicenseFeature.GroupMTUOverride).result).toBe(
       true,
     );
@@ -30,7 +31,6 @@ describe('XGuard feature availability (no license tiers)', () => {
     for (const feature of [
       LicenseFeature.ServiceLocations,
       LicenseFeature.AclAllowedIps,
-      LicenseFeature.Fido2,
     ]) {
       expect(isFeatureSupported(feature)).toBe(false);
       expect(canUseEnterpriseFeature(null, feature).result).toBe(false);

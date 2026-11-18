@@ -209,8 +209,8 @@ pub(crate) fn license_error_response(field: &str, code: &str) -> ApiResponse {
 /// would produce over-tier state.
 ///
 /// Gates compose additively on top of the per-method prerequisites in
-/// [`check_method_prerequisites`]: multi-step needs Business, OIDC needs Business as well as a
-/// configured provider, and FIDO2 needs the `Fido2` license feature.
+/// [`check_method_prerequisites`]: OIDC needs a configured provider; every method is
+/// supported by XGuard (see [`is_mfa_method_supported`]).
 #[must_use]
 fn check_flow_license_gates(step_methods: &[Vec<VpnClientMfaMethod>]) -> Option<ApiResponse> {
     // Keep these write-side gates in sync with `flow_unavailable_reason`, which reports saved-flow
@@ -1064,8 +1064,8 @@ mod tests {
         );
     }
 
-    /// A step that has only FIDO2 cannot run (FIDO2 VPN MFA is not supported by XGuard), so the
-    /// flow reports `NotSupported`. A step that also has another usable method still runs.
+    /// A step that has only FIDO2 cannot run while FIDO2 is unavailable, so the flow reports
+    /// `NotSupported`. A step that also has another usable method still runs.
     #[test]
     fn test_flow_unavailable_reason_reports_not_supported_for_fido2_only_step() {
         let business = gates(true, true, true, false);

@@ -4,6 +4,7 @@ mod acme;
 mod bidi;
 mod client_settings;
 mod enrollment;
+mod fido2;
 mod lifecycle;
 mod mfa;
 mod mfa_config;

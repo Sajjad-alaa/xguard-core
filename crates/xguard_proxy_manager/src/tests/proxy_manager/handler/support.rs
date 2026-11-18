@@ -23,7 +23,6 @@ use xguard_common::{
             settings::Settings,
             user::{TOTP_CODE_DIGITS, TOTP_CODE_VALIDITY_PERIOD},
             vpn_client_session::{VpnClientMfaMethod, VpnClientSession},
-            webauthn::AuthenticatorKind,
             wireguard::ServiceLocationMode,
         },
     },
@@ -539,20 +538,26 @@ pub(crate) async fn setup_user_totp_mfa(pool: &PgPool, user: &mut User<Id>) {
     user.enable_totp(pool).await.expect("enable_totp");
 }
 
-/// Register a security key of `kind` for `user_id`. The `passkey` blob is a placeholder
-/// because the paths exercised here only check which key rows exist.
-pub(crate) async fn register_webauthn_key(pool: &PgPool, user_id: Id, kind: AuthenticatorKind) {
-    sqlx::query(
-        "INSERT INTO webauthn (user_id, name, passkey, authenticator_kind) \
-        VALUES ($1, $2, $3, $4)",
+/// Register a security key for `user_id`, enabled for VPN MFA when `vpn_mfa` is set (as a key
+/// registered from the desktop client is), or only for the web sign-in. The `passkey` blob is a
+/// placeholder because the paths exercised here only check which key rows exist.
+pub(crate) async fn register_webauthn_key(pool: &PgPool, user_id: Id, vpn_mfa: bool) {
+    let id: Id = sqlx::query_scalar(
+        "INSERT INTO webauthn (user_id, name, passkey) VALUES ($1, $2, $3) RETURNING id",
     )
     .bind(user_id)
     .bind("test key")
     .bind(vec![0_u8])
-    .bind(kind)
-    .execute(pool)
+    .fetch_one(pool)
     .await
     .expect("insert webauthn key");
+    if vpn_mfa {
+        sqlx::query("INSERT INTO webauthn_vpn_mfa (webauthn_id) VALUES ($1)")
+            .bind(id)
+            .execute(pool)
+            .await
+            .expect("enable webauthn key for VPN MFA");
+    }
 }
 
 /// Generate a valid 6-digit TOTP code for `user` using the current timestamp.

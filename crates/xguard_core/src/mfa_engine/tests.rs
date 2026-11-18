@@ -268,6 +268,7 @@ fn test_mobile_approve_empty_proof_reads_approval_flag() {
         mobile_approved: false,
         mobile_auth_device_name: None,
         biometric_challenge: None,
+        fido2: None,
     };
     assert_eq!(check_mobile_approval(&ephemeral), Verdict::NotYet,);
 
@@ -2454,4 +2455,369 @@ async fn test_finish_on_uninitialized_step(_: PgPoolOptions, options: PgConnectO
     let err = Status::from(err);
     assert_eq!(err.code(), Code::InvalidArgument);
     assert_eq!(err.message(), "no MFA attempt in progress");
+}
+
+// The default XGuard URL of a fresh database: settings are process-wide, so tests running in
+// parallel keep agreeing on the relying party.
+const FIDO2_RP_ID: &str = "localhost";
+const FIDO2_ORIGIN: &str = "http://localhost:8000";
+
+/// Registers `authenticator` for `user`, enabled for VPN MFA. The key is bound to the default
+/// XGuard URL of a fresh database.
+async fn setup_fido2(
+    pool: &PgPool,
+    user: &User<Id>,
+    authenticator: &mut crate::fido2::test_authenticator::TestAuthenticator,
+) {
+    use xguard_common::db::models::webauthn::{AuthenticatorInfo, RegistrationSource, WebAuthn};
+    let (options, state) = crate::fido2::start_registration(pool, user)
+        .await
+        .expect("registration must start");
+    let passkey =
+        crate::fido2::finish_registration(&state, &authenticator.register(&options, FIDO2_ORIGIN))
+            .expect("registration must finish");
+    WebAuthn::new(
+        user.id,
+        "key".to_owned(),
+        &passkey,
+        AuthenticatorInfo::unattested(RegistrationSource::Desktop),
+    )
+    .unwrap()
+    .save(pool)
+    .await
+    .unwrap()
+    .enable_vpn_mfa(pool)
+    .await
+    .unwrap();
+}
+
+fn fido2_proof(step_attempt_id: &str, assertion: crate::fido2::Fido2Assertion) -> StepProof {
+    StepProof {
+        step_attempt_id: step_attempt_id.to_owned(),
+        credential: Some(StepCredential::Fido2(assertion)),
+    }
+}
+
+/// A `[FIDO2, TOTP]` flow: the security key answers the attempt's challenge once, the step
+/// advances, and the flow completes with FIDO2 recorded as the method of step 0.
+#[sqlx::test]
+async fn test_fido2_step_advances_once_per_challenge(_: PgPoolOptions, options: PgConnectOptions) {
+    use crate::fido2::test_authenticator::TestAuthenticator;
+    let pool = setup_pool(options).await;
+    initialize_current_settings(&pool)
+        .await
+        .expect("failed to init settings");
+    let location = create_mfa_location(&pool).await;
+    create_and_assign_flow(
+        &pool,
+        location.id,
+        vec![
+            vec![VpnClientMfaMethod::Fido2],
+            vec![VpnClientMfaMethod::Totp],
+        ],
+    )
+    .await;
+    let mut user = create_user(&pool).await;
+    setup_user_totp_and_email(&pool, &mut user).await;
+    let device = create_device(&pool, user.id).await;
+    attach_device_to_location(&pool, location.id, device.id).await;
+    let mut key = TestAuthenticator::new();
+    setup_fido2(&pool, &user, &mut key).await;
+
+    let (flow_id, step_methods) = resolve_flow(&pool, location.id, user.id).await;
+    let (engine, mut event_rx, _gateway_rx) = make_engine(pool.clone());
+    let StartResult::Accepted(outcome) = engine
+        .start_multi_step(
+            &location,
+            &device,
+            &user,
+            flow_id,
+            step_methods,
+            vec![VpnClientMfaMethod::Fido2, VpnClientMfaMethod::Totp],
+        )
+        .await
+        .expect("start should succeed")
+    else {
+        panic!("expected an accepted plan")
+    };
+    let challenge = outcome
+        .challenge
+        .expect("FIDO2 start must return a challenge");
+    assert_eq!(outcome.credential_ids.len(), 1);
+    // The WebAuthn state stays on the server.
+    let session = VpnClientMfaSession::<Id>::find_active_by_token(&pool, &outcome.token)
+        .await
+        .unwrap()
+        .unwrap();
+    let state = session.ephemeral_state.as_ref().unwrap().0.fido2.clone();
+    assert_eq!(state.map(|state| state.challenge), Some(challenge.clone()));
+
+    let assertion = key.assert(FIDO2_RP_ID, &challenge, FIDO2_ORIGIN);
+    let replay = crate::fido2::Fido2Assertion {
+        rp_id_hash: assertion.rp_id_hash.clone(),
+        authenticator_data: assertion.authenticator_data.clone(),
+        signature: assertion.signature.clone(),
+        credential_id: assertion.credential_id.clone(),
+    };
+    let result = engine
+        .finish_step(
+            outcome.token.clone(),
+            fido2_proof(&outcome.step_attempt_id, assertion),
+            test_ip(),
+        )
+        .await
+        .expect("a valid assertion must advance the step");
+    assert_eq!(result, FinishOutcome::Advanced { next_step: 1 });
+
+    // Replaying the same assertion cannot satisfy anything else.
+    let err = engine
+        .finish_step(
+            outcome.token.clone(),
+            fido2_proof(&outcome.step_attempt_id, replay),
+            test_ip(),
+        )
+        .await
+        .expect_err("a replayed assertion must be refused");
+    assert!(
+        matches!(
+            err,
+            StepFinishError::UninitializedStep | StepFinishError::StaleAttempt
+        ),
+        "{err:?}"
+    );
+
+    let attempt = engine
+        .step_start(outcome.token.clone(), VpnClientMfaMethod::Totp)
+        .await
+        .unwrap();
+    let FinishOutcome::Completed { .. } = engine
+        .finish_step(
+            outcome.token.clone(),
+            code_proof(attempt.step_attempt_id, totp_code(&user)),
+            test_ip(),
+        )
+        .await
+        .expect("the TOTP step must complete the flow")
+    else {
+        panic!("expected a completed flow")
+    };
+    let event = event_rx.try_recv().expect("expected a success event");
+    match event.event {
+        BidiStreamEventType::DesktopClientMfa(event) => match *event {
+            DesktopClientMfaEvent::Success { attribution, .. } => assert_eq!(
+                attribution.snapshot.steps[0].satisfied,
+                Some(VpnClientMfaMethod::Fido2)
+            ),
+            other => panic!("unexpected event: {other:?}"),
+        },
+        other => panic!("unexpected stream event: {other:?}"),
+    }
+}
+
+/// A rejected assertion is audited, counted and uses the challenge up; a re-issued step gets a
+/// fresh challenge that works.
+#[sqlx::test]
+async fn test_fido2_rejection_consumes_the_challenge(_: PgPoolOptions, options: PgConnectOptions) {
+    use crate::fido2::test_authenticator::TestAuthenticator;
+    let pool = setup_pool(options).await;
+    initialize_current_settings(&pool)
+        .await
+        .expect("failed to init settings");
+    let location = create_mfa_location(&pool).await;
+    create_and_assign_flow(&pool, location.id, vec![vec![VpnClientMfaMethod::Fido2]]).await;
+    let user = create_user(&pool).await;
+    let device = create_device(&pool, user.id).await;
+    attach_device_to_location(&pool, location.id, device.id).await;
+    let mut key = TestAuthenticator::new();
+    setup_fido2(&pool, &user, &mut key).await;
+
+    let (flow_id, step_methods) = resolve_flow(&pool, location.id, user.id).await;
+    let (engine, mut event_rx, mut gateway_rx) = make_engine(pool.clone());
+    let StartResult::Accepted(outcome) = engine
+        .start_multi_step(
+            &location,
+            &device,
+            &user,
+            flow_id,
+            step_methods,
+            vec![VpnClientMfaMethod::Fido2],
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected an accepted plan")
+    };
+    let challenge = outcome.challenge.unwrap();
+
+    // Signed for another origin: verified and refused.
+    let wrong = key.assert(FIDO2_RP_ID, &challenge, "https://phish.example.com");
+    let err = engine
+        .finish_step(
+            outcome.token.clone(),
+            fido2_proof(&outcome.step_attempt_id, wrong),
+            test_ip(),
+        )
+        .await
+        .expect_err("a wrong origin must be refused");
+    assert!(matches!(err, StepFinishError::Unauthorized), "{err:?}");
+    let event = event_rx.try_recv().expect("expected a failure event");
+    match event.event {
+        BidiStreamEventType::DesktopClientMfa(event) => match *event {
+            DesktopClientMfaEvent::Failed { method, .. } => {
+                assert_eq!(method, VpnClientMfaMethod::Fido2.into());
+            }
+            other => panic!("unexpected event: {other:?}"),
+        },
+        other => panic!("unexpected stream event: {other:?}"),
+    }
+    let session = VpnClientMfaSession::<Id>::find_active_by_token(&pool, &outcome.token)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(session.failed_attempts, 1);
+
+    // The challenge is gone, even for a correct answer.
+    let right = key.assert(FIDO2_RP_ID, &challenge, FIDO2_ORIGIN);
+    let err = engine
+        .finish_step(
+            outcome.token.clone(),
+            fido2_proof(&outcome.step_attempt_id, right),
+            test_ip(),
+        )
+        .await
+        .expect_err("a used challenge must be refused");
+    assert!(matches!(err, StepFinishError::MissingChallenge), "{err:?}");
+
+    // A malformed assertion does not use a fresh challenge up.
+    let attempt = engine
+        .step_start(outcome.token.clone(), VpnClientMfaMethod::Fido2)
+        .await
+        .expect("the step can be re-issued");
+    let challenge = attempt.challenge.unwrap();
+    let mut malformed = key.assert(FIDO2_RP_ID, &challenge, FIDO2_ORIGIN);
+    malformed.authenticator_data.truncate(10);
+    assert!(matches!(
+        engine
+            .finish_step(
+                outcome.token.clone(),
+                fido2_proof(&attempt.step_attempt_id, malformed),
+                test_ip(),
+            )
+            .await,
+        Err(StepFinishError::MalformedProof { .. })
+    ));
+    let _ = event_rx.try_recv();
+
+    // The re-issued attempt's challenge still answers.
+    let FinishOutcome::Completed { .. } = engine
+        .finish_step(
+            outcome.token.clone(),
+            fido2_proof(
+                &attempt.step_attempt_id,
+                key.assert(FIDO2_RP_ID, &challenge, FIDO2_ORIGIN),
+            ),
+            test_ip(),
+        )
+        .await
+        .expect("the re-issued challenge must work")
+    else {
+        panic!("expected a completed flow")
+    };
+    assert!(gateway_rx.try_recv().is_ok(), "the peer must be authorized");
+}
+
+/// Two finishes racing with the same valid assertion: exactly one takes the challenge.
+#[sqlx::test]
+async fn test_fido2_concurrent_finishes_take_the_challenge_once(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    use crate::fido2::test_authenticator::TestAuthenticator;
+    let pool = setup_pool(options).await;
+    initialize_current_settings(&pool)
+        .await
+        .expect("failed to init settings");
+    let location = create_mfa_location(&pool).await;
+    create_and_assign_flow(&pool, location.id, vec![vec![VpnClientMfaMethod::Fido2]]).await;
+    let user = create_user(&pool).await;
+    let device = create_device(&pool, user.id).await;
+    attach_device_to_location(&pool, location.id, device.id).await;
+    let mut key = TestAuthenticator::new();
+    setup_fido2(&pool, &user, &mut key).await;
+
+    let (flow_id, step_methods) = resolve_flow(&pool, location.id, user.id).await;
+    let (engine, _event_rx, _gateway_rx) = make_engine(pool.clone());
+    let StartResult::Accepted(outcome) = engine
+        .start_multi_step(
+            &location,
+            &device,
+            &user,
+            flow_id,
+            step_methods,
+            vec![VpnClientMfaMethod::Fido2],
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected an accepted plan")
+    };
+    let assertion = key.assert(
+        FIDO2_RP_ID,
+        outcome.challenge.as_ref().unwrap(),
+        FIDO2_ORIGIN,
+    );
+    let finishes = (0..4).map(|_| {
+        engine.finish_step(
+            outcome.token.clone(),
+            fido2_proof(
+                &outcome.step_attempt_id,
+                crate::fido2::Fido2Assertion {
+                    rp_id_hash: assertion.rp_id_hash.clone(),
+                    authenticator_data: assertion.authenticator_data.clone(),
+                    signature: assertion.signature.clone(),
+                    credential_id: assertion.credential_id.clone(),
+                },
+            ),
+            test_ip(),
+        )
+    });
+    let results = join_all(finishes).await;
+    let completed = results
+        .iter()
+        .filter(|result| matches!(result, Ok(FinishOutcome::Completed { .. })))
+        .count();
+    assert_eq!(completed, 1, "{results:?}");
+}
+
+/// FIDO2 cannot start for a user without a security key enabled for VPN MFA.
+#[sqlx::test]
+async fn test_fido2_start_requires_a_vpn_key(_: PgPoolOptions, options: PgConnectOptions) {
+    let pool = setup_pool(options).await;
+    initialize_current_settings(&pool)
+        .await
+        .expect("failed to init settings");
+    let location = create_mfa_location(&pool).await;
+    create_and_assign_flow(&pool, location.id, vec![vec![VpnClientMfaMethod::Fido2]]).await;
+    let user = create_user(&pool).await;
+    let device = create_device(&pool, user.id).await;
+    attach_device_to_location(&pool, location.id, device.id).await;
+
+    let (flow_id, step_methods) = resolve_flow(&pool, location.id, user.id).await;
+    let (engine, _event_rx, _gateway_rx) = make_engine(pool.clone());
+    let StartResult::Rejected(rejections) = engine
+        .start_multi_step(
+            &location,
+            &device,
+            &user,
+            flow_id,
+            step_methods,
+            vec![VpnClientMfaMethod::Fido2],
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected a rejected plan")
+    };
+    assert_eq!(rejections[0].reason, StartRejectionReason::StepUnavailable);
+    assert_eq!(session_count(&pool, location.id, device.id).await, 0);
 }

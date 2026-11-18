@@ -243,6 +243,10 @@ impl From<InitiateError> for Status {
                 Self::unimplemented("Selected MFA method is not supported")
             }
             InitiateError::TooManyRequests => Self::failed_precondition(err.to_string()),
+            InitiateError::Fido2NotConfigured => Self::failed_precondition(
+                "No security key is registered for VPN MFA. Register one in the XGuard client.",
+            ),
+            InitiateError::Fido2(_) => Self::internal("unexpected error"),
         }
     }
 }
