@@ -17,7 +17,6 @@ export interface LicenseCheckResult {
 
 const UNSUPPORTED_FEATURES: readonly LicenseFeatureValue[] = [
   LicenseFeature.ServiceLocations,
-  LicenseFeature.DevicePosture,
   LicenseFeature.AclAllowedIps,
   LicenseFeature.Fido2,
 ];

@@ -10,3 +10,4 @@ mod mfa_config;
 mod mfa_legacy;
 mod oidc;
 mod password_reset;
+mod posture;

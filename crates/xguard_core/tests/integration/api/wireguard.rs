@@ -82,7 +82,7 @@ async fn test_network(_: PgPoolOptions, options: PgConnectOptions) {
         allowed_ips_from_acl: false,
         mfa_enabled: false,
         service_location_mode: ServiceLocationMode::Disabled,
-        posture_checks: Vec::new(),
+        posture_checks: None,
         mfa_flows: Vec::new(),
         group_client_mtus: None,
     };
@@ -560,7 +560,7 @@ async fn test_peer_disconnect_threshold_validation_create(
         allowed_ips_from_acl: false,
         mfa_enabled: false,
         service_location_mode: ServiceLocationMode::Disabled,
-        posture_checks: Vec::new(),
+        posture_checks: None,
         mfa_flows: Vec::new(),
         group_client_mtus: None,
     };
@@ -625,7 +625,7 @@ async fn test_peer_disconnect_threshold_validation_modify(
         allowed_ips_from_acl: false,
         mfa_enabled: false,
         service_location_mode: ServiceLocationMode::Disabled,
-        posture_checks: Vec::new(),
+        posture_checks: None,
         mfa_flows: Vec::new(),
         group_client_mtus: None,
     };

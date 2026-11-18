@@ -5,7 +5,7 @@ import { policyOsVariantToText } from './policyPostures';
 
 const getOsLine = (
   osType: 'windows' | 'macos' | 'linux' | 'ios' | 'android',
-  version: number | null,
+  version: string | number | null,
 ): SummaryLine => {
   if (version === null) {
     return { text: String(m.posture_checks_version_any()) };
@@ -66,6 +66,16 @@ export const getPostureCheckAssignmentSummarySections = (
                 ),
               }
             : null,
+          rule.firewall_required
+            ? {
+                text: String(m.posture_checks_condition_firewall()),
+              }
+            : null,
+          rule.screen_lock_required
+            ? {
+                text: String(m.posture_checks_condition_screen_lock()),
+              }
+            : null,
         ].filter((line): line is SummaryLine => line !== null);
 
         if (lines.length > 0) {
@@ -84,6 +94,16 @@ export const getPostureCheckAssignmentSummarySections = (
                 text: String(
                   m.posture_checks_wizard_operating_systems_condition_disk_encryption(),
                 ),
+              }
+            : null,
+          rule.firewall_required
+            ? {
+                text: String(m.posture_checks_condition_firewall()),
+              }
+            : null,
+          rule.screen_lock_required
+            ? {
+                text: String(m.posture_checks_condition_screen_lock()),
               }
             : null,
           rule.device_integrity_required
@@ -111,6 +131,16 @@ export const getPostureCheckAssignmentSummarySections = (
                 text: String(
                   m.posture_checks_wizard_operating_systems_condition_disk_encryption(),
                 ),
+              }
+            : null,
+          rule.firewall_required
+            ? {
+                text: String(m.posture_checks_condition_firewall()),
+              }
+            : null,
+          rule.screen_lock_required
+            ? {
+                text: String(m.posture_checks_condition_screen_lock()),
               }
             : null,
         ].filter((line): line is SummaryLine => line !== null);

@@ -865,6 +865,22 @@ impl ProxyHandler {
                     }
                 }
             }
+            // Posture-only connection (location with posture policies and no MFA).
+            Some(core_request::Payload::PostureConnect(request)) => {
+                match boxed(
+                    services
+                        .client_mfa
+                        .posture_connect(request, received.device_info),
+                )
+                .await
+                {
+                    Ok(response) => Some(core_response::Payload::PostureConnect(response)),
+                    Err(err) => {
+                        info!("posture connect refused: {err}");
+                        Some(core_response::Payload::CoreError(err.into()))
+                    }
+                }
+            }
             // rpc ClientMfaFinish (ClientMfaFinishRequest) returns (ClientMfaFinishResponse)
             Some(core_request::Payload::ClientMfaFinish(request)) => {
                 match boxed(

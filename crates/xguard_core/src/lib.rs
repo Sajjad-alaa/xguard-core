@@ -109,6 +109,12 @@ use crate::{
         client_settings::{get_client_settings, patch_client_settings},
         component_setup::{adopt_gateway, setup_gateway_tls_stream},
         core_certs::{get_ca, get_certs, set_external_url_settings, set_internal_url_settings},
+        device_posture::{
+            create_device_posture, delete_device_posture, device_posture_versions,
+            duplicate_device_posture, get_device_posture, get_device_posture_snapshot,
+            list_device_postures, list_user_device_postures, set_device_posture_locations,
+            update_device_posture,
+        },
         directory::{preview_directory_sync, sync_directory, test_directory},
         firewall::{
             create_firewall_rule, create_snat_binding, delete_firewall_rule, delete_snat_binding,
@@ -198,6 +204,7 @@ pub mod log_file;
 pub mod log_stream;
 pub mod mail;
 pub mod mfa_engine;
+pub mod posture;
 pub mod setup_logs;
 pub mod sso;
 pub mod support;
@@ -549,7 +556,34 @@ pub fn build_webapp(
                 "/mfa-flow/method-availability",
                 get(get_method_availability),
             )
-            .route("/location/{id}/mfa-flows", get(get_location_mfa_flows)),
+            .route("/location/{id}/mfa-flows", get(get_location_mfa_flows))
+            .route(
+                "/device-posture",
+                get(list_device_postures).post(create_device_posture),
+            )
+            .route("/device-posture/versions", get(device_posture_versions))
+            .route(
+                "/device-posture/{id}",
+                get(get_device_posture)
+                    .put(update_device_posture)
+                    .delete(delete_device_posture),
+            )
+            .route(
+                "/device-posture/{id}/duplicate",
+                post(duplicate_device_posture),
+            )
+            .route(
+                "/device-posture/{id}/locations",
+                put(set_device_posture_locations),
+            )
+            .route(
+                "/device/{device_id}/posture",
+                get(get_device_posture_snapshot),
+            )
+            .route(
+                "/user/{username}/device-posture",
+                get(list_user_device_postures),
+            ),
     );
 
     let api_router = api_router.nest(

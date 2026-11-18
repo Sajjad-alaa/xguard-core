@@ -6,6 +6,7 @@ pub mod certificates;
 pub mod client_settings;
 pub mod device;
 pub mod device_login;
+pub mod device_posture;
 pub mod error;
 pub mod gateway;
 pub mod group;

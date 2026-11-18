@@ -314,6 +314,38 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
             "Set {} group MTU override(s) for location '{location_name}'",
             after.len()
         )),
+        ApiEventType::DevicePostureCreated { posture } => {
+            Some(format!("Created posture policy '{}'", posture.name))
+        }
+        ApiEventType::DevicePostureUpdated { after, .. } => {
+            Some(format!("Updated posture policy '{}'", after.name))
+        }
+        ApiEventType::DevicePostureDeleted { posture } => {
+            Some(format!("Deleted posture policy '{}'", posture.name))
+        }
+        ApiEventType::DevicePostureDuplicated {
+            original,
+            duplicate,
+        } => Some(format!(
+            "Duplicated posture policy '{}' as '{}'",
+            original.name, duplicate.name
+        )),
+        ApiEventType::DevicePostureLocationsAssigned {
+            posture_name,
+            location_ids,
+            ..
+        } => Some(format!(
+            "Assigned posture policy '{posture_name}' to {} location(s)",
+            location_ids.len()
+        )),
+        ApiEventType::LocationPosturesAssigned {
+            location_name,
+            posture_ids,
+            ..
+        } => Some(format!(
+            "Assigned {} posture policy(ies) to location '{location_name}'",
+            posture_ids.len()
+        )),
     }
 }
 

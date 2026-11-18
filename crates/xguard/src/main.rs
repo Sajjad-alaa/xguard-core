@@ -415,6 +415,11 @@ async fn main() -> Result<(), anyhow::Error> {
             ldap_tx.clone(),
             gateway_tx.clone()
         ) => bail!("Directory sync worker returned early"),
+        () = xguard_core::posture::worker::run_worker(
+            pool.clone(),
+            gateway_tx.clone(),
+            bidi_event_tx.clone()
+        ) => bail!("Posture re-evaluation worker returned early"),
         () = xguard_core::dirsync::worker::run_worker(
             pool.clone(),
             dirsync_tx.clone(),

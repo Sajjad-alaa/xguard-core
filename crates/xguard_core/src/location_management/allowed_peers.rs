@@ -12,7 +12,8 @@ use crate::grpc::should_prevent_service_location_usage;
 /// which enables enforcing peer disconnect in MFA-protected networks.
 ///
 /// Service locations are not supported, so they never return peers.
-/// MFA-enabled locations only return peers backed by an active session with a runtime preshared key.
+/// MFA-enabled and posture-checked locations only return peers backed by an active session with a
+/// runtime preshared key.
 pub async fn get_location_allowed_peers(
     location: &WireguardNetwork<Id>,
     conn: &mut PgConnection,
@@ -27,7 +28,10 @@ pub async fn get_location_allowed_peers(
         return Ok(Vec::new());
     }
 
-    if !location.mfa_enabled {
+    // Locations with posture policies authorize sessions like MFA locations: only peers with an
+    // active session (and its runtime preshared key) are allowed.
+    let has_postures = location.has_postures(&mut *conn).await?;
+    if !location.mfa_enabled && !has_postures {
         let rows = query!(
             "SELECT d.wireguard_pubkey pubkey, \
                     ARRAY( \

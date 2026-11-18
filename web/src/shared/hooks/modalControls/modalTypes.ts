@@ -12,11 +12,13 @@ import type {
   OpenCEFirewallRuleModal,
   OpenCEGroupModal,
   OpenCEOpenIdClientModal,
+  OpenCEPostureCheckModal,
   OpenCESnatBindingModal,
   OpenCEWebhookModal,
   OpenConfirmActionModal,
   OpenDeleteAliasDestinationBlockedModal,
   OpenDeleteAliasDestinationConfirmModal,
+  OpenDevicePostureModal,
   OpenDisplayListModal,
   OpenEditDeviceModal,
   OpenEditNetworkDeviceModal,
@@ -59,6 +61,8 @@ export const ModalName = {
   CEOpenIdClient: 'createEditOpenIdClient',
   CEWebhook: 'createEditWebhook',
   CEFirewallRule: 'createEditFirewallRule',
+  CEPostureCheck: 'createEditPostureCheck',
+  DevicePosture: 'devicePosture',
   CESnatBinding: 'createEditSnatBinding',
   AssignGroupsToUsers: 'assignGroupsToUsers',
   AddNetworkDevice: 'addNetworkDevice',
@@ -143,6 +147,14 @@ const modalOpenArgsSchema = z.discriminatedUnion('name', [
   z.object({
     name: z.literal(ModalName.CEFirewallRule),
     data: z.custom<OpenCEFirewallRuleModal>(),
+  }),
+  z.object({
+    name: z.literal(ModalName.CEPostureCheck),
+    data: z.custom<OpenCEPostureCheckModal>(),
+  }),
+  z.object({
+    name: z.literal(ModalName.DevicePosture),
+    data: z.custom<OpenDevicePostureModal>(),
   }),
   z.object({
     name: z.literal(ModalName.CESnatBinding),

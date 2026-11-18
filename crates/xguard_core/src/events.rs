@@ -372,6 +372,30 @@ pub enum ApiEventType {
         before: Vec<xguard_common::db::models::wireguard::GroupClientMtu>,
         after: Vec<xguard_common::db::models::wireguard::GroupClientMtu>,
     },
+    DevicePostureCreated {
+        posture: crate::posture::policy::ApiDevicePosture,
+    },
+    DevicePostureUpdated {
+        before: crate::posture::policy::ApiDevicePosture,
+        after: crate::posture::policy::ApiDevicePosture,
+    },
+    DevicePostureDeleted {
+        posture: crate::posture::policy::ApiDevicePosture,
+    },
+    DevicePostureDuplicated {
+        original: crate::posture::policy::ApiDevicePosture,
+        duplicate: crate::posture::policy::ApiDevicePosture,
+    },
+    DevicePostureLocationsAssigned {
+        posture_id: Id,
+        posture_name: String,
+        location_ids: Vec<Id>,
+    },
+    LocationPosturesAssigned {
+        location_id: Id,
+        location_name: String,
+        posture_ids: Vec<Id>,
+    },
 }
 
 /// Events from Web API
@@ -384,7 +408,7 @@ pub struct ApiEvent {
 /// Shared context for every event generated from a user request in the bi-directional gRPC stream.
 ///
 /// Similarly to `ApiRequestContexts` at the moment it's mostly meant to populate the activity log.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BidiRequestContext {
     pub timestamp: NaiveDateTime,
     pub user_id: Id,
@@ -486,6 +510,20 @@ pub enum DesktopClientMfaEvent {
     MfaLoginSuperseded {
         device: Device<Id>,
         location: WireguardNetwork<Id>,
+    },
+    /// The device met the posture policies of the location.
+    PostureCheckPassed {
+        device: Device<Id>,
+        location: WireguardNetwork<Id>,
+        facts: Option<crate::posture::PostureFacts>,
+    },
+    /// The device did not meet the posture policies of the location (at connect time, or when
+    /// the policies changed while it was connected).
+    PostureCheckFailed {
+        device: Device<Id>,
+        location: WireguardNetwork<Id>,
+        facts: Option<crate::posture::PostureFacts>,
+        failed_checks: Vec<String>,
     },
 }
 

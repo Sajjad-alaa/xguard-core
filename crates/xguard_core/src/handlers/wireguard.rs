@@ -14,6 +14,7 @@ use xguard_common::{
         models::{
             Device, DeviceConfig, DeviceType, User, WireguardNetwork,
             device::{AddDevice, DeviceInfo, ModifyDevice, WireguardNetworkDevice},
+            device_posture::LocationPostures,
             mfa_flow::{LocationMfaFlowAssignment, MfaFlow, MfaFlowAssignmentLicenseError},
             wireguard::{GroupClientMtu, MappedDevice, ServiceLocationMode},
         },
@@ -56,7 +57,7 @@ pub(crate) struct WireguardNetworkInfo {
     gateways: Vec<GatewayInfo>,
     allowed_groups: Vec<String>,
     has_devices: bool,
-    /// Always empty: device posture checks are not supported.
+    /// IDs of the posture policies attached to the location.
     posture_checks: Vec<Id>,
     group_client_mtus: Vec<GroupClientMtu>,
 }
@@ -91,7 +92,9 @@ pub struct WireguardNetworkData {
     pub allowed_ips_from_acl: bool,
     pub mfa_enabled: bool,
     pub service_location_mode: ServiceLocationMode,
-    pub posture_checks: Vec<Id>,
+    /// Posture policies to attach. `None` (absent) keeps the current ones.
+    #[serde(default)]
+    pub posture_checks: Option<Vec<Id>>,
     pub mfa_flows: Vec<LocationMfaFlowAssignment>,
     /// Client MTU overrides; each group may appear once. `None` keeps saved overrides.
     #[serde(default)]
@@ -99,6 +102,24 @@ pub struct WireguardNetworkData {
 }
 
 const MIN_PEER_DISCONNECT_THRESHOLD_WITH_MFA: i32 = 120;
+
+/// Normalises a list of posture policy IDs and checks that they all exist.
+async fn validate_posture_assignment(
+    conn: &mut PgConnection,
+    ids: &[Id],
+) -> Result<Result<Vec<Id>, ApiResponse>, WebError> {
+    let ids = match crate::posture::policy::normalize_ids(ids) {
+        Ok(ids) => ids,
+        Err(err) => return Ok(Err(WebError::BadRequest(err.to_string()).into())),
+    };
+    let existing = LocationPostures::count_existing(&mut *conn, &ids).await?;
+    if usize::try_from(existing).ok() != Some(ids.len()) {
+        return Ok(Err(
+            WebError::BadRequest("Unknown posture policy.".into()).into()
+        ));
+    }
+    Ok(Ok(ids))
+}
 /// Smallest MTU WireGuard can carry a packet over.
 const MIN_MTU: i32 = 72;
 /// The largest MTU an IPv4/IPv6 interface can have.
@@ -416,10 +437,16 @@ pub(crate) async fn create_network(
     network.add_all_allowed_devices(&mut transaction).await?;
     info!("Assigning IPs for existing devices in network {network}");
 
-    if !data.posture_checks.is_empty() {
-        error!("Cannot assign posture checks to new location {network}: not supported.");
-        return Ok(WebError::BadRequest("Device posture checks are not supported.".into()).into());
-    }
+    let posture_checks = match validate_posture_assignment(
+        &mut transaction,
+        data.posture_checks.as_deref().unwrap_or_default(),
+    )
+    .await?
+    {
+        Ok(ids) => ids,
+        Err(response) => return Ok(response),
+    };
+    LocationPostures::set(&mut transaction, network.id, &posture_checks).await?;
 
     let mfa_assignments: Vec<LocationMfaFlowAssignment> = data.mfa_flows.clone();
     if let Err(error) = MfaFlow::validate_mfa_flow_assignments_license(
@@ -446,6 +473,16 @@ pub(crate) async fn create_network(
         session.user.username
     );
 
+    if !posture_checks.is_empty() {
+        appstate.emit_event(ApiEvent {
+            context: context.clone(),
+            event: Box::new(ApiEventType::LocationPosturesAssigned {
+                location_id: network.id,
+                location_name: network.name.clone(),
+                posture_ids: posture_checks,
+            }),
+        })?;
+    }
     if !mfa_assignments.is_empty() {
         appstate.emit_event(ApiEvent {
             context: context.clone(),
@@ -617,6 +654,23 @@ pub(crate) async fn modify_network(
         return Ok(response);
     }
 
+    // Posture policies: only when the request names them.
+    let postures_assigned = if let Some(requested) = data.posture_checks.as_deref() {
+        let requested = match validate_posture_assignment(&mut transaction, requested).await? {
+            Ok(ids) => ids,
+            Err(response) => return Ok(response),
+        };
+        let current = LocationPostures::find(&mut *transaction, network.id).await?;
+        if current == requested {
+            None
+        } else {
+            LocationPostures::set(&mut transaction, network.id, &requested).await?;
+            Some(requested)
+        }
+    } else {
+        None
+    };
+
     // `NetworkModified` sends the complete peer list. The gateway compares the peer count and
     // public keys, then replaces its peers, so separate device events are not needed.
     let mut events = Vec::new();
@@ -633,6 +687,17 @@ pub(crate) async fn modify_network(
         "User {} updated WireGuard network {network_id}",
         session.user.username,
     );
+    if let Some(posture_ids) = postures_assigned {
+        crate::posture::worker::policies_changed([network.id]);
+        appstate.emit_event(ApiEvent {
+            context: context.clone(),
+            event: Box::new(ApiEventType::LocationPosturesAssigned {
+                location_id: network.id,
+                location_name: network.name.clone(),
+                posture_ids,
+            }),
+        })?;
+    }
     if mfa_assignments_updated {
         appstate.emit_event(ApiEvent {
             context: context.clone(),
@@ -737,6 +802,7 @@ pub async fn list_networks(_role: AdminRole, State(appstate): State<AppState>) -
     debug!("Listing WireGuard networks");
     let mut network_info = Vec::new();
     let networks = WireguardNetwork::all(&appstate.pool).await?;
+    let mut postures = LocationPostures::all_by_location(&appstate.pool).await?;
 
     for network in networks {
         let allowed_groups = network.fetch_allowed_groups(&appstate.pool).await?;
@@ -744,12 +810,13 @@ pub async fn list_networks(_role: AdminRole, State(appstate): State<AppState>) -
         let has_devices =
             WireguardNetworkDevice::has_devices_in_network(&appstate.pool, network.id).await?;
         let group_client_mtus = network.fetch_group_client_mtus(&appstate.pool).await?;
+        let posture_checks = postures.remove(&network.id).unwrap_or_default();
         network_info.push(WireguardNetworkInfo {
             network,
             gateways,
             allowed_groups,
             has_devices,
-            posture_checks: Vec::new(),
+            posture_checks,
             group_client_mtus,
         });
     }
@@ -820,12 +887,13 @@ pub(crate) async fn network_details(
             let has_devices =
                 WireguardNetworkDevice::has_devices_in_network(&appstate.pool, network_id).await?;
             let group_client_mtus = network.fetch_group_client_mtus(&appstate.pool).await?;
+            let posture_checks = LocationPostures::find(&appstate.pool, network_id).await?;
             let network_info = WireguardNetworkInfo {
                 network,
                 gateways,
                 allowed_groups,
                 has_devices,
-                posture_checks: Vec::new(),
+                posture_checks,
                 group_client_mtus,
             };
             ApiResponse::json(network_info, StatusCode::OK)

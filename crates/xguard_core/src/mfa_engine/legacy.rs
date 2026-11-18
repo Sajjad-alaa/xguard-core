@@ -50,6 +50,9 @@ pub enum FinishError {
     MissingBiometricChallenge,
     #[error("{message}")]
     MalformedProof { message: &'static str },
+    /// The device no longer meets the location's posture policies.
+    #[error("device posture check failed")]
+    PostureRejected(Vec<String>),
     #[error("unexpected error")]
     Internal,
     #[error(transparent)]
@@ -328,6 +331,7 @@ fn map_finish_core_error(error: FinishCoreError) -> FinishError {
         FinishCoreError::SessionNotFound => FinishError::SessionNotFound,
         FinishCoreError::UninitializedStep => FinishError::UninitializedStep,
         FinishCoreError::StaleAttempt => FinishError::StaleAttempt,
+        FinishCoreError::PostureRejected(failed) => FinishError::PostureRejected(failed),
         FinishCoreError::Internal => FinishError::Internal,
         FinishCoreError::Event(error) => FinishError::Event(error),
     }

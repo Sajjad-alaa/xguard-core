@@ -1139,7 +1139,7 @@ async fn test_create_network_without_groups_rejected(_: PgPoolOptions, options: 
         allowed_ips_from_acl: false,
         mfa_enabled: false, // mfa_enabled
         service_location_mode: ServiceLocationMode::Disabled,
-        posture_checks: Vec::new(),
+        posture_checks: None,
         mfa_flows: Vec::new(),
         group_client_mtus: None,
     };
@@ -1197,7 +1197,7 @@ async fn test_modify_network_without_groups_rejected(_: PgPoolOptions, options: 
         allowed_ips_from_acl: false,
         mfa_enabled: false, // mfa_enabled
         service_location_mode: ServiceLocationMode::Disabled,
-        posture_checks: Vec::new(),
+        posture_checks: None,
         mfa_flows: Vec::new(),
         group_client_mtus: None,
     };

@@ -130,13 +130,44 @@ impl From<VpnClientMfaMethod> for MfaMethod {
     }
 }
 
+/// Message prefix of every device posture refusal.
+pub const POSTURE_REJECTED_PREFIX: &str = "Device posture check failed: ";
+/// Longest posture refusal message sent to a client.
+const MAX_POSTURE_MESSAGE_LEN: usize = 1024;
+
+/// The status core returns when a device does not meet a location's posture policies. It
+/// reaches Edge as a `PERMISSION_DENIED` [`CoreError`] with [`CoreErrorCode::PostureRejected`].
+#[must_use]
+pub fn posture_rejected_status(failed_checks: &[String]) -> Status {
+    let mut message = format!("{POSTURE_REJECTED_PREFIX}{}", failed_checks.join("; "));
+    if message.len() > MAX_POSTURE_MESSAGE_LEN {
+        let mut end = MAX_POSTURE_MESSAGE_LEN - 3;
+        while !message.is_char_boundary(end) {
+            end -= 1;
+        }
+        message.truncate(end);
+        message.push_str("...");
+    }
+    Status::permission_denied(message)
+}
+
+/// Whether `status` is a posture refusal made by [`posture_rejected_status`].
+#[must_use]
+pub fn is_posture_rejected(status: &Status) -> bool {
+    status.code() == Code::PermissionDenied && status.message().starts_with(POSTURE_REJECTED_PREFIX)
+}
+
 impl From<Status> for CoreError {
     fn from(status: Status) -> Self {
-        Self {
+        let mut error = Self {
             status_code: status.code().into(),
             message: status.message().into(),
             ..Default::default()
+        };
+        if is_posture_rejected(&status) {
+            error.set_code(CoreErrorCode::PostureRejected);
         }
+        error
     }
 }
 
@@ -248,5 +279,34 @@ impl Configuration {
             // Set by callers that compiled the location's firewall policy.
             firewall: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod posture_tests {
+    use super::*;
+
+    #[test]
+    fn posture_refusal_carries_its_code() {
+        let status = posture_rejected_status(&["disk encryption is required".into()]);
+        assert_eq!(status.code(), Code::PermissionDenied);
+        assert!(is_posture_rejected(&status));
+        let error = CoreError::from(status);
+        assert_eq!(error.code(), CoreErrorCode::PostureRejected);
+        assert_eq!(
+            error.message,
+            "Device posture check failed: disk encryption is required"
+        );
+
+        let other = CoreError::from(Status::permission_denied("device is not assigned"));
+        assert_eq!(other.code(), CoreErrorCode::Unspecified);
+    }
+
+    #[test]
+    fn posture_refusal_is_bounded() {
+        let long = vec!["é".repeat(400); 10];
+        let status = posture_rejected_status(&long);
+        assert!(status.message().len() <= 1024);
+        assert!(status.message().ends_with("..."));
     }
 }

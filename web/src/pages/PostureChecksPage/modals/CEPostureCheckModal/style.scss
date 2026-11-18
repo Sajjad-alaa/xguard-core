@@ -1,0 +1,15 @@
+.ce-posture-check-form {
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-xl, 16px);
+  }
+
+  .os-rule {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md, 12px);
+    margin-top: var(--spacing-md, 12px);
+    padding-left: var(--spacing-xl, 16px);
+  }
+}

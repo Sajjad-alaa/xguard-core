@@ -149,6 +149,12 @@ const DevicesTable = ({ rowData }: { rowData: RowData[] }) => {
       ];
       if (isAdmin) {
         items.push({
+          text: m.posture_device_menu_view(),
+          icon: 'connected-devices',
+          testId: 'device-posture',
+          onClick: () => openModal(ModalName.DevicePosture, { deviceId: row.id }),
+        });
+        items.push({
           text: m.profile_devices_menu_ip_settings(),
           icon: 'gateway',
           testId: 'assign-device-ip',

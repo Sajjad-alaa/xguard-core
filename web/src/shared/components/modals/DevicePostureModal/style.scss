@@ -1,0 +1,39 @@
+#device-posture-modal {
+  .device-posture {
+    .status {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md, 12px);
+    }
+
+    .title {
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm, 8px);
+    }
+
+    ul {
+      margin: 0;
+      padding-left: var(--spacing-xl, 16px);
+    }
+
+    dl {
+      display: grid;
+      gap: var(--spacing-xs, 4px);
+      margin: 0;
+
+      div {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-md, 12px);
+      }
+
+      dd {
+        margin: 0;
+      }
+    }
+
+    .attestation {
+      opacity: 0.7;
+    }
+  }
+}

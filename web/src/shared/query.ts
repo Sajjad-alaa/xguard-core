@@ -216,6 +216,26 @@ export const getOpenIdClientQueryOptions = queryOptions({
   queryKey: ['oauth'],
 });
 
+export const getDevicePosturesQueryOptions = queryOptions({
+  queryFn: api.devicePosture.getDevicePostures,
+  queryKey: ['device-posture'],
+  select: (resp) => resp.data,
+});
+
+export const getDevicePostureVersionsQueryOptions = queryOptions({
+  queryFn: api.devicePosture.getVersionCatalog,
+  queryKey: ['device-posture', 'versions'],
+  select: (resp) => resp.data,
+  staleTime: Infinity,
+});
+
+export const getDevicePostureSnapshotQueryOptions = (deviceId: number) =>
+  queryOptions({
+    queryFn: () => api.devicePosture.getDeviceSnapshot(deviceId),
+    queryKey: ['device-posture', 'device', deviceId],
+    select: (resp) => resp.data,
+  });
+
 export const getFirewallRulesQueryOptions = queryOptions({
   queryFn: api.firewall.getRules,
   queryKey: ['firewall', 'rule'],
