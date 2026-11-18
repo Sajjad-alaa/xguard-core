@@ -209,6 +209,127 @@ impl WebAuthn<Id> {
     }
 }
 
+/// A security key that may answer VPN MFA steps, with its stored passkey.
+#[derive(Clone, Debug)]
+pub struct VpnSecurityKey {
+    pub id: Id,
+    pub name: String,
+    pub passkey: Passkey,
+    /// The stored CBOR, compared on update so concurrent sign-ins cannot roll the counter back.
+    pub stored: Vec<u8>,
+}
+
+/// Queries over `webauthn_vpn_mfa`, the credentials enabled for VPN MFA. Runtime queries keep the
+/// `webauthn` row shape and its offline query cache unchanged.
+impl WebAuthn<Id> {
+    /// The user's security keys enabled for VPN MFA, in registration order.
+    pub async fn vpn_keys_for_user<'e, E>(
+        executor: E,
+        user_id: Id,
+    ) -> sqlx::Result<Vec<VpnSecurityKey>>
+    where
+        E: PgExecutor<'e>,
+    {
+        let rows: Vec<(Id, String, Vec<u8>)> = sqlx::query_as(
+            "SELECT w.id, w.name, w.passkey FROM webauthn w \
+            JOIN webauthn_vpn_mfa v ON v.webauthn_id = w.id \
+            WHERE w.user_id = $1 ORDER BY w.id",
+        )
+        .bind(user_id)
+        .fetch_all(executor)
+        .await?;
+        rows.into_iter()
+            .map(|(id, name, stored)| {
+                let passkey = serde_cbor::from_slice(&stored)
+                    .map_err(|err| sqlx::Error::Decode(Box::new(err)))?;
+                Ok(VpnSecurityKey {
+                    id,
+                    name,
+                    passkey,
+                    stored,
+                })
+            })
+            .collect()
+    }
+
+    /// Whether the user has at least one security key enabled for VPN MFA.
+    pub async fn vpn_key_exists_for_user<'e, E>(executor: E, user_id: Id) -> sqlx::Result<bool>
+    where
+        E: PgExecutor<'e>,
+    {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM webauthn w \
+            JOIN webauthn_vpn_mfa v ON v.webauthn_id = w.id WHERE w.user_id = $1)",
+        )
+        .bind(user_id)
+        .fetch_one(executor)
+        .await
+    }
+
+    /// Enables this key for VPN MFA.
+    pub async fn enable_vpn_mfa<'e, E>(&self, executor: E) -> sqlx::Result<()>
+    where
+        E: PgExecutor<'e>,
+    {
+        sqlx::query(
+            "INSERT INTO webauthn_vpn_mfa (webauthn_id) VALUES ($1) ON CONFLICT DO NOTHING",
+        )
+        .bind(self.id)
+        .execute(executor)
+        .await?;
+        Ok(())
+    }
+
+    /// Stores `passkey` after a sign-in (new signature counter) and records the use.
+    ///
+    /// Compare-and-swap on the previously `stored` CBOR: returns `false`, changing nothing, when
+    /// another sign-in updated the key meanwhile, so a lower counter never overwrites a higher one.
+    pub async fn record_vpn_use<'e, E>(
+        executor: E,
+        id: Id,
+        stored: &[u8],
+        passkey: Option<&Passkey>,
+    ) -> sqlx::Result<bool>
+    where
+        E: PgExecutor<'e>,
+    {
+        let updated = match passkey {
+            Some(passkey) => Some(
+                serde_cbor::to_vec(passkey).map_err(|err| sqlx::Error::Encode(Box::new(err)))?,
+            ),
+            None => None,
+        };
+        let result = sqlx::query(
+            "WITH key AS ( \
+                UPDATE webauthn SET passkey = COALESCE($3, passkey) \
+                WHERE id = $1 AND passkey = $2 RETURNING id \
+            ) \
+            UPDATE webauthn_vpn_mfa SET last_used_at = now() AT TIME ZONE 'UTC' \
+            WHERE webauthn_id IN (SELECT id FROM key)",
+        )
+        .bind(id)
+        .bind(stored)
+        .bind(updated)
+        .execute(executor)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// IDs of the user's keys enabled for VPN MFA.
+    pub async fn vpn_key_ids_for_user<'e, E>(executor: E, user_id: Id) -> sqlx::Result<Vec<Id>>
+    where
+        E: PgExecutor<'e>,
+    {
+        sqlx::query_scalar(
+            "SELECT w.id FROM webauthn w JOIN webauthn_vpn_mfa v ON v.webauthn_id = w.id \
+            WHERE w.user_id = $1 ORDER BY w.id",
+        )
+        .bind(user_id)
+        .fetch_all(executor)
+        .await
+    }
+}
+
 fn deserialize_passkeys(bin_keys: &[Vec<u8>]) -> sqlx::Result<Vec<Passkey>> {
     bin_keys
         .iter()

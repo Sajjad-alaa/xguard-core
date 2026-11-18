@@ -9,11 +9,8 @@ use crate::{
     db::{
         Id, NoId,
         models::{
-            WireguardNetwork,
-            biometric_auth::BiometricAuth,
-            user::User,
-            vpn_session_stats::VpnSessionStats,
-            webauthn::{AuthenticatorKind, WebAuthn},
+            WireguardNetwork, biometric_auth::BiometricAuth, user::User,
+            vpn_session_stats::VpnSessionStats, webauthn::WebAuthn,
         },
     },
     secret::SecretStringWrapper,
@@ -76,7 +73,7 @@ impl VpnClientMfaMethod {
     /// Per-user setup reads `User::totp_enabled` (TOTP), `User::email_mfa_enabled` (email),
     /// `User::openid_sub` (OIDC), and the `biometric_auth` table - keyed on the device for
     /// biometric and on any of the user's devices for mobile-approve. FIDO2 counts only keys
-    /// that passed hardware attestation at registration.
+    /// enabled for VPN MFA (`webauthn_vpn_mfa`), not every passkey used for the web sign-in.
     /// `device_id` may be absent during initial enrollment, before the device is created.
     ///
     /// OIDC requires `openid_sub` because MFA re-verifies an existing link rather than creating
@@ -105,10 +102,7 @@ impl VpnClientMfaMethod {
             Self::MobileApprove => !BiometricAuth::find_by_user_id(executor, user.id)
                 .await?
                 .is_empty(),
-            Self::Fido2 => {
-                WebAuthn::exists_for_user(executor, user.id, Some(AuthenticatorKind::Hardware))
-                    .await?
-            }
+            Self::Fido2 => WebAuthn::vpn_key_exists_for_user(executor, user.id).await?,
         };
         Ok(configured)
     }
@@ -491,8 +485,8 @@ mod tests {
                 .unwrap()
         );
 
-        // FIDO2: only a hardware-attested security key counts. The passkey blob is never
-        // deserialized by the predicate, which only asks whether a key row exists.
+        // FIDO2: only a key enabled for VPN MFA counts, whatever its attestation. The passkey
+        // blob is never deserialized by the predicate, which only asks whether such a key exists.
         let security_key = |authenticator_kind| WebAuthn {
             id: NoId,
             user_id: user.id,
@@ -507,7 +501,7 @@ mod tests {
             attestation_chain_sha256: None,
             registered_at: None,
         };
-        security_key(AuthenticatorKind::Unknown)
+        security_key(AuthenticatorKind::Hardware)
             .save(&pool)
             .await
             .expect("failed to save security key");
@@ -517,10 +511,13 @@ mod tests {
                 .await
                 .unwrap()
         );
-        security_key(AuthenticatorKind::Hardware)
+        let key = security_key(AuthenticatorKind::Unknown)
             .save(&pool)
             .await
             .expect("failed to save security key");
+        key.enable_vpn_mfa(&pool)
+            .await
+            .expect("failed to enable the key for VPN MFA");
         assert!(
             VpnClientMfaMethod::Fido2
                 .is_configured(&pool, &user, Some(device.id), false, false)

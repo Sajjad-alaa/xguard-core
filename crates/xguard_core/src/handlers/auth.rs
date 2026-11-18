@@ -695,8 +695,14 @@ pub async fn webauthn_end(
             Ok(auth_result) => {
                 if auth_result.needs_update() {
                     // Find `Passkey` and try to update its credentials
-                    for webauthn in WebAuthn::all_for_user(&appstate.pool, session.user_id).await? {
-                        if let Some(true) = webauthn.passkey()?.update_credential(&auth_result) {
+                    // Store the new signature counter, so a cloned key is detected later.
+                    for mut webauthn in
+                        WebAuthn::all_for_user(&appstate.pool, session.user_id).await?
+                    {
+                        let mut passkey = webauthn.passkey()?;
+                        if let Some(true) = passkey.update_credential(&auth_result) {
+                            webauthn.passkey = serde_cbor::to_vec(&passkey)
+                                .map_err(|_| WebError::Http(StatusCode::INTERNAL_SERVER_ERROR))?;
                             webauthn.save(&appstate.pool).await?;
                         }
                     }

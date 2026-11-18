@@ -7141,6 +7141,7 @@ dependencies = [
  "mrml",
  "nix",
  "openidconnect",
+ "openssl",
  "prost",
  "pulldown-cmark",
  "qrcode",

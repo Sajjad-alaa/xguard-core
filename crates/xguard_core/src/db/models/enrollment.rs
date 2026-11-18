@@ -10,7 +10,7 @@ use xguard_common::{
     VERSION,
     db::{
         Id,
-        models::{Settings, user::User},
+        models::{Settings, user::User, vpn_client_mfa_session::Fido2AttemptState},
     },
     random::gen_alphanumeric,
     types::UrlParseError,
@@ -99,14 +99,10 @@ impl From<TokenError> for Status {
 /// An in-flight authorization attempt of an MFA configuration session.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum MfaConfigAuthState {
-    Fido2 {
-        challenge: String,
-    },
+    /// A FIDO2 assertion challenge, answered at most once.
+    Fido2(Fido2AttemptState),
     /// An OIDC round trip, marked completed by the Edge callback.
-    Oidc {
-        attempt_id: String,
-        completed: bool,
-    },
+    Oidc { attempt_id: String, completed: bool },
 }
 
 // Representation of a user enrollment session
@@ -270,6 +266,68 @@ impl Token {
             .await?;
         transaction.commit().await?;
         Ok(true)
+    }
+
+    /// Starts a FIDO2 authorization attempt, replacing any pending one. Returns `false` when a
+    /// completed OIDC attempt is waiting for the client to authorize the session.
+    pub async fn begin_mfa_config_fido2(
+        &mut self,
+        pool: &PgPool,
+        state: Fido2AttemptState,
+    ) -> Result<bool, TokenError> {
+        self.replace_mfa_config_auth_state(pool, &MfaConfigAuthState::Fido2(state))
+            .await
+    }
+
+    /// Removes and returns the pending FIDO2 authorization challenge, so it is answered once.
+    pub async fn take_mfa_config_fido2(
+        &mut self,
+        pool: &PgPool,
+    ) -> Result<Option<Fido2AttemptState>, TokenError> {
+        let mut transaction = pool.begin().await?;
+        let Some(MfaConfigAuthState::Fido2(state)) =
+            self.lock_mfa_config_auth_state(&mut transaction).await?
+        else {
+            return Ok(None);
+        };
+        self.clear_mfa_setup_state(&mut *transaction).await?;
+        transaction.commit().await?;
+        Ok(Some(state))
+    }
+
+    /// Stores the state of a FIDO2 registration on an authorized setup session.
+    pub async fn store_fido2_registration(
+        &mut self,
+        pool: &PgPool,
+        state: Vec<u8>,
+    ) -> Result<(), TokenError> {
+        sqlx::query("UPDATE token SET mfa_setup_state = $1 WHERE id = $2 AND used_at IS NOT NULL")
+            .bind(&state)
+            .bind(&self.id)
+            .execute(pool)
+            .await?;
+        self.mfa_setup_state = Some(state);
+        Ok(())
+    }
+
+    /// Removes and returns the FIDO2 registration state, so a registration finishes once.
+    pub async fn take_fido2_registration(
+        &mut self,
+        pool: &PgPool,
+    ) -> Result<Option<Vec<u8>>, TokenError> {
+        let mut transaction = pool.begin().await?;
+        let state: Option<Option<Vec<u8>>> = sqlx::query_scalar(
+            "SELECT mfa_setup_state FROM token WHERE id = $1 AND used_at IS NOT NULL FOR UPDATE",
+        )
+        .bind(&self.id)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some(Some(state)) = state else {
+            return Ok(None);
+        };
+        self.clear_mfa_setup_state(&mut *transaction).await?;
+        transaction.commit().await?;
+        Ok(Some(state))
     }
 
     /// Whether `attempt_id` is still the pending OIDC attempt, locking the token row for the

@@ -14,6 +14,7 @@ use super::{
     LoadedFinishContext, MfaEngine,
     authorize::ClientMfaServerError,
     error::{FinishCoreError, StartError},
+    fido2::Fido2StepError,
     filter_supported_mfa_methods, is_code_method,
     method::{Verdict, VerifyError, check_mobile_approval, verify, verify_mobile_signature},
     poll_allowed, throttle_key,
@@ -23,30 +24,20 @@ use crate::events::{
     BidiRequestContext, BidiStreamEvent, BidiStreamEventType, DesktopClientMfaEvent,
 };
 
-/// FIDO2 assertion fields as submitted by a client.
-///
-/// XGuard does not support FIDO2 VPN MFA (see [`crate::features`]); a submitted assertion is
-/// always rejected as a malformed proof.
-#[derive(Debug, Eq, PartialEq)]
-pub struct Fido2Assertion {
-    pub rp_id_hash: Vec<u8>,
-    pub authenticator_data: Vec<u8>,
-    pub signature: Vec<u8>,
-    pub credential_id: Vec<u8>,
-}
+/// FIDO2 assertion fields as submitted by a client, verified by [`crate::fido2`].
+pub use crate::fido2::Fido2Assertion;
 
-/// Error converting a submitted credential into a verifiable proof.
+/// Error converting a submitted credential into a proof for the shared, read-only verifier.
 #[derive(Debug, Eq, thiserror::Error, PartialEq)]
 pub enum ProofConversionError {
-    #[error("FIDO2 MFA is not supported")]
-    Fido2Unsupported,
+    /// FIDO2 assertions consume their challenge, so they go to the FIDO2 verifier instead.
+    #[error("FIDO2 assertions need the FIDO2 verifier")]
+    Fido2NeedsOwnVerifier,
 }
 
 fn map_proof_conversion_error(error: ProofConversionError) -> StepFinishError {
     match error {
-        ProofConversionError::Fido2Unsupported => StepFinishError::MalformedProof {
-            message: "FIDO2 MFA is not supported",
-        },
+        ProofConversionError::Fido2NeedsOwnVerifier => StepFinishError::Internal,
     }
 }
 
@@ -169,7 +160,7 @@ impl TryFrom<StepCredential> for VerificationProof {
             StepCredential::BiometricSignature(signature) => {
                 Ok(Self::BiometricSignature(signature))
             }
-            StepCredential::Fido2(_) => Err(ProofConversionError::Fido2Unsupported),
+            StepCredential::Fido2(_) => Err(ProofConversionError::Fido2NeedsOwnVerifier),
         }
     }
 }
@@ -333,34 +324,46 @@ impl MfaEngine {
             return Err(StepError::MethodNotConfigured);
         }
 
-        let challenge = super::method::initiate(&self.pool, &ctx, method)
+        let initiated = super::method::initiate(&self.pool, &ctx, method)
             .await
             .map_err(|err| {
                 super::log_initiate_error(&err, &ctx);
                 StepError::from(err)
             })?;
-        let credential_ids = super::method::offered_credential_ids(&self.pool, &ctx, method)
-            .await
-            .map_err(|err| {
-                error!("Failed to load FIDO2 credentials: {err}");
-                StepError::Internal
-            })?;
+        let challenge = initiated.challenge();
+        let credential_ids = initiated.credential_ids();
 
-        let mut conn = self.pool.acquire().await.map_err(|_| {
-            error!("Failed to acquire DB connection");
+        let mut transaction = self.pool.begin().await.map_err(|err| {
+            error!("Failed to begin transaction: {err}");
             StepError::Internal
         })?;
         let step_attempt_id = session
-            .begin_attempt(&mut conn, method, challenge.clone())
+            .begin_attempt(&mut transaction, method, initiated.signature)
             .await
             .map_err(|err| {
                 error!("Failed to begin MFA attempt: {err}");
                 StepError::Internal
             })?;
+        if let Some(issued) = &initiated.fido2
+            && !session
+                .set_fido2_state(&mut transaction, &step_attempt_id, &issued.state)
+                .await
+                .map_err(|err| {
+                    error!("Failed to store the FIDO2 challenge: {err}");
+                    StepError::Internal
+                })?
+        {
+            error!("The MFA attempt was replaced before its FIDO2 challenge was stored");
+            return Err(StepError::Internal);
+        }
+        transaction.commit().await.map_err(|err| {
+            error!("Failed to commit the MFA attempt: {err}");
+            StepError::Internal
+        })?;
 
         Ok(StepStarted {
             step_attempt_id,
-            challenge: challenge.map(|challenge| challenge.challenge),
+            challenge,
             credential_ids,
         })
     }
@@ -442,13 +445,36 @@ impl MfaEngine {
             return Err(StepFinishError::AttemptLimit);
         }
 
-        let proof = credential
-            .map(VerificationProof::try_from)
-            .transpose()
-            .map_err(map_proof_conversion_error)?;
-        let verdict = if method == VpnClientMfaMethod::MobileApprove {
+        let verdict = if let Some(StepCredential::Fido2(assertion)) = &credential {
+            match self
+                .verify_fido2(&session, &ctx, &attempt_id, assertion)
+                .await
+            {
+                Ok(verdict) => verdict,
+                Err(Fido2StepError::Malformed(message)) => {
+                    self.channels.emit_event(BidiStreamEvent {
+                        context,
+                        event: BidiStreamEventType::DesktopClientMfa(Box::new(
+                            DesktopClientMfaEvent::Failed {
+                                location: ctx.location.clone(),
+                                device: ctx.device.clone(),
+                                method: method.into(),
+                                message: format!("Malformed security key assertion: {message}"),
+                            },
+                        )),
+                    })?;
+                    return Err(StepFinishError::MalformedProof { message });
+                }
+                Err(Fido2StepError::NoChallenge) => return Err(StepFinishError::MissingChallenge),
+                Err(Fido2StepError::Internal) => return Err(StepFinishError::Internal),
+            }
+        } else if method == VpnClientMfaMethod::MobileApprove {
             check_mobile_approval(&ephemeral)
         } else {
+            let proof = credential
+                .map(VerificationProof::try_from)
+                .transpose()
+                .map_err(map_proof_conversion_error)?;
             match verify(&self.pool, &ctx, &ephemeral, proof.as_ref()).await {
                 Ok(verdict) => {
                     if let Some(key) = &charge_key
@@ -753,7 +779,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_step_credential_rejects_fido2_assertion() {
+    fn test_step_credential_sends_fido2_to_its_own_verifier() {
         let error = VerificationProof::try_from(StepCredential::Fido2(Fido2Assertion {
             rp_id_hash: vec![0; 32],
             authenticator_data: vec![0; 37],
@@ -761,6 +787,6 @@ mod tests {
             credential_id: vec![2],
         }))
         .unwrap_err();
-        assert_eq!(error, ProofConversionError::Fido2Unsupported);
+        assert_eq!(error, ProofConversionError::Fido2NeedsOwnVerifier);
     }
 }

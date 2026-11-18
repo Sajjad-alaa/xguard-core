@@ -41,13 +41,14 @@ use crate::{
     mfa_engine::{
         authorize::{EventChannels, build_authorized_gateway_network_info, create_new_session},
         error::{FinishCoreError, StartError},
-        method::{InitiateError, initiate, offered_credential_ids},
+        method::{InitiateError, initiate},
         types::{FinishOutcome, StartedSession},
     },
 };
 
 pub mod authorize;
 pub mod error;
+pub mod fido2;
 pub mod legacy;
 pub mod method;
 pub mod multi_step;
@@ -201,27 +202,22 @@ impl MfaEngine {
             device: device.clone(),
             user: user.clone(),
         };
-        let challenge = initiate(&self.pool, &ctx, method).await.map_err(|err| {
+        let initiated = initiate(&self.pool, &ctx, method).await.map_err(|err| {
             log_initiate_error(&err, &ctx);
             StartError::from(err)
         })?;
-        let response_challenge = challenge
-            .as_ref()
-            .map(|challenge| challenge.challenge.clone());
-        let credential_ids = offered_credential_ids(&self.pool, &ctx, method)
-            .await
-            .map_err(|err| {
-                error!("Failed to load FIDO2 credentials: {err}");
-                StartError::Internal
-            })?;
+        let response_challenge = initiated.challenge();
+        let credential_ids = initiated.credential_ids();
 
-        let mut conn = self.pool.acquire().await.map_err(|_| {
-            error!("Failed to acquire DB connection");
+        // The FIDO2 challenge state is written in the same transaction as the session, so the
+        // session is never visible with an attempt that lacks it.
+        let mut transaction = self.pool.begin().await.map_err(|err| {
+            error!("Failed to begin transaction: {err}");
             StartError::Internal
         })?;
         let step_methods = steps.iter().map(VpnClientMfaMethod::ordered_set).collect();
-        let (_session, outcome) = VpnClientMfaSession::<Id>::start(
-            &mut conn,
+        let (session, outcome) = VpnClientMfaSession::<Id>::start(
+            &mut transaction,
             location.id,
             device.id,
             user.id,
@@ -229,12 +225,28 @@ impl MfaEngine {
             step_methods,
             flow_kind,
             method,
-            challenge,
+            initiated.signature,
             VPN_MFA_SESSION_TIMEOUT,
         )
         .await
         .map_err(|err| {
             error!("Failed to start MFA session: {err}");
+            StartError::Internal
+        })?;
+        if let Some(issued) = &initiated.fido2
+            && !session
+                .set_fido2_state(&mut transaction, &outcome.step_attempt_id, &issued.state)
+                .await
+                .map_err(|err| {
+                    error!("Failed to store the FIDO2 challenge: {err}");
+                    StartError::Internal
+                })?
+        {
+            error!("The new MFA session lost its first attempt before the FIDO2 challenge");
+            return Err(StartError::Internal);
+        }
+        transaction.commit().await.map_err(|err| {
+            error!("Failed to commit the new MFA session: {err}");
             StartError::Internal
         })?;
 
@@ -606,6 +618,10 @@ fn log_initiate_error(err: &InitiateError, ctx: &MfaSessionContext) {
             "User {username} has no MFA step initiations left for device {} at location {}",
             ctx.device.id, ctx.location.name
         ),
+        InitiateError::Fido2NotConfigured => {
+            warn!("User {username} selected FIDO2 MFA with no security key registered for VPN MFA");
+        }
+        InitiateError::Fido2(e) => error!("Failed to issue a FIDO2 challenge: {e}"),
     }
 }
 

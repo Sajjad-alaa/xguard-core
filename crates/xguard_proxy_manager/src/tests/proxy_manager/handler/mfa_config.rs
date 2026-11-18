@@ -8,7 +8,6 @@ use xguard_common::{
         models::{
             MFAMethod, Session, SessionState, User, WebAuthn,
             settings::{Settings, update_current_settings},
-            webauthn::AuthenticatorKind,
         },
     },
     testing::smtp::configure_working_smtp,
@@ -231,7 +230,7 @@ async fn test_fido2_only_user_is_not_treated_as_no_factor(
 
     let (mut user, device) = create_user_with_device(&context.pool).await;
     // The security key is the user's only factor; its registration issued recovery codes.
-    register_webauthn_key(&context.pool, user.id, AuthenticatorKind::Hardware).await;
+    register_webauthn_key(&context.pool, user.id, true).await;
     let issued = user
         .get_recovery_codes(&context.pool)
         .await
@@ -274,15 +273,15 @@ async fn test_fido2_only_user_is_not_treated_as_no_factor(
     context.finish().await.expect_server_finished().await;
 }
 
-/// Gives the user a software passkey as their only factor, with MFA enabled as web
+/// Gives the user a web sign-in passkey (not enabled for VPN MFA) as their only factor, with MFA enabled as web
 /// registration leaves it.
 async fn setup_software_passkey_user(pool: &PgPool, user: &mut User<Id>) {
-    register_webauthn_key(pool, user.id, AuthenticatorKind::Unknown).await;
+    register_webauthn_key(pool, user.id, false).await;
     user.verify_mfa_state(pool).await.expect("verify_mfa_state");
     assert!(user.mfa_enabled, "a passkey must enable MFA");
 }
 
-/// A software passkey cannot authorize, and an email fallback would bypass it.
+/// A web-only passkey cannot authorize, and an email fallback would bypass it.
 #[sqlx::test]
 async fn test_software_passkey_user_gets_no_session(_: PgPoolOptions, options: PgConnectOptions) {
     let mut context = HandlerTestContext::new(options).await;

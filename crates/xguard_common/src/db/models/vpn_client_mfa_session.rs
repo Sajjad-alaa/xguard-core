@@ -89,6 +89,22 @@ pub struct EphemeralState {
     pub mobile_auth_device_name: Option<String>,
     #[serde(default)]
     pub biometric_challenge: Option<BiometricChallenge>,
+    /// FIDO2 only: the pending WebAuthn assertion state. Taken (removed) by the first finish that
+    /// presents an assertion, so each challenge can be answered once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fido2: Option<Fido2AttemptState>,
+}
+
+/// Server-side state of a FIDO2 challenge issued for one attempt.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Fido2AttemptState {
+    /// The challenge sent to the client, base64url without padding.
+    pub challenge: String,
+    /// The serialized `webauthn_rs` `PasskeyAuthentication`: challenge, allowed credentials and
+    /// user-verification policy. Never sent to the client.
+    pub authentication: serde_json::Value,
+    /// When the challenge was issued, for its own (shorter than the session's) lifetime.
+    pub issued_at: NaiveDateTime,
 }
 
 /// Result of `start`, carrying the raw token (returned exactly once), the id of the first
@@ -169,6 +185,7 @@ fn new_attempt_state(
         mobile_approved: false,
         mobile_auth_device_name: None,
         biometric_challenge: challenge,
+        fido2: None,
     };
     let state_json =
         serde_json::to_value(&state).map_err(|err| sqlx::Error::Decode(Box::new(err)))?;
@@ -422,6 +439,54 @@ impl VpnClientMfaSession<Id> {
             }),
         )
         .await
+    }
+
+    /// Stores the FIDO2 challenge state on the attempt `step_attempt_id`.
+    ///
+    /// Returns `false` when that attempt is no longer the current one.
+    pub async fn set_fido2_state(
+        &self,
+        conn: &mut PgConnection,
+        step_attempt_id: &str,
+        state: &Fido2AttemptState,
+    ) -> sqlx::Result<bool> {
+        let state =
+            serde_json::to_value(state).map_err(|err| sqlx::Error::Encode(Box::new(err)))?;
+        self.mark_attempt_state(conn, step_attempt_id, serde_json::json!({ "fido2": state }))
+            .await
+    }
+
+    /// Atomically removes and returns the FIDO2 challenge state of the attempt `step_attempt_id`.
+    ///
+    /// Of concurrent callers at most one gets the state, so a challenge is answered once. Returns
+    /// `None` for a stale attempt, an expired session or an already used challenge.
+    pub async fn take_fido2_state(
+        &self,
+        conn: &mut PgConnection,
+        step_attempt_id: &str,
+    ) -> sqlx::Result<Option<Fido2AttemptState>> {
+        let state: Option<serde_json::Value> = sqlx::query_scalar(
+            "WITH current AS ( \
+                SELECT id, ephemeral_state->'fido2' AS fido2 FROM vpn_client_mfa_session \
+                WHERE id = $1 AND ephemeral_state->>'step_attempt_id' = $2 \
+                  AND jsonb_typeof(ephemeral_state->'fido2') = 'object' \
+                  AND expires_at > (now() AT TIME ZONE 'UTC') \
+                FOR UPDATE \
+            ) \
+            UPDATE vpn_client_mfa_session s SET ephemeral_state = s.ephemeral_state - 'fido2' \
+            FROM current WHERE s.id = current.id \
+              AND jsonb_typeof(s.ephemeral_state->'fido2') = 'object' \
+            RETURNING current.fido2",
+        )
+        .bind(self.id)
+        .bind(step_attempt_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+        state
+            .map(|state| {
+                serde_json::from_value(state).map_err(|err| sqlx::Error::Decode(Box::new(err)))
+            })
+            .transpose()
     }
 
     /// Updates the current attempt when `step_attempt_id` matches.

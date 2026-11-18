@@ -419,9 +419,9 @@ async fn test_method_availability_basic(_: PgPoolOptions, options: PgConnectOpti
     );
     assert_eq!(find("biometric")["available"].as_bool(), Some(true));
     assert_eq!(find("mobileapprove")["available"].as_bool(), Some(true));
-    // FIDO2 VPN MFA is not supported by XGuard.
-    assert_eq!(find("fido2")["available"].as_bool(), Some(false));
-    assert_eq!(find("fido2")["reason"].as_str(), Some("not_supported"));
+    // FIDO2 security keys need no deployment-level setup.
+    assert_eq!(find("fido2")["available"].as_bool(), Some(true));
+    assert_eq!(find("fido2")["reason"].as_str(), Some("available"));
 
     // With an enabled provider, OpenID can be used in MFA flows.
     let response = client
