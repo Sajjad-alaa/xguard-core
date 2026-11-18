@@ -1,9 +1,9 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { m } from '../../paraglide/messages';
 import { Page } from '../../shared/components/Page/Page';
-import { instanceBehavior } from '../../shared/defaults/instanceBehavior';
 import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
 import {
+  getClientSettingsQueryOptions,
   getGroupsInfoQueryOptions,
   getLocationsQueryOptions,
   getUsersOverviewQueryOptions,
@@ -15,7 +15,7 @@ import { CEGroupModal } from './modals/CEGroupModal/CEGroupModal';
 
 export const GroupsPage = () => {
   const { data: groups } = useSuspenseQuery(getGroupsInfoQueryOptions);
-  const enterpriseSettings = instanceBehavior;
+  const { data: enterpriseSettings } = useSuspenseQuery(getClientSettingsQueryOptions);
   const { data: locations } = useSuspenseQuery(getLocationsQueryOptions);
   const { data: users } = useSuspenseQuery(getUsersOverviewQueryOptions);
   const groupClientTrafficPolicies = enterpriseSettings.group_client_traffic_policies ?? {

@@ -160,6 +160,7 @@ pub enum EventType {
     MfaFlowUpdated,
     MfaFlowDeleted,
     LocationMfaFlowsAssigned,
+    LocationGroupMtusChanged,
     DevicePostureCheckPassed,
     DevicePostureCheckFailed,
     // LDAP sync events

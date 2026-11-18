@@ -1213,6 +1213,31 @@ fn api_event_cases() -> Vec<EventTestCase> {
             module: ActivityLogModule::XGuard,
             description_contains: Some("MFA flow"),
         },
+        EventTestCase {
+            name: "ClientSettingsUpdated",
+            message: api_message(ApiEventType::ClientSettingsUpdated {
+                before: xguard_common::db::models::client_settings::ClientSettingsInfo::default(),
+                after: xguard_common::db::models::client_settings::ClientSettingsInfo::default(),
+            }),
+            event_type: EventType::EnterpriseSettingsUpdated,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("client and device settings"),
+        },
+        EventTestCase {
+            name: "LocationGroupMtusChanged",
+            message: api_message(ApiEventType::LocationGroupMtusChanged {
+                location_id: location.id,
+                location_name: location.name.clone(),
+                before: Vec::new(),
+                after: vec![xguard_common::db::models::wireguard::GroupClientMtu {
+                    client_mtu: 1280,
+                    group_ids: vec![7],
+                }],
+            }),
+            event_type: EventType::LocationGroupMtusChanged,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("group MTU"),
+        },
     ];
 
     assert_eq!(

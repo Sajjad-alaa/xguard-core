@@ -1,5 +1,5 @@
-import { instanceBehavior } from '../../../../../../../shared/defaults/instanceBehavior';
 import './style.scss';
+import { useQuery } from '@tanstack/react-query';
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -19,6 +19,7 @@ import { openModal } from '../../../../../../../shared/hooks/modalControls/modal
 import { ModalName } from '../../../../../../../shared/hooks/modalControls/modalTypes';
 import { useApp } from '../../../../../../../shared/hooks/useApp';
 import { useAuth } from '../../../../../../../shared/hooks/useAuth';
+import { getClientSettingsQueryOptions } from '../../../../../../../shared/query';
 import { displayDate } from '../../../../../../../shared/utils/displayDate';
 import { Badge } from '../../../../../../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../../../../../../shared/xguard-ui/components/Button/Button';
@@ -89,7 +90,7 @@ const columnHelper = createColumnHelper<RowData>();
 const DevicesTable = ({ rowData }: { rowData: RowData[] }) => {
   const info = useApp((s) => s.appInfo);
   const isAdmin = useAuth((s) => s.isAdmin);
-  const enterpriseSettings = instanceBehavior;
+  const { data: enterpriseSettings } = useQuery(getClientSettingsQueryOptions);
   const devices = useUserProfile((s) => s.devices);
   const user = useUserProfile((s) => s.user);
   const username = user.username;
@@ -118,7 +119,14 @@ const DevicesTable = ({ rowData }: { rowData: RowData[] }) => {
         });
       },
     }),
-    [canModifyDevices, devices, user, info.network_present, isAdmin],
+    [
+      canModifyDevices,
+      devices,
+      user,
+      info.network_present,
+      isAdmin,
+      enterpriseSettings?.only_client_activation,
+    ],
   );
 
   const makeRowMenu = useCallback(
@@ -205,7 +213,13 @@ const DevicesTable = ({ rowData }: { rowData: RowData[] }) => {
       });
       return [{ items }];
     },
-    [reservedNames, username, isAdmin, reservedPubkeys],
+    [
+      reservedNames,
+      username,
+      isAdmin,
+      reservedPubkeys,
+      enterpriseSettings?.only_client_activation,
+    ],
   );
 
   const tableColumns = useMemo(

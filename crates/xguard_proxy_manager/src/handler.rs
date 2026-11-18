@@ -34,7 +34,7 @@ use xguard_common::{
     VERSION,
     db::{
         Id,
-        models::{Certificates, Settings, proxy::Proxy},
+        models::{Certificates, ClientSettings, Settings, proxy::Proxy},
     },
 };
 use xguard_core::{
@@ -408,11 +408,19 @@ impl ProxyHandler {
             });
 
             // Push public settings (Edge UI controls) to the newly-connected proxy.
-            let public_settings = edge_public_settings(&Settings::get_current_settings());
-            let _ = tx.send(CoreResponse {
-                id: 0,
-                payload: Some(core_response::Payload::PublicSettings(public_settings)),
-            });
+            // Skipped when the settings cannot be read: the Edge then keeps its previous values
+            // rather than being told to show pages the admin may have hidden.
+            match ClientSettings::current(&self.pool).await {
+                Ok(client) => {
+                    let public_settings =
+                        edge_public_settings(&Settings::get_current_settings(), &client);
+                    let _ = tx.send(CoreResponse {
+                        id: 0,
+                        payload: Some(core_response::Payload::PublicSettings(public_settings)),
+                    });
+                }
+                Err(err) => error!("Failed to load client settings for the Edge: {err}"),
+            }
 
             // If a certificate has already been provisioned, push it to the newly-connected
             // proxy immediately so it can start serving HTTPS without a manual trigger.
@@ -1228,11 +1236,19 @@ impl ProxyHandler {
         });
 
         // Push public settings to the test proxy.
-        let public_settings = edge_public_settings(&Settings::get_current_settings());
-        let _ = tx.send(CoreResponse {
-            id: 0,
-            payload: Some(core_response::Payload::PublicSettings(public_settings)),
-        });
+        // Skipped when the settings cannot be read: the Edge then keeps its previous values
+        // rather than being told to show pages the admin may have hidden.
+        match ClientSettings::current(&self.pool).await {
+            Ok(client) => {
+                let public_settings =
+                    edge_public_settings(&Settings::get_current_settings(), &client);
+                let _ = tx.send(CoreResponse {
+                    id: 0,
+                    payload: Some(core_response::Payload::PublicSettings(public_settings)),
+                });
+            }
+            Err(err) => error!("Failed to load client settings for the Edge: {err}"),
+        }
 
         let result = self
             .message_loop(tx, tx_set.wireguard.clone(), &mut resp_stream)

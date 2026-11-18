@@ -2,6 +2,7 @@ pub(crate) mod support;
 
 mod acme;
 mod bidi;
+mod client_settings;
 mod enrollment;
 mod lifecycle;
 mod mfa;

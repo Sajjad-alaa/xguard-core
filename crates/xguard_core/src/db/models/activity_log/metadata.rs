@@ -652,3 +652,17 @@ pub struct OidcDirectorySyncGroupMemberMetadata {
     pub group: Group<Id>,
     pub user: UserNoSecrets,
 }
+
+#[derive(Serialize)]
+pub struct ClientSettingsUpdateMetadata {
+    pub before: xguard_common::db::models::client_settings::ClientSettingsInfo,
+    pub after: xguard_common::db::models::client_settings::ClientSettingsInfo,
+}
+
+#[derive(Serialize)]
+pub struct LocationGroupMtusMetadata {
+    pub location_id: Id,
+    pub location_name: String,
+    pub before: Vec<xguard_common::db::models::wireguard::GroupClientMtu>,
+    pub after: Vec<xguard_common::db::models::wireguard::GroupClientMtu>,
+}

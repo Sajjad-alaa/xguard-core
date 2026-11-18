@@ -14,7 +14,11 @@ use xguard_common::{
     config::server_config,
     db::{
         Id,
-        models::{Settings, User, WireguardNetwork, vpn_client_session::VpnClientMfaMethod},
+        models::{
+            ClientSettings, ClientTrafficPolicy as XGuardClientTrafficPolicy, Settings, User,
+            WireguardNetwork, client_settings::effective_client_traffic_policy,
+            vpn_client_session::VpnClientMfaMethod,
+        },
     },
     types::UrlParseError,
 };
@@ -153,6 +157,9 @@ pub struct InstanceInfo {
     proxy_url: Url,
     username: String,
     smtp_configured: bool,
+    /// The user's effective traffic policy (instance default resolved against their groups).
+    client_traffic_policy: XGuardClientTrafficPolicy,
+    disable_tunnels: bool,
     /// The provider users can sign in with through Edge (display name and kind).
     openid: Option<(Option<String>, ProviderKind)>,
     pub configured_methods: Vec<VpnClientMfaMethod>,
@@ -192,6 +199,10 @@ impl InstanceInfo {
                 configured_methods.push(method);
             }
         }
+        let client_settings = ClientSettings::current(pool).await?;
+        let client_traffic_policy =
+            effective_client_traffic_policy(pool, client_settings.client_traffic_policy, user.id)
+                .await?;
         let url = Settings::url()?;
         let proxy_url = settings.proxy_public_url()?;
         Ok(Self {
@@ -201,9 +212,21 @@ impl InstanceInfo {
             proxy_url,
             username: user.username.clone(),
             smtp_configured,
+            client_traffic_policy,
+            disable_tunnels: client_settings.disable_tunnels,
             openid,
             configured_methods,
         })
+    }
+}
+
+/// The wire value of a client traffic policy.
+#[must_use]
+pub const fn proto_traffic_policy(policy: XGuardClientTrafficPolicy) -> ClientTrafficPolicy {
+    match policy {
+        XGuardClientTrafficPolicy::None => ClientTrafficPolicy::None,
+        XGuardClientTrafficPolicy::DisableAllTraffic => ClientTrafficPolicy::DisableAllTraffic,
+        XGuardClientTrafficPolicy::ForceAllTraffic => ClientTrafficPolicy::ForceAllTraffic,
     }
 }
 
@@ -217,15 +240,16 @@ impl From<InstanceInfo> for xguard_proto::client_types::InstanceInfo {
             username: instance.username,
             // Ensure backwards compatibility.
             #[allow(deprecated)]
-            disable_all_traffic: false,
-            client_traffic_policy: Some(ClientTrafficPolicy::None as i32),
+            disable_all_traffic: instance.client_traffic_policy
+                == XGuardClientTrafficPolicy::DisableAllTraffic,
+            client_traffic_policy: Some(proto_traffic_policy(instance.client_traffic_policy) as i32),
             enterprise_enabled: false,
             openid_display_name: instance.openid.as_ref().and_then(|(name, _)| name.clone()),
             openid_provider_kind: instance
                 .openid
                 .as_ref()
                 .map(|(_, kind)| OpenIdProviderKind::from(*kind) as i32),
-            disable_tunnels: Some(false),
+            disable_tunnels: Some(instance.disable_tunnels),
             smtp_configured: Some(instance.smtp_configured),
             openid_available: Some(instance.openid.is_some()),
             mfa_user_state: Some(MfaUserState {

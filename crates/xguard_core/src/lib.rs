@@ -106,6 +106,7 @@ use crate::{
             totp_disable, totp_enable, totp_secret, webauthn_end, webauthn_finish, webauthn_init,
             webauthn_start,
         },
+        client_settings::{get_client_settings, patch_client_settings},
         component_setup::{adopt_gateway, setup_gateway_tls_stream},
         core_certs::{get_ca, get_certs, set_external_url_settings, set_internal_url_settings},
         directory::{preview_directory_sync, sync_directory, test_directory},
@@ -180,6 +181,7 @@ pub mod auth;
 pub mod cert_settings;
 pub mod db;
 pub mod device_access;
+pub mod device_policy;
 pub mod directory;
 pub mod dirsync;
 pub mod enrollment_management;
@@ -409,6 +411,15 @@ pub fn build_webapp(
                 get(get_settings).put(update_settings).patch(patch_settings),
             )
             .route("/settings/{id}", put(set_default_branding))
+            // client and device settings; `settings_enterprise` is the pre-XGuard path
+            .route(
+                "/client_settings",
+                get(get_client_settings).patch(patch_client_settings),
+            )
+            .route(
+                "/settings_enterprise",
+                get(get_client_settings).patch(patch_client_settings),
+            )
             // settings for frontend
             .route("/settings_essentials", get(get_settings_essentials))
             .route("/ldap/test", post(test_directory))

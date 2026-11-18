@@ -21,6 +21,9 @@ describe('XGuard feature availability (no license tiers)', () => {
     expect(canUseEnterpriseFeature(null).result).toBe(true);
     expect(canUseEnterpriseFeature(null, LicenseFeature.ComponentHa).result).toBe(true);
     expect(canUseEnterpriseFeature(null, LicenseFeature.MfaFlow).result).toBe(true);
+    expect(canUseEnterpriseFeature(null, LicenseFeature.GroupMTUOverride).result).toBe(
+      true,
+    );
   });
 
   it('reports features XGuard does not implement as unavailable', () => {
@@ -28,7 +31,6 @@ describe('XGuard feature availability (no license tiers)', () => {
       LicenseFeature.ServiceLocations,
       LicenseFeature.DevicePosture,
       LicenseFeature.AclAllowedIps,
-      LicenseFeature.GroupMTUOverride,
       LicenseFeature.Fido2,
     ]) {
       expect(isFeatureSupported(feature)).toBe(false);

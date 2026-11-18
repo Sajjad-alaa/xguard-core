@@ -240,6 +240,12 @@ export const getSettingsQueryOptions = queryOptions({
   select: (resp) => resp.data,
 });
 
+export const getClientSettingsQueryOptions = queryOptions({
+  queryFn: api.settings.getClientSettings,
+  queryKey: ['client_settings'],
+  select: (resp) => resp.data,
+});
+
 export const getActivityLogEventQueryOptions = (id: number) =>
   queryOptions({
     queryFn: () => api.getActivityLogEvent(id).then((resp) => resp.data),

@@ -137,7 +137,7 @@ pub struct WireguardNetwork<I = NoId> {
 }
 
 /// Client MTU for members of the listed groups.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GroupClientMtu {
     pub client_mtu: i32, // Should be u32, but sqlx won't allow that.
@@ -1462,6 +1462,27 @@ impl WireguardNetwork<Id> {
         .await?;
 
         Ok(group_mtu.or(self.client_mtu))
+    }
+
+    /// Group MTU overrides that apply to `user_id`, per location, in one query. When several of
+    /// the user's groups override the same location, the lowest MTU wins: it is the one every
+    /// path the admins configured for is known to carry.
+    pub async fn group_client_mtus_for_user<'e, E>(
+        executor: E,
+        user_id: Id,
+    ) -> sqlx::Result<HashMap<Id, i32>>
+    where
+        E: PgExecutor<'e>,
+    {
+        let rows: Vec<(Id, i32)> = sqlx::query_as(
+            "SELECT gcm.network_id, min(gcm.client_mtu) FROM group_client_mtu gcm \
+            JOIN group_user gu ON gu.group_id = gcm.group_id \
+            WHERE gu.user_id = $1 GROUP BY gcm.network_id",
+        )
+        .bind(user_id)
+        .fetch_all(executor)
+        .await?;
+        Ok(rows.into_iter().collect())
     }
 
     /// Replace group client MTU overrides.

@@ -1780,10 +1780,7 @@ async fn test_service_locations_are_not_supported(_: PgPoolOptions, options: PgC
 }
 
 #[sqlx::test]
-async fn test_group_client_mtu_overrides_are_not_supported(
-    _: PgPoolOptions,
-    options: PgConnectOptions,
-) {
+async fn test_group_client_mtu_overrides_are_saved(_: PgPoolOptions, options: PgConnectOptions) {
     let pool = setup_pool(options).await;
     let (mut client, client_state) = make_test_client(pool).await;
     authenticate_admin(&mut client).await;
@@ -1802,5 +1799,16 @@ async fn test_group_client_mtu_overrides_are_not_supported(
         .json(&create_data)
         .send()
         .await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let id = response.json::<Value>().await["id"].as_i64().unwrap();
+    let details: Value = client
+        .get(format!("/api/v1/network/{id}"))
+        .send()
+        .await
+        .json()
+        .await;
+    assert_eq!(
+        details["group_client_mtus"],
+        json!([{"client_mtu": 1300, "group_ids": [group]}])
+    );
 }
