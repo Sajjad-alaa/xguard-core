@@ -1,5 +1,6 @@
 mod activity_log;
 mod auth;
+mod client_settings;
 mod common;
 mod component_setup;
 mod core_certs;

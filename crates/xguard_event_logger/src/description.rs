@@ -303,6 +303,17 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::EnrollmentTokenAdded { user } => {
             Some(format!("Added enrollment token for user {user}"))
         }
+        ApiEventType::ClientSettingsUpdated { .. } => {
+            Some("Updated client and device settings".into())
+        }
+        ApiEventType::LocationGroupMtusChanged {
+            location_name,
+            after,
+            ..
+        } => Some(format!(
+            "Set {} group MTU override(s) for location '{location_name}'",
+            after.len()
+        )),
     }
 }
 

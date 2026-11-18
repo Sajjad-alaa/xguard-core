@@ -10,7 +10,7 @@ use xguard_common::{
     db::{
         Id,
         models::{
-            Settings, SettingsEssentials,
+            ClientSettings, Settings, SettingsEssentials,
             settings::{SettingsPatch, update_current_settings},
         },
     },
@@ -31,12 +31,13 @@ use crate::{
 static DEFAULT_NAV_LOGO_URL: &str = "/svg/xguard-nav-logo.svg";
 static DEFAULT_MAIN_LOGO_URL: &str = "/svg/logo-xguard-white.svg";
 
-/// Settings the Edge (proxy) shows on its public pages.
+/// Settings the Edge (proxy) shows on its public pages. Password reset needs email delivery, so
+/// it is offered only when the admin allows it and SMTP is configured.
 #[must_use]
-pub fn edge_public_settings(settings: &Settings) -> PublicSettings {
+pub fn edge_public_settings(settings: &Settings, client: &ClientSettings) -> PublicSettings {
     PublicSettings {
-        display_password_reset: settings.smtp_configured(),
-        display_download_step: true,
+        display_password_reset: client.display_password_reset && settings.smtp_configured(),
+        display_download_step: client.display_download_step,
         public_url: settings.configured_public_proxy_url(),
     }
 }
@@ -56,11 +57,18 @@ pub(crate) fn public_settings_message(public_settings: PublicSettings) -> ProxyC
 /// logged rather than propagated, since proxies also receive the current values when they next
 /// connect.
 pub(crate) async fn broadcast_public_settings(
-    _pool: &PgPool,
+    pool: &PgPool,
     settings: &Settings,
     proxy_control_tx: &mpsc::Sender<ProxyControlMessage>,
 ) {
-    let message = public_settings_message(edge_public_settings(settings));
+    let client = match ClientSettings::current(pool).await {
+        Ok(client) => client,
+        Err(err) => {
+            error!("Failed to load client settings for the Edge public settings: {err}");
+            return;
+        }
+    };
+    let message = public_settings_message(edge_public_settings(settings, &client));
     if let Err(err) = proxy_control_tx.send(message).await {
         error!("Failed to broadcast PublicSettings after public proxy URL change: {err:?}");
     }

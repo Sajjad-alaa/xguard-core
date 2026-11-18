@@ -162,6 +162,7 @@ pub(crate) async fn network_device_configs(
     debug!("Creating a WireGuard config for network device {device_id}.");
 
     let device = device_for_admin_or_self(&appstate.pool, &session, device_id).await?;
+    crate::device_policy::ensure_may_configure_manually(&appstate.pool, &session).await?;
     let user = User::find_by_id(&appstate.pool, device.user_id)
         .await?
         .ok_or(WebError::ObjectNotFound(format!(

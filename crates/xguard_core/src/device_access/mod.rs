@@ -3,6 +3,8 @@
 //! This module owns the process of assigning a device to a VPN location and
 //! generating its WireGuard configuration.
 
+use std::collections::HashMap;
+
 use sqlx::PgConnection;
 use tracing::warn;
 use xguard_common::{
@@ -22,12 +24,41 @@ use xguard_common::{
 /// Build a `DeviceConfig` for a device already assigned to a network.
 ///
 /// Uses the location's configured AllowedIPs and generates the WireGuard
-/// config string.
+/// config string. The client MTU is the user's lowest group override for this location, else the
+/// location's `client_mtu`. When building configs for several locations, load the overrides once
+/// with [`WireguardNetwork::group_client_mtus_for_user`] and use
+/// [`build_device_config_with_group_mtus`].
 pub async fn build_device_config(
     conn: &mut PgConnection,
     network: &WireguardNetwork<Id>,
     wireguard_network_device: &WireguardNetworkDevice,
     user: &User<Id>,
+) -> Result<DeviceConfig, DeviceError> {
+    let mtu = network
+        .client_mtu_for_user(&mut *conn, user.id)
+        .await
+        .map_err(|err| DeviceError::Unexpected(err.to_string()))?;
+    build_config(conn, network, wireguard_network_device, user, mtu).await
+}
+
+/// [`build_device_config`] with the user's group MTU overrides already loaded (keyed by location).
+pub async fn build_device_config_with_group_mtus(
+    conn: &mut PgConnection,
+    network: &WireguardNetwork<Id>,
+    wireguard_network_device: &WireguardNetworkDevice,
+    user: &User<Id>,
+    group_mtus: &HashMap<Id, i32>,
+) -> Result<DeviceConfig, DeviceError> {
+    let mtu = group_mtus.get(&network.id).copied().or(network.client_mtu);
+    build_config(conn, network, wireguard_network_device, user, mtu).await
+}
+
+async fn build_config(
+    conn: &mut PgConnection,
+    network: &WireguardNetwork<Id>,
+    wireguard_network_device: &WireguardNetworkDevice,
+    user: &User<Id>,
+    mtu: Option<i32>,
 ) -> Result<DeviceConfig, DeviceError> {
     let effective_ips = network.allowed_ips.clone();
 
@@ -43,8 +74,6 @@ pub async fn build_device_config(
     } else {
         Some(LocationMfaMode::Disabled)
     };
-
-    let mtu = network.client_mtu;
 
     // Resolve the location's MFA flow for this user, carrying the ordered steps (methods only;
     // per-method `configured` flags are computed separately). Empty when MFA is disabled or no
@@ -105,6 +134,9 @@ pub async fn join_device_to_all_networks(
     user: &User<Id>,
 ) -> Result<(Vec<DeviceNetworkInfo>, Vec<DeviceConfig>), DeviceError> {
     let networks = WireguardNetwork::all(&mut *conn).await?;
+    let group_mtus = WireguardNetwork::group_client_mtus_for_user(&mut *conn, user.id)
+        .await
+        .map_err(|err| DeviceError::Unexpected(err.to_string()))?;
 
     let mut configs = Vec::new();
     let mut network_info = Vec::new();
@@ -146,8 +178,14 @@ pub async fn join_device_to_all_networks(
             .await?;
         network_info.push(device_network_info);
 
-        let device_config =
-            build_device_config(conn, &network, &wireguard_network_device, user).await?;
+        let device_config = build_device_config_with_group_mtus(
+            conn,
+            &network,
+            &wireguard_network_device,
+            user,
+            &group_mtus,
+        )
+        .await?;
         configs.push(device_config);
     }
 
@@ -173,12 +211,12 @@ mod tests {
             group::Group,
             mfa_flow::{LocationMfaFlowAssignment, MfaFlow, MfaFlowStep},
             vpn_client_session::VpnClientMfaMethod,
-            wireguard::LocationMfaMode,
+            wireguard::{GroupClientMtu, LocationMfaMode},
         },
         setup_pool,
     };
 
-    use super::build_device_config;
+    use super::{build_device_config, build_device_config_with_group_mtus};
 
     async fn create_user(pool: &PgPool, username: &str) -> User<Id> {
         User::new(
@@ -332,5 +370,123 @@ mod tests {
         assert!(!config.mfa_enabled);
         assert_eq!(config.location_mfa_mode, Some(LocationMfaMode::Disabled));
         assert_eq!(config.steps, [] as [MfaFlowStep<Id>; 0]);
+    }
+
+    #[sqlx::test]
+    async fn test_build_device_config_resolves_group_client_mtu(
+        _: PgPoolOptions,
+        options: PgConnectOptions,
+    ) {
+        let pool = setup_pool(options).await;
+
+        let group_a = Group::new("mtu-a").save(&pool).await.unwrap();
+        let group_b = Group::new("mtu-b").save(&pool).await.unwrap();
+        let both_user = create_user(&pool, "both-user").await;
+        let a_user = create_user(&pool, "a-user").await;
+        let plain_user = create_user(&pool, "plain-user").await;
+        both_user.add_to_group(&pool, &group_a).await.unwrap();
+        both_user.add_to_group(&pool, &group_b).await.unwrap();
+        a_user.add_to_group(&pool, &group_a).await.unwrap();
+
+        let mut network = WireguardNetwork::default()
+            .try_set_address("10.0.0.1/24")
+            .unwrap()
+            .save(&pool)
+            .await
+            .unwrap();
+        network.client_mtu = Some(1400);
+        network.save(&pool).await.unwrap();
+        // A second location with its own override, to check overrides are kept per location.
+        let mut other = WireguardNetwork::default()
+            .try_set_address("10.1.0.1/24")
+            .unwrap();
+        other.name = "other".into();
+        other.pubkey = "other-location-pubkey".into();
+        let other = other.save(&pool).await.unwrap();
+        let mut conn = pool.acquire().await.unwrap();
+        network
+            .set_group_client_mtus(
+                &mut conn,
+                &[
+                    GroupClientMtu {
+                        client_mtu: 1300,
+                        group_ids: vec![group_a.id],
+                    },
+                    GroupClientMtu {
+                        client_mtu: 1280,
+                        group_ids: vec![group_b.id],
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+        other
+            .set_group_client_mtus(
+                &mut conn,
+                &[GroupClientMtu {
+                    client_mtu: 1200,
+                    group_ids: vec![group_a.id],
+                }],
+            )
+            .await
+            .unwrap();
+
+        let mtu_for = async |network: &WireguardNetwork<Id>, user: &User<Id>| {
+            let wireguard_network_device = WireguardNetworkDevice::new(
+                network.id,
+                create_device(&pool, user.id).await.id,
+                vec![IpAddr::V4(Ipv4Addr::new(10, 0, 0, 10))],
+            );
+            let mut conn = pool.acquire().await.unwrap();
+            let mtu = build_device_config(&mut conn, network, &wireguard_network_device, user)
+                .await
+                .unwrap()
+                .mtu;
+            // The batched path agrees with the per-location path.
+            let group_mtus = WireguardNetwork::group_client_mtus_for_user(&mut *conn, user.id)
+                .await
+                .unwrap();
+            let batched = build_device_config_with_group_mtus(
+                &mut conn,
+                network,
+                &wireguard_network_device,
+                user,
+                &group_mtus,
+            )
+            .await
+            .unwrap()
+            .mtu;
+            assert_eq!(mtu, batched);
+            Device::find_by_id(&pool, wireguard_network_device.device_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .delete(&pool)
+                .await
+                .unwrap();
+            mtu
+        };
+
+        // The lowest override among the user's groups wins.
+        assert_eq!(mtu_for(&network, &both_user).await, Some(1280));
+        assert_eq!(mtu_for(&network, &a_user).await, Some(1300));
+        assert_eq!(mtu_for(&other, &a_user).await, Some(1200));
+        // Users without an override fall back to the location value.
+        assert_eq!(mtu_for(&network, &plain_user).await, Some(1400));
+        assert_eq!(mtu_for(&other, &plain_user).await, None);
+
+        // Overrides apply without a location MTU.
+        network.client_mtu = None;
+        network.save(&pool).await.unwrap();
+        assert_eq!(mtu_for(&network, &a_user).await, Some(1300));
+        assert_eq!(mtu_for(&network, &plain_user).await, None);
+
+        // The batch query returns one entry per location.
+        let mtus = WireguardNetwork::group_client_mtus_for_user(&pool, both_user.id)
+            .await
+            .unwrap();
+        assert_eq!(mtus.len(), 2);
+        assert_eq!(mtus[&network.id], 1280);
+        assert_eq!(mtus[&other.id], 1200);
     }
 }

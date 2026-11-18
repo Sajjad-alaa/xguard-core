@@ -27,7 +27,12 @@ use crate::handlers::ApiErrorResponse;
 use crate::{
     appstate::AppState,
     auth::{AdminRole, SessionInfo},
-    device_access::{build_device_config, join_device_to_all_networks},
+    device_access::{
+        build_device_config, build_device_config_with_group_mtus, join_device_to_all_networks,
+    },
+    device_policy::{
+        ONLY_CLIENT_ACTIVATION_MSG, ensure_may_configure_manually, ensure_may_manage_devices,
+    },
     events::{ApiEvent, ApiEventType, ApiRequestContext},
     grpc::GatewayCommand,
     handlers::{
@@ -96,6 +101,10 @@ pub struct WireguardNetworkData {
 const MIN_PEER_DISCONNECT_THRESHOLD_WITH_MFA: i32 = 120;
 /// Smallest MTU WireGuard can carry a packet over.
 const MIN_MTU: i32 = 72;
+/// The largest MTU an IPv4/IPv6 interface can have.
+const MAX_MTU: i32 = 65535;
+/// Bounds the work one location update can cause.
+const MAX_GROUP_MTU_ASSIGNMENTS: usize = 10_000;
 
 /// Build the structured `400` response for the `mfa_enabled` precondition: a location cannot be
 /// MFA-enabled while no MFA flow exists to assign to it.
@@ -220,6 +229,11 @@ impl WireguardNetworkData {
                 ));
             }
             for group_id in &item.group_ids {
+                if group_ids.len() >= MAX_GROUP_MTU_ASSIGNMENTS {
+                    return Err(WebError::BadRequest(format!(
+                        "group_client_mtus: at most {MAX_GROUP_MTU_ASSIGNMENTS} groups"
+                    )));
+                }
                 if !group_ids.insert(*group_id) {
                     return Err(WebError::BadRequest(format!(
                         "group_client_mtus: group {group_id} has more than one override"
@@ -245,6 +259,10 @@ fn validate_min_mtu(field: &str, mtu: i32) -> Result<(), WebError> {
     if mtu < MIN_MTU {
         Err(WebError::BadRequest(format!(
             "{field} must be at least {MIN_MTU}"
+        )))
+    } else if mtu > MAX_MTU {
+        Err(WebError::BadRequest(format!(
+            "{field} must be at most {MAX_MTU}"
         )))
     } else {
         Ok(())
@@ -354,15 +372,6 @@ pub(crate) async fn create_network(
         });
     }
 
-    if data
-        .group_client_mtus
-        .as_ref()
-        .is_some_and(|overrides| !overrides.is_empty())
-    {
-        error!("Adding location {network_name} blocked! Group MTU overrides are not supported.");
-        return Ok(WebError::BadRequest("Group MTU overrides are not supported.".into()).into());
-    }
-
     data.validate_peer_disconnect_threshold()?;
     data.validate_service_location_mfa()?;
     data.validate_keepalive_interval()?;
@@ -396,9 +405,12 @@ pub(crate) async fn create_network(
     network
         .set_allowed_groups(&mut transaction, &data.allowed_groups)
         .await?;
-    if let Some(overrides) = &data.group_client_mtus {
+    let group_mtus_after = if let Some(overrides) = &data.group_client_mtus {
         save_group_client_mtus(&network, &mut transaction, overrides).await?;
-    }
+        network.fetch_group_client_mtus(&mut *transaction).await?
+    } else {
+        Vec::new()
+    };
 
     // generate IP addresses for existing devices
     network.add_all_allowed_devices(&mut transaction).await?;
@@ -441,6 +453,17 @@ pub(crate) async fn create_network(
                 location_id: network.id,
                 location_name: network.name.clone(),
                 assignments: LocationMfaFlowAssignment::snapshot(&mfa_assignments),
+            }),
+        })?;
+    }
+    if !group_mtus_after.is_empty() {
+        appstate.emit_event(ApiEvent {
+            context: context.clone(),
+            event: Box::new(ApiEventType::LocationGroupMtusChanged {
+                location_id: network.id,
+                location_name: network.name.clone(),
+                before: Vec::new(),
+                after: group_mtus_after,
             }),
         })?;
     }
@@ -542,16 +565,14 @@ pub(crate) async fn modify_network(
     network
         .set_allowed_groups(&mut transaction, &data.allowed_groups)
         .await?;
-    if data
-        .group_client_mtus
-        .as_ref()
-        .is_some_and(|overrides| !overrides.is_empty())
-    {
-        warn!(
-            location_id = network.id,
-            "Ignoring group MTU overrides: not supported"
-        );
-    }
+    // `None` keeps the overrides; `Some` replaces them.
+    let group_mtus_before = network.fetch_group_client_mtus(&mut *transaction).await?;
+    let group_mtus_after = if let Some(overrides) = &data.group_client_mtus {
+        save_group_client_mtus(&network, &mut transaction, overrides).await?;
+        network.fetch_group_client_mtus(&mut *transaction).await?
+    } else {
+        group_mtus_before.clone()
+    };
 
     // Flow order is significant, but group order is not, so normalize group IDs before comparing.
     let current_mfa_assignments = normalize_mfa_flow_assignments(
@@ -619,6 +640,17 @@ pub(crate) async fn modify_network(
                 location_id: network.id,
                 location_name: network.name.clone(),
                 assignments: LocationMfaFlowAssignment::snapshot(&mfa_assignments),
+            }),
+        })?;
+    }
+    if group_mtus_before != group_mtus_after {
+        appstate.emit_event(ApiEvent {
+            context: context.clone(),
+            event: Box::new(ApiEventType::LocationGroupMtusChanged {
+                location_id: network.id,
+                location_name: network.name.clone(),
+                before: group_mtus_before,
+                after: group_mtus_after,
             }),
         })?;
     }
@@ -1092,6 +1124,9 @@ pub(crate) async fn add_device(
     );
 
     let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
+    // Adding a device here means supplying its WireGuard key: manual configuration.
+    ensure_may_manage_devices(&appstate.pool, &session).await?;
+    ensure_may_configure_manually(&appstate.pool, &session).await?;
 
     // Disabled users' devices never get network access (see
     // `is_device_allowed_in_network`), and get stripped on the next sync even if
@@ -1244,6 +1279,19 @@ pub(crate) async fn modify_device(
 
     let mut device = device_for_admin_or_self(&appstate.pool, &session, device_id).await?;
     let before = device.clone();
+    let client_settings = ensure_may_manage_devices(&appstate.pool, &session).await?;
+    // A device set up by the client keeps its key; only the name may change.
+    if !client_settings.may_configure_manually(session.is_admin)
+        && (data.wireguard_pubkey != before.wireguard_pubkey
+            || data.description != before.description)
+    {
+        warn!(
+            "User {} tried to change the key or description of device {device_id}, but devices \
+            can only be set up through the XGuard client",
+            session.user.username
+        );
+        return Err(WebError::Forbidden(ONLY_CLIENT_ACTIVATION_MSG));
+    }
 
     let networks = WireguardNetwork::all(&appstate.pool).await?;
 
@@ -1378,6 +1426,7 @@ pub(crate) async fn delete_device(
     let mut transaction = appstate.pool.begin().await?;
 
     let device = device_for_admin_or_self(&mut *transaction, &session, device_id).await?;
+    ensure_may_manage_devices(&mut *transaction, &session).await?;
 
     let mut events = Vec::new();
 
@@ -1543,6 +1592,7 @@ pub(crate) async fn download_config(
 
     let network = find_network(network_id, &appstate.pool).await?;
     let device = device_for_admin_or_self(&appstate.pool, &session, device_id).await?;
+    ensure_may_configure_manually(&appstate.pool, &session).await?;
     let user = User::find_by_id(&appstate.pool, device.user_id)
         .await?
         .ok_or(WebError::ObjectNotFound(format!(
@@ -1600,6 +1650,7 @@ pub(crate) async fn user_device_configs(
     debug!("Creating WireGuard configs for user device {device_id}.");
 
     let device = device_for_admin_or_self(&appstate.pool, &session, device_id).await?;
+    ensure_may_configure_manually(&appstate.pool, &session).await?;
     let user = User::find_by_id(&appstate.pool, device.user_id)
         .await?
         .ok_or(WebError::ObjectNotFound(format!(
@@ -1607,6 +1658,7 @@ pub(crate) async fn user_device_configs(
             device.user_id
         )))?;
     let locations = WireguardNetwork::find_user_device_networks(&appstate.pool, device_id).await?;
+    let group_mtus = WireguardNetwork::group_client_mtus_for_user(&appstate.pool, user.id).await?;
 
     let mut result = Vec::new();
     for location in locations {
@@ -1621,8 +1673,14 @@ pub(crate) async fn user_device_configs(
             location.name
         );
         let mut conn = appstate.pool.acquire().await?;
-        let device_config =
-            build_device_config(&mut conn, &location, &location_device, &user).await?;
+        let device_config = build_device_config_with_group_mtus(
+            &mut conn,
+            &location,
+            &location_device,
+            &user,
+            &group_mtus,
+        )
+        .await?;
         result.push(DeviceWireGuardConfig {
             network_id: device_config.network_id,
             network_name: device_config.network_name,

@@ -1197,6 +1197,8 @@ export interface GroupClientTrafficPolicies {
   force_all_traffic: number[];
 }
 
+/** Instance-wide client and device settings (`/api/v1/client_settings`). Group overrides are
+ * only filled in for admins. */
 export interface SettingsEnterprise {
   admin_device_management: boolean;
   client_traffic_policy: ClientTrafficPolicyValue;
@@ -1206,6 +1208,11 @@ export interface SettingsEnterprise {
   disable_tunnels: boolean;
   group_client_traffic_policies: GroupClientTrafficPolicies;
 }
+
+export type ClientSettings = SettingsEnterprise;
+
+/** A partial update; `group_client_traffic_policies` replaces every group override. */
+export type ClientSettingsPatch = Partial<ClientSettings>;
 
 export type ApiDevicePostureOsRule =
   | {
@@ -1500,7 +1507,6 @@ export interface SettingsGeneral {
 
 export type Settings = SettingsBranding &
   SettingsGatewayNotifications &
-  SettingsEnterprise &
   SettingsLDAP &
   SettingsLicense &
   SettingsModules &

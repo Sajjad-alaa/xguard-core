@@ -626,6 +626,33 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     EventType::EnrollmentTokenAdded,
                     serde_json::to_value(EnrollmentTokenMetadata { user: user.into() }).ok(),
                 ),
+                ApiEventType::ClientSettingsUpdated { before, after } => (
+                    EventType::EnterpriseSettingsUpdated,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::ClientSettingsUpdateMetadata {
+                            before,
+                            after,
+                        },
+                    )
+                    .ok(),
+                ),
+                ApiEventType::LocationGroupMtusChanged {
+                    location_id,
+                    location_name,
+                    before,
+                    after,
+                } => (
+                    EventType::LocationGroupMtusChanged,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::LocationGroupMtusMetadata {
+                            location_id,
+                            location_name,
+                            before,
+                            after,
+                        },
+                    )
+                    .ok(),
+                ),
             };
 
             let module = api_event_module(&event_type);

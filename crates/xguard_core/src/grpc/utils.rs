@@ -25,7 +25,7 @@ use xguard_proto::{
 
 use super::InstanceInfo;
 use crate::{
-    device_access::build_device_config,
+    device_access::{build_device_config, build_device_config_with_group_mtus},
     grpc::{
         client_version::{ClientFeature, should_omit_location_for_device},
         should_prevent_service_location_usage,
@@ -134,6 +134,13 @@ pub async fn build_device_config_response(
         })?;
         let supports_multi_step_mfa =
             ClientFeature::MultiStepMfa.is_supported_by_device(device_info.as_ref());
+        // Group MTU overrides for every location, in one query.
+        let group_mtus = WireguardNetwork::group_client_mtus_for_user(pool, user.id)
+            .await
+            .map_err(|err| {
+                error!("Failed to fetch group MTU overrides: {err}");
+                Status::internal(format!("unexpected error: {err}"))
+            })?;
         for location in locations {
             let Some(wireguard_network_device) = assignments.remove(&location.id) else {
                 continue;
@@ -159,13 +166,18 @@ pub async fn build_device_config_response(
                 Status::internal(format!("unexpected error: {err}"))
             })?;
 
-            let device_config =
-                build_device_config(&mut conn, &location, &wireguard_network_device, &user)
-                    .await
-                    .map_err(|err| {
-                        error!("Failed to build device config: {err}");
-                        Status::internal(format!("unexpected error: {err}"))
-                    })?;
+            let device_config = build_device_config_with_group_mtus(
+                &mut conn,
+                &location,
+                &wireguard_network_device,
+                &user,
+                &group_mtus,
+            )
+            .await
+            .map_err(|err| {
+                error!("Failed to build device config: {err}");
+                Status::internal(format!("unexpected error: {err}"))
+            })?;
 
             if device_config.posture_check_required
                 && !ClientFeature::PostureChecks.is_supported_by_device(device_info.as_ref())

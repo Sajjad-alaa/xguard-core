@@ -19,7 +19,6 @@ const UNSUPPORTED_FEATURES: readonly LicenseFeatureValue[] = [
   LicenseFeature.ServiceLocations,
   LicenseFeature.DevicePosture,
   LicenseFeature.AclAllowedIps,
-  LicenseFeature.GroupMTUOverride,
   LicenseFeature.Fido2,
 ];
 

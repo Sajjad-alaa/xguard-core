@@ -737,6 +737,7 @@ pub(crate) async fn start_remote_desktop_configuration(
     );
     let user = user_for_admin_or_self(&appstate.pool, &session, &username).await?;
     debug!("Successfully fetched user data: {user:?}");
+    crate::device_policy::ensure_may_manage_devices(&appstate.pool, &session).await?;
 
     // if email is None assume that email should be sent to enrolling user
     let email = match data.email {

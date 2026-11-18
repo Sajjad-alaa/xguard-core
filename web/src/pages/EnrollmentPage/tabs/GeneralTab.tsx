@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import z from 'zod';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
-import type { Settings } from '../../../shared/api/types';
+import type { ClientSettings, Settings } from '../../../shared/api/types';
 import {
   ContextualHelpKey,
   ContextualHelpSidebar,
@@ -14,12 +14,16 @@ import { SettingsHeader } from '../../../shared/components/SettingsHeader/Settin
 import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
-import { getSettingsQueryOptions } from '../../../shared/query';
+import {
+  getClientSettingsQueryOptions,
+  getSettingsQueryOptions,
+} from '../../../shared/query';
 import {
   createNumericSelectOptions,
   withNumericFallbackOption,
 } from '../../../shared/utils/numericSelectOptions';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
 import { MarkedSection } from '../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
 import { MarkedSectionHeader } from '../../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
@@ -43,12 +47,15 @@ const enrollmentSessionTimeoutBaseOptions = createNumericSelectOptions({
 const generalTabFormSchema = z.object({
   enrollment_token_timeout_hours: z.number(m.form_error_required()).int().min(1),
   enrollment_session_timeout_minutes: z.number(m.form_error_required()).int().min(1),
+  display_download_step: z.boolean(),
+  display_password_reset: z.boolean(),
 });
 
 type GeneralTabFormFields = z.infer<typeof generalTabFormSchema>;
 
 export const GeneralTab = () => {
   const { data: settings } = useQuery(getSettingsQueryOptions);
+  const { data: clientSettings } = useQuery(getClientSettingsQueryOptions);
 
   return (
     <SettingsLayout
@@ -60,12 +67,20 @@ export const GeneralTab = () => {
         subtitle={m.settings_enrollment_page_subtitle()}
       />
       <SizedBox height={ThemeSpacing.Lg} />
-      {isPresent(settings) && <GeneralTabContent settings={settings} />}
+      {isPresent(settings) && isPresent(clientSettings) && (
+        <GeneralTabContent settings={settings} clientSettings={clientSettings} />
+      )}
     </SettingsLayout>
   );
 };
 
-const GeneralTabContent = ({ settings }: { settings: Settings }) => {
+const GeneralTabContent = ({
+  settings,
+  clientSettings,
+}: {
+  settings: Settings;
+  clientSettings: ClientSettings;
+}) => {
   const { mutateAsync: patchSettings } = useMutation({
     mutationFn: api.settings.patchSettings,
     meta: {
@@ -79,13 +94,25 @@ const GeneralTabContent = ({ settings }: { settings: Settings }) => {
     },
   });
 
+  const { mutateAsync: patchClientSettings } = useMutation({
+    mutationFn: api.settings.patchClientSettings,
+    meta: {
+      invalidate: ['client_settings'],
+    },
+    onError: () => {
+      Snackbar.error(m.settings_msg_save_failed());
+    },
+  });
+
   const defaultValues = useMemo(
     (): GeneralTabFormFields => ({
       enrollment_token_timeout_hours: settings.enrollment_token_timeout_hours ?? 24,
       enrollment_session_timeout_minutes:
         settings.enrollment_session_timeout_minutes ?? 10,
+      display_download_step: clientSettings.display_download_step,
+      display_password_reset: clientSettings.display_password_reset,
     }),
-    [settings],
+    [settings, clientSettings],
   );
 
   const enrollmentTokenTimeoutOptions = useMemo(
@@ -116,7 +143,16 @@ const GeneralTabContent = ({ settings }: { settings: Settings }) => {
       onChange: generalTabFormSchema,
     },
     onSubmit: async ({ value }) => {
-      // Always patch open-source settings
+      // The Edge display options live in the client settings; patch only what changed.
+      if (
+        value.display_download_step !== defaultValues.display_download_step ||
+        value.display_password_reset !== defaultValues.display_password_reset
+      ) {
+        await patchClientSettings({
+          display_download_step: value.display_download_step,
+          display_password_reset: value.display_password_reset,
+        });
+      }
       await patchSettings({
         enrollment_token_timeout_hours: value.enrollment_token_timeout_hours,
         enrollment_session_timeout_minutes: value.enrollment_session_timeout_minutes,
@@ -135,6 +171,31 @@ const GeneralTabContent = ({ settings }: { settings: Settings }) => {
         }}
       >
         <form.AppForm>
+          <MarkedSection icon="key">
+            <MarkedSectionHeader title={m.settings_enrollment_section_edge_ui_title()} />
+            <form.AppField name="display_password_reset">
+              {(field) => (
+                <field.FormInteractiveBlock
+                  data-testid="field-display-password-reset"
+                  variant="toggle"
+                  title={m.settings_enrollment_display_password_reset_label()}
+                  content={m.settings_enrollment_display_password_reset_content()}
+                />
+              )}
+            </form.AppField>
+            <SizedBox height={ThemeSpacing.Xl} />
+            <form.AppField name="display_download_step">
+              {(field) => (
+                <field.FormInteractiveBlock
+                  data-testid="field-display-download-step"
+                  variant="toggle"
+                  title={m.settings_enrollment_display_download_label()}
+                  content={m.settings_enrollment_display_download_content()}
+                />
+              )}
+            </form.AppField>
+          </MarkedSection>
+          <Divider spacing={ThemeSpacing.Xl2} />
           <MarkedSection icon="settings">
             <MarkedSectionHeader
               title={m.settings_enrollment_section_duration_title()}

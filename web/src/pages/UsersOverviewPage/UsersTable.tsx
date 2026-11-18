@@ -33,12 +33,12 @@ import {
 import { useSelectionModal } from '../../shared/components/modals/SelectionModal/useSelectionModal';
 import type { SelectionOption } from '../../shared/components/SelectionSection/type';
 import { TableValuesListCell } from '../../shared/components/TableValuesListCell/TableValuesListCell';
-import { instanceBehavior } from '../../shared/defaults/instanceBehavior';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import { useApp } from '../../shared/hooks/useApp';
 import { useAuth } from '../../shared/hooks/useAuth';
 import {
+  getClientSettingsQueryOptions,
   getGroupsInfoQueryOptions,
   getLicenseInfoQueryOptions,
   getSettingsQueryOptions,
@@ -140,7 +140,7 @@ export const UsersTable = () => {
     [usersData?.pages],
   );
   const { data: license } = useSuspenseQuery(getLicenseInfoQueryOptions);
-  const enterpriseSettings = instanceBehavior;
+  const { data: enterpriseSettings } = useQuery(getClientSettingsQueryOptions);
   const appInfo = useApp((s) => s.appInfo);
   const isAdmin = useAuth((s) => s.isAdmin);
   const authUsername = useAuth((s) => s.user?.username);

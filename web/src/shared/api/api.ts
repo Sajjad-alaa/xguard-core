@@ -32,6 +32,8 @@ import type {
   ChangeWebhookStateRequest,
   CheckReservedParams,
   CheckReservedResponse,
+  ClientSettings,
+  ClientSettingsPatch,
   CountResponse,
   CreateActivityLogStreamRequest,
   CreateAdminRequest,
@@ -506,6 +508,9 @@ const api = {
     ldapDryRun: (data: Settings) => client.post<LdapSyncReport>('/ldap/dry_run', data),
     ldapSync: (data: LdapSyncRequest) => client.post<LdapSyncReport>('/ldap/sync', data),
     getSettingsEssentials: () => client.get<SettingsEssentials>('/settings_essentials'),
+    getClientSettings: () => client.get<ClientSettings>('/client_settings'),
+    patchClientSettings: (data: ClientSettingsPatch) =>
+      client.patch<ClientSettings>('/client_settings', data),
   },
   mail: {
     sendTestEmail: (data: { to: string }) => client.post('/mail/test', data),

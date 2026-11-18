@@ -118,6 +118,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // initialize global settings struct
     initialize_current_settings(&pool).await?;
+    xguard_common::db::models::client_settings::initialize_client_settings(&pool).await?;
 
     // handle optional subcommands
     if let Some(command) = &config.cmd {

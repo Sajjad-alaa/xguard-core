@@ -6,8 +6,8 @@ use xguard_common::{
     db::{
         Id,
         models::{
-            BiometricAuth, Device, DeviceConfig, DeviceType, MFAMethod, Settings, User,
-            WireguardNetwork,
+            BiometricAuth, ClientSettings, Device, DeviceConfig, DeviceType, MFAMethod, Settings,
+            User, WireguardNetwork,
             device::{DeviceInfo, WireguardNetworkDevice},
             polling_token::PollingToken,
             wireguard::ServiceLocationMode,
@@ -19,6 +19,9 @@ use xguard_core::{
         ENROLLMENT_TOKEN_TYPE, MFA_CONFIG_SESSION_TIMEOUT, MFA_CONFIG_TOKEN_TYPE, Token,
     },
     device_access::{build_device_config, join_device_to_all_networks},
+    device_policy::{
+        ADMIN_DEVICE_MANAGEMENT_MSG, enrollment_may_create_device, token_issued_by_other_admin,
+    },
     events::{
         ApiEvent, ApiEventType, BidiRequestContext, BidiStreamEvent, BidiStreamEventType,
         EnrollmentEvent, LdapSyncEventType,
@@ -263,11 +266,28 @@ impl EnrollmentServer {
             .fetch_one(&self.pool)
             .await
             .map_err(|_| Status::internal("Failed to read data".to_owned()))?;
+            // Per session: `admin_device_management` tells the client to skip the VPN step,
+            // exactly when `create_device` would refuse this token.
+            let device_creation_allowed = enrollment.device_id.is_some()
+                || self
+                    .may_create_device(&user, enrollment.admin_id)
+                    .await
+                    .map_err(|err| {
+                        error!("Failed to check device management settings: {err}");
+                        Status::internal("unexpected error")
+                    })?;
+            let only_client_activation = ClientSettings::current(&self.pool)
+                .await
+                .map_err(|err| {
+                    error!("Failed to load client settings: {err}");
+                    Status::internal("unexpected error")
+                })?
+                .only_client_activation;
             let enrollment_settings = xguard_proto::client_types::EnrollmentSettings {
                 vpn_setup_optional,
                 smtp_configured,
-                only_client_activation: false,
-                admin_device_management: false,
+                only_client_activation,
+                admin_device_management: !device_creation_allowed,
                 mfa_required: instance_has_internal_mfa,
             };
             let settings = Settings::get_current_settings();
@@ -579,6 +599,45 @@ impl EnrollmentServer {
         Ok(())
     }
 
+    /// Whether `user` may create a device with a token issued by `admin_id` (see
+    /// [`xguard_core::device_policy`]).
+    async fn may_create_device(&self, user: &User<Id>, admin_id: Option<Id>) -> sqlx::Result<bool> {
+        let settings = ClientSettings::current(&self.pool).await?;
+        if !settings.admin_device_management {
+            return Ok(true);
+        }
+        let user_is_admin = user.is_admin(&self.pool).await?;
+        let issued_by_other_admin = token_issued_by_other_admin(&self.pool, user, admin_id).await?;
+        Ok(enrollment_may_create_device(
+            &settings,
+            user_is_admin,
+            issued_by_other_admin,
+        ))
+    }
+
+    async fn ensure_may_create_device(
+        &self,
+        user: &User<Id>,
+        admin_id: Option<Id>,
+    ) -> Result<(), Status> {
+        let allowed = self
+            .may_create_device(user, admin_id)
+            .await
+            .map_err(|err| {
+                error!("Failed to check device management settings: {err}");
+                Status::internal("unexpected error")
+            })?;
+        if allowed {
+            Ok(())
+        } else {
+            warn!(
+                "Refusing to create a device for user {}({}): only admins may add devices",
+                user.username, user.id
+            );
+            Err(Status::permission_denied(ADMIN_DEVICE_MANAGEMENT_MSG))
+        }
+    }
+
     #[instrument(skip_all)]
     pub(crate) async fn create_device(
         &self,
@@ -609,6 +668,12 @@ impl EnrollmentServer {
             "User {}({:?}) is active, proceeding with device creation, pubkey: {}",
             user.username, user.id, request.pubkey
         );
+
+        // A token bound to a device finishes the setup of a device an admin already created.
+        if enrollment_token.device_id.is_none() {
+            self.ensure_may_create_device(&user, enrollment_token.admin_id)
+                .await?;
+        }
 
         let ip_address;
         let device_info;

@@ -362,6 +362,16 @@ pub enum ApiEventType {
         location_name: String,
         assignments: Vec<LocationMfaFlowAssignmentSnapshot>,
     },
+    ClientSettingsUpdated {
+        before: xguard_common::db::models::client_settings::ClientSettingsInfo,
+        after: xguard_common::db::models::client_settings::ClientSettingsInfo,
+    },
+    LocationGroupMtusChanged {
+        location_id: Id,
+        location_name: String,
+        before: Vec<xguard_common::db::models::wireguard::GroupClientMtu>,
+        after: Vec<xguard_common::db::models::wireguard::GroupClientMtu>,
+    },
 }
 
 /// Events from Web API

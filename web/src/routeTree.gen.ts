@@ -52,6 +52,7 @@ import { Route as AuthorizedDefaultMfaAddFlowRouteImport } from './routes/_autho
 import { Route as AuthorizedDefaultSettingsIndexRouteImport } from './routes/_authorized/_default/settings/index'
 import { Route as AuthorizedDefaultSettingsCaRouteImport } from './routes/_authorized/_default/settings/ca'
 import { Route as AuthorizedDefaultSettingsCertsRouteImport } from './routes/_authorized/_default/settings/certs'
+import { Route as AuthorizedDefaultSettingsClientRouteImport } from './routes/_authorized/_default/settings/client'
 import { Route as AuthorizedDefaultSettingsGatewayNotificationsRouteImport } from './routes/_authorized/_default/settings/gateway-notifications'
 import { Route as AuthorizedDefaultSettingsInstanceRouteImport } from './routes/_authorized/_default/settings/instance'
 import { Route as AuthorizedDefaultSettingsLdapRouteImport } from './routes/_authorized/_default/settings/ldap'
@@ -295,6 +296,12 @@ const AuthorizedDefaultSettingsCertsRoute =
     path: '/settings/certs',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
+const AuthorizedDefaultSettingsClientRoute =
+  AuthorizedDefaultSettingsClientRouteImport.update({
+    id: '/settings/client',
+    path: '/settings/client',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
 const AuthorizedDefaultSettingsGatewayNotificationsRoute =
   AuthorizedDefaultSettingsGatewayNotificationsRouteImport.update({
     id: '/settings/gateway-notifications',
@@ -407,6 +414,7 @@ export interface FileRoutesByFullPath {
   '/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
+  '/settings/client': typeof AuthorizedDefaultSettingsClientRoute
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
@@ -461,6 +469,7 @@ export interface FileRoutesByTo {
   '/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
+  '/settings/client': typeof AuthorizedDefaultSettingsClientRoute
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
@@ -519,6 +528,7 @@ export interface FileRoutesById {
   '/_authorized/_default/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/_authorized/_default/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/_authorized/_default/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
+  '/_authorized/_default/settings/client': typeof AuthorizedDefaultSettingsClientRoute
   '/_authorized/_default/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/_authorized/_default/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/_authorized/_default/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
@@ -576,6 +586,7 @@ export interface FileRouteTypes {
     | '/mfa/add-flow'
     | '/settings/ca'
     | '/settings/certs'
+    | '/settings/client'
     | '/settings/gateway-notifications'
     | '/settings/instance'
     | '/settings/ldap'
@@ -630,6 +641,7 @@ export interface FileRouteTypes {
     | '/mfa/add-flow'
     | '/settings/ca'
     | '/settings/certs'
+    | '/settings/client'
     | '/settings/gateway-notifications'
     | '/settings/instance'
     | '/settings/ldap'
@@ -687,6 +699,7 @@ export interface FileRouteTypes {
     | '/_authorized/_default/mfa/add-flow'
     | '/_authorized/_default/settings/ca'
     | '/_authorized/_default/settings/certs'
+    | '/_authorized/_default/settings/client'
     | '/_authorized/_default/settings/gateway-notifications'
     | '/_authorized/_default/settings/instance'
     | '/_authorized/_default/settings/ldap'
@@ -1022,6 +1035,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultSettingsCertsRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
+    '/_authorized/_default/settings/client': {
+      id: '/_authorized/_default/settings/client'
+      path: '/settings/client'
+      fullPath: '/settings/client'
+      preLoaderRoute: typeof AuthorizedDefaultSettingsClientRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
     '/_authorized/_default/settings/gateway-notifications': {
       id: '/_authorized/_default/settings/gateway-notifications'
       path: '/settings/gateway-notifications'
@@ -1123,6 +1143,7 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultMfaAddFlowRoute: typeof AuthorizedDefaultMfaAddFlowRoute
   AuthorizedDefaultSettingsCaRoute: typeof AuthorizedDefaultSettingsCaRoute
   AuthorizedDefaultSettingsCertsRoute: typeof AuthorizedDefaultSettingsCertsRoute
+  AuthorizedDefaultSettingsClientRoute: typeof AuthorizedDefaultSettingsClientRoute
   AuthorizedDefaultSettingsGatewayNotificationsRoute: typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   AuthorizedDefaultSettingsInstanceRoute: typeof AuthorizedDefaultSettingsInstanceRoute
   AuthorizedDefaultSettingsLdapRoute: typeof AuthorizedDefaultSettingsLdapRoute
@@ -1154,6 +1175,7 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
   AuthorizedDefaultMfaAddFlowRoute: AuthorizedDefaultMfaAddFlowRoute,
   AuthorizedDefaultSettingsCaRoute: AuthorizedDefaultSettingsCaRoute,
   AuthorizedDefaultSettingsCertsRoute: AuthorizedDefaultSettingsCertsRoute,
+  AuthorizedDefaultSettingsClientRoute: AuthorizedDefaultSettingsClientRoute,
   AuthorizedDefaultSettingsGatewayNotificationsRoute:
     AuthorizedDefaultSettingsGatewayNotificationsRoute,
   AuthorizedDefaultSettingsInstanceRoute:
