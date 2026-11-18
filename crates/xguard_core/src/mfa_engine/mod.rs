@@ -404,6 +404,41 @@ impl MfaEngine {
             return Err(FinishCoreError::Internal);
         };
 
+        // Authorization point: the stored posture snapshot must still comply with the
+        // location's policies as they are now.
+        let posture = crate::posture::check_stored_snapshot(
+            &mut *transaction,
+            ctx.location.id,
+            ctx.device.id,
+        )
+        .await
+        .map_err(|err| {
+            error!("Failed to check the posture of {}: {err}", ctx.device);
+            FinishCoreError::Internal
+        })?;
+        if let crate::posture::PostureResult::Fail(failed_checks) = posture {
+            warn!(
+                "Refusing to authorize {} in {}: {}",
+                ctx.device,
+                ctx.location,
+                failed_checks.join("; ")
+            );
+            if let Err(err) = self.channels.emit_event(BidiStreamEvent {
+                context: context.clone(),
+                event: BidiStreamEventType::DesktopClientMfa(Box::new(
+                    DesktopClientMfaEvent::PostureCheckFailed {
+                        device: ctx.device.clone(),
+                        location: ctx.location.clone(),
+                        facts: None,
+                        failed_checks: failed_checks.clone(),
+                    },
+                )),
+            }) {
+                error!("Failed to emit posture event: {err}");
+            }
+            return Err(FinishCoreError::PostureRejected(failed_checks));
+        }
+
         let flow_name = MfaFlow::find_by_id(&mut *transaction, snapshot.flow_id)
             .await
             .map_err(|err| {

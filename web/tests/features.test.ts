@@ -26,7 +26,6 @@ describe('XGuard feature availability (no license tiers)', () => {
   it('reports features XGuard does not implement as unavailable', () => {
     for (const feature of [
       LicenseFeature.ServiceLocations,
-      LicenseFeature.DevicePosture,
       LicenseFeature.AclAllowedIps,
       LicenseFeature.GroupMTUOverride,
       LicenseFeature.Fido2,
@@ -43,10 +42,16 @@ describe('XGuard feature availability (no license tiers)', () => {
     licenseActionCheck(canUseBusinessFeature(null), action);
     expect(action).toHaveBeenCalledTimes(1);
     licenseActionCheck(
-      canUseEnterpriseFeature(null, LicenseFeature.DevicePosture),
+      canUseEnterpriseFeature(null, LicenseFeature.ServiceLocations),
       action,
     );
     expect(action).toHaveBeenCalledTimes(1);
+    // Device posture is implemented in XGuard.
+    licenseActionCheck(
+      canUseEnterpriseFeature(null, LicenseFeature.DevicePosture),
+      action,
+    );
+    expect(action).toHaveBeenCalledTimes(2);
   });
 
   it('does not lock navigation items without a feature', () => {

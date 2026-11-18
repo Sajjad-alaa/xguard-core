@@ -652,3 +652,43 @@ pub struct OidcDirectorySyncGroupMemberMetadata {
     pub group: Group<Id>,
     pub user: UserNoSecrets,
 }
+
+#[derive(Serialize)]
+pub struct DevicePostureMetadata {
+    pub posture: crate::posture::policy::ApiDevicePosture,
+}
+
+#[derive(Serialize)]
+pub struct DevicePostureModifiedMetadata {
+    pub before: crate::posture::policy::ApiDevicePosture,
+    pub after: crate::posture::policy::ApiDevicePosture,
+}
+
+#[derive(Serialize)]
+pub struct DevicePostureDuplicatedMetadata {
+    pub original: crate::posture::policy::ApiDevicePosture,
+    pub duplicate: crate::posture::policy::ApiDevicePosture,
+}
+
+#[derive(Serialize)]
+pub struct DevicePostureLocationsMetadata {
+    pub posture_id: Id,
+    pub posture_name: String,
+    pub location_ids: Vec<Id>,
+}
+
+#[derive(Serialize)]
+pub struct LocationPosturesMetadata {
+    pub location_id: Id,
+    pub location_name: String,
+    pub posture_ids: Vec<Id>,
+}
+
+/// A posture evaluation of a connecting device. `facts` is what the client reported.
+#[derive(Serialize)]
+pub struct DevicePostureCheckMetadata {
+    pub location: WireguardNetwork<Id>,
+    pub device: Device<Id>,
+    pub facts: Option<crate::posture::PostureFacts>,
+    pub failed_checks: Vec<String>,
+}

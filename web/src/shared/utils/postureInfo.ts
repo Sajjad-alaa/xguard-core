@@ -20,6 +20,8 @@ export const getWindowsSection = (
   if (rule.ad_domain_joined_required) otherItems.push('Connected to Active Directory');
   if (rule.antivirus_required) otherItems.push('Antivirus installed');
   if (rule.disk_encryption_required) otherItems.push('Disk encryption enabled');
+  if (rule.firewall_required) otherItems.push('Firewall enabled');
+  if (rule.screen_lock_required) otherItems.push('Screen lock enabled');
 
   const rows: OsDetailRow[] = [];
   rows.push({
@@ -27,7 +29,7 @@ export const getWindowsSection = (
     value:
       rule.min_os_version === null
         ? m.posture_checks_version_any()
-        : `Windows ${rule.min_os_version} and higher`,
+        : `Windows build ${rule.min_os_version} and higher`,
   });
   if (rule.windows_security_update_max_age !== null) {
     rows.push({
@@ -47,6 +49,8 @@ export const getMacosSection = (
 ): OsSection => {
   const otherItems: string[] = [];
   if (rule.disk_encryption_required) otherItems.push('Disk encryption enabled');
+  if (rule.firewall_required) otherItems.push('Firewall enabled');
+  if (rule.screen_lock_required) otherItems.push('Screen lock enabled');
   if (rule.device_integrity_required) otherItems.push('Device integrity');
 
   const rows: OsDetailRow[] = [];
@@ -69,6 +73,8 @@ export const getLinuxSection = (
 ): OsSection => {
   const otherItems: string[] = [];
   if (rule.disk_encryption_required) otherItems.push('Disk encryption enabled');
+  if (rule.firewall_required) otherItems.push('Firewall enabled');
+  if (rule.screen_lock_required) otherItems.push('Screen lock enabled');
 
   const rows: OsDetailRow[] = [];
   rows.push({

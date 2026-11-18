@@ -1207,36 +1207,45 @@ export interface SettingsEnterprise {
   group_client_traffic_policies: GroupClientTrafficPolicies;
 }
 
+/** Requirements for one operating system. Versions are dotted numbers such as `14.5`. */
 export type ApiDevicePostureOsRule =
   | {
       os_type: 'windows';
-      min_os_version: number | null;
+      min_os_version: string | null;
       disk_encryption_required: boolean | null;
+      firewall_required: boolean | null;
+      screen_lock_required: boolean | null;
       antivirus_required: boolean | null;
       ad_domain_joined_required: boolean | null;
       windows_security_update_max_age: number | null;
     }
   | {
       os_type: 'macos';
-      min_os_version: number | null;
+      min_os_version: string | null;
       disk_encryption_required: boolean | null;
+      firewall_required: boolean | null;
+      screen_lock_required: boolean | null;
       device_integrity_required: boolean | null;
     }
   | {
       os_type: 'linux';
-      min_kernel_version: number | null;
+      min_kernel_version: string | null;
       disk_encryption_required: boolean | null;
+      firewall_required: boolean | null;
+      screen_lock_required: boolean | null;
     }
   | {
       os_type: 'ios';
-      min_os_version: number | null;
+      min_os_version: string | null;
     }
   | {
       os_type: 'android';
-      min_os_version: number | null;
+      min_os_version: string | null;
       device_integrity_required: boolean | null;
       android_security_patch_level_max_age: number | null;
     };
+
+export type DevicePostureOsType = ApiDevicePostureOsRule['os_type'];
 
 export type EditDevicePostureOsRule = ApiDevicePostureOsRule;
 
@@ -1260,18 +1269,51 @@ export interface EditDevicePostureRequest {
   os_rules: EditDevicePostureOsRule[];
 }
 
-export interface DevicePostureOsVersionCatalog {
-  windows: number[];
-  macos: number[];
-  ios: number[];
-  android: number[];
+export interface DevicePostureVersionOption {
+  value: string;
+  label: string;
 }
 
-export interface DevicePostureVersionMetadata {
-  os_versions: DevicePostureOsVersionCatalog;
-  linux_kernel_versions: number[];
-  desktop_client_versions: string[];
-  mobile_client_versions: string[];
+/** Version shortcuts offered by core; any dotted version is accepted. */
+export interface DevicePostureVersionCatalog {
+  windows: DevicePostureVersionOption[];
+  macos: DevicePostureVersionOption[];
+  ios: DevicePostureVersionOption[];
+  android: DevicePostureVersionOption[];
+  linux_kernel: DevicePostureVersionOption[];
+}
+
+/** Facts a client reported about its device: an attestation, not proof. */
+export interface DevicePostureFacts {
+  os: DevicePostureOsType | null;
+  os_version: string | null;
+  os_name: string | null;
+  kernel_version: string | null;
+  client_version: string | null;
+  disk_encrypted: boolean | null;
+  firewall_enabled: boolean | null;
+  screen_lock_enabled: boolean | null;
+  antivirus_enabled: boolean | null;
+  domain_joined: boolean | null;
+  device_integrity: boolean | null;
+  security_update_age_days: number | null;
+  security_patch_date: string | null;
+  collected_at: number | null;
+}
+
+export interface DevicePostureSnapshot {
+  device_id: number;
+  facts: Partial<DevicePostureFacts>;
+  reported_at: string;
+  location_id: number | null;
+  compliant: boolean;
+  failed_checks: string[];
+}
+
+export interface DevicePostureView {
+  device_id: number;
+  device_name: string;
+  snapshot: DevicePostureSnapshot | null;
 }
 
 export type InitialSetupStepValue =

@@ -251,6 +251,19 @@ fn test_context() -> EventContext {
     }
 }
 
+fn sample_posture() -> xguard_core::posture::policy::ApiDevicePosture {
+    xguard_core::posture::policy::ApiDevicePosture {
+        id: 1,
+        name: "Laptops".into(),
+        description: None,
+        min_desktop_client_version: Some("2.2.0".into()),
+        min_mobile_client_version: None,
+        allow_prerelease_client: false,
+        os_rules: Vec::new(),
+        locations: vec![1],
+    }
+}
+
 fn api_message(event: ApiEventType) -> EventLoggerMessage {
     EventLoggerMessage {
         context: test_context(),
@@ -1213,6 +1226,66 @@ fn api_event_cases() -> Vec<EventTestCase> {
             module: ActivityLogModule::XGuard,
             description_contains: Some("MFA flow"),
         },
+        EventTestCase {
+            name: "DevicePostureCreated",
+            message: api_message(ApiEventType::DevicePostureCreated {
+                posture: sample_posture(),
+            }),
+            event_type: EventType::DevicePostureCreated,
+            module: ActivityLogModule::Posture,
+            description_contains: Some("Created posture policy 'Laptops'"),
+        },
+        EventTestCase {
+            name: "DevicePostureUpdated",
+            message: api_message(ApiEventType::DevicePostureUpdated {
+                before: sample_posture(),
+                after: sample_posture(),
+            }),
+            event_type: EventType::DevicePostureUpdated,
+            module: ActivityLogModule::Posture,
+            description_contains: Some("Updated posture policy"),
+        },
+        EventTestCase {
+            name: "DevicePostureDeleted",
+            message: api_message(ApiEventType::DevicePostureDeleted {
+                posture: sample_posture(),
+            }),
+            event_type: EventType::DevicePostureDeleted,
+            module: ActivityLogModule::Posture,
+            description_contains: Some("Deleted posture policy"),
+        },
+        EventTestCase {
+            name: "DevicePostureDuplicated",
+            message: api_message(ApiEventType::DevicePostureDuplicated {
+                original: sample_posture(),
+                duplicate: sample_posture(),
+            }),
+            event_type: EventType::DevicePostureDuplicated,
+            module: ActivityLogModule::Posture,
+            description_contains: Some("Duplicated posture policy"),
+        },
+        EventTestCase {
+            name: "DevicePostureLocationsAssigned",
+            message: api_message(ApiEventType::DevicePostureLocationsAssigned {
+                posture_id: 1,
+                posture_name: "Laptops".into(),
+                location_ids: vec![1, 2],
+            }),
+            event_type: EventType::DevicePostureLocationsAssigned,
+            module: ActivityLogModule::Posture,
+            description_contains: Some("to 2 location(s)"),
+        },
+        EventTestCase {
+            name: "LocationPosturesAssigned",
+            message: api_message(ApiEventType::LocationPosturesAssigned {
+                location_id: location.id,
+                location_name: location.name.clone(),
+                posture_ids: vec![1],
+            }),
+            event_type: EventType::LocationPosturesAssigned,
+            module: ActivityLogModule::Posture,
+            description_contains: Some("posture policy(ies)"),
+        },
     ];
 
     assert_eq!(
@@ -1427,6 +1500,39 @@ fn bidi_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::VpnClientMfaLoginSuperseded,
             module: ActivityLogModule::Vpn,
             description_contains: Some("superseded"),
+        },
+        EventTestCase {
+            name: "PostureCheckPassed",
+            message: bidi_msg(
+                BidiStreamEventType::DesktopClientMfa(Box::new(
+                    DesktopClientMfaEvent::PostureCheckPassed {
+                        location: location.clone(),
+                        device: device.clone(),
+                        facts: Some(xguard_core::posture::PostureFacts::default()),
+                    },
+                )),
+                Some(location.clone()),
+            ),
+            event_type: EventType::DevicePostureCheckPassed,
+            module: ActivityLogModule::Posture,
+            description_contains: Some("passed the posture check"),
+        },
+        EventTestCase {
+            name: "PostureCheckFailed",
+            message: bidi_msg(
+                BidiStreamEventType::DesktopClientMfa(Box::new(
+                    DesktopClientMfaEvent::PostureCheckFailed {
+                        location: location.clone(),
+                        device: device.clone(),
+                        facts: None,
+                        failed_checks: vec!["disk encryption is required".into()],
+                    },
+                )),
+                Some(location.clone()),
+            ),
+            event_type: EventType::DevicePostureCheckFailed,
+            module: ActivityLogModule::Posture,
+            description_contains: Some("disk encryption is required"),
         },
     ];
 

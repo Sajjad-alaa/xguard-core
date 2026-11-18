@@ -14,7 +14,8 @@ use xguard_common::{
 use super::handlers::{
     ApiErrorResponse, Auth, EditGroupInfo, GroupInfo, PasswordChange, PasswordChangeSelf,
     SESSION_COOKIE_NAME, StartEnrollmentRequest, Username, activity_log, api_tokens, app_info,
-    auth, component_setup, core_certs, directory, dirsync, firewall, forward_auth, gateway,
+    auth, component_setup, core_certs, device_posture, directory, dirsync, firewall, forward_auth,
+    gateway,
     group::{self, BulkAssignToGroupsRequest},
     location_stats, log_stream, mail, mfa_flow, network_devices, openid_clients, openid_flow,
     proxy, reserved, resource_display, session_info, settings, ssh_authorized_keys, sso,
@@ -211,6 +212,17 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         firewall::create_snat_binding,
         firewall::update_snat_binding,
         firewall::delete_snat_binding,
+        // device posture
+        device_posture::list_device_postures,
+        device_posture::device_posture_versions,
+        device_posture::get_device_posture,
+        device_posture::create_device_posture,
+        device_posture::update_device_posture,
+        device_posture::delete_device_posture,
+        device_posture::duplicate_device_posture,
+        device_posture::set_device_posture_locations,
+        device_posture::get_device_posture_snapshot,
+        device_posture::list_user_device_postures,
         // settings
         settings::get_settings,
         settings::patch_settings,
@@ -268,7 +280,13 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
             crate::dirsync::settings::DirectorySyncInput,
             crate::dirsync::settings::MissingUserAction, crate::dirsync::settings::SyncTarget,
             crate::dirsync::ConnectionTest, crate::dirsync::sync::LastRun,
-            dirsync::DirectorySyncRequest, dirsync::DirectorySyncStatus
+            dirsync::DirectorySyncRequest, dirsync::DirectorySyncStatus,
+            crate::posture::policy::ApiDevicePosture, crate::posture::policy::ApiOsRule,
+            crate::posture::policy::EditDevicePosture, crate::posture::policy::VersionCatalog,
+            crate::posture::policy::VersionOption, crate::posture::PostureFacts,
+            xguard_common::db::models::device_posture::PostureSnapshot,
+            xguard_common::db::models::device_posture::OsType,
+            device_posture::AssignLocations, device_posture::DevicePostureView
         ),
     ),
     tags(
@@ -287,6 +305,7 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         (name = "SSH key", description = "SSH and GPG authentication keys of users."),
         (name = "webhook", description = "Webhooks triggered by user and provisioning events."),
         (name = "api token", description = "Personal API tokens of admins, for automation."),
+        (name = "device posture", description = "Device posture policies attached to locations, and the posture devices last reported."),
         (name = "firewall", description = "XGuard firewall rules and the policies compiled from them."),
         (name = "settings", description = "Instance settings."),
         (name = "activity log", description = "Activity log events."),

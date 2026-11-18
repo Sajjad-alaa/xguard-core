@@ -51,6 +51,7 @@ async fn send_flow_start(
         id,
         device_info: Some(make_device_info()),
         payload: Some(core_request::Payload::MfaFlowStart(MfaFlowStartRequest {
+            posture: None,
             location_id,
             pubkey: pubkey.to_owned(),
             selected_methods: selected_methods
@@ -287,6 +288,7 @@ async fn test_mfa_start_fails_for_disabled_location(_: PgPoolOptions, options: P
         device_info: Some(make_device_info()),
         payload: Some(core_request::Payload::ClientMfaStart(
             ClientMfaStartRequest {
+                posture: None,
                 location_id: network.id,
                 pubkey: device.wireguard_pubkey.clone(),
                 method: MfaMethod::Email as i32,
@@ -318,6 +320,7 @@ async fn test_mfa_start_fails_for_unknown_location(_: PgPoolOptions, options: Pg
         device_info: Some(make_device_info()),
         payload: Some(core_request::Payload::ClientMfaStart(
             ClientMfaStartRequest {
+                posture: None,
                 location_id: nonexistent_location_id,
                 pubkey: device.wireguard_pubkey.clone(),
                 method: MfaMethod::Email as i32,
@@ -1169,6 +1172,7 @@ async fn test_mfa_start_fails_for_unknown_device(_: PgPoolOptions, options: PgCo
         device_info: Some(make_device_info()),
         payload: Some(core_request::Payload::ClientMfaStart(
             ClientMfaStartRequest {
+                posture: None,
                 location_id: network.id,
                 pubkey: "no-such-pubkey".to_owned(),
                 method: MfaMethod::Email as i32,
@@ -1201,6 +1205,7 @@ async fn test_mfa_start_fails_when_email_mfa_not_enabled(
         device_info: Some(make_device_info()),
         payload: Some(core_request::Payload::ClientMfaStart(
             ClientMfaStartRequest {
+                posture: None,
                 location_id: network.id,
                 pubkey: device.wireguard_pubkey.clone(),
                 method: MfaMethod::Email as i32,
@@ -1245,6 +1250,7 @@ async fn test_mfa_start_rejects_email_when_smtp_not_configured(
         device_info: Some(make_device_info()),
         payload: Some(core_request::Payload::ClientMfaStart(
             ClientMfaStartRequest {
+                posture: None,
                 location_id: network.id,
                 pubkey: device.wireguard_pubkey.clone(),
                 method: MfaMethod::Email as i32,

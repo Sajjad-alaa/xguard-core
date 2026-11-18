@@ -65,6 +65,12 @@ const navigationConfig: NavGroupProps[] = [
         label: m.firewall_nav(),
         link: '/firewall',
       },
+      {
+        id: 'posture_checks',
+        icon: 'connected-devices',
+        label: m.cmp_nav_item_posture_checks(),
+        link: '/posture-checks',
+      },
     ],
   },
   {

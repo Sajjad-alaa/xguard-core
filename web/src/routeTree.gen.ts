@@ -33,6 +33,7 @@ import { Route as AuthorizedDefaultFirewallRouteImport } from './routes/_authori
 import { Route as AuthorizedDefaultGroupsRouteImport } from './routes/_authorized/_default/groups'
 import { Route as AuthorizedDefaultNetworkDevicesRouteImport } from './routes/_authorized/_default/network-devices'
 import { Route as AuthorizedDefaultOpenidRouteImport } from './routes/_authorized/_default/openid'
+import { Route as AuthorizedDefaultPostureChecksRouteImport } from './routes/_authorized/_default/posture-checks'
 import { Route as AuthorizedDefaultSupportRouteImport } from './routes/_authorized/_default/support'
 import { Route as AuthorizedDefaultUsersRouteImport } from './routes/_authorized/_default/users'
 import { Route as AuthorizedDefaultWebhooksRouteImport } from './routes/_authorized/_default/webhooks'
@@ -187,6 +188,12 @@ const AuthorizedDefaultOpenidRoute = AuthorizedDefaultOpenidRouteImport.update({
   path: '/openid',
   getParentRoute: () => AuthorizedDefaultRoute,
 } as any)
+const AuthorizedDefaultPostureChecksRoute =
+  AuthorizedDefaultPostureChecksRouteImport.update({
+    id: '/posture-checks',
+    path: '/posture-checks',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
 const AuthorizedDefaultSupportRoute =
   AuthorizedDefaultSupportRouteImport.update({
     id: '/support',
@@ -391,6 +398,7 @@ export interface FileRoutesByFullPath {
   '/groups': typeof AuthorizedDefaultGroupsRoute
   '/network-devices': typeof AuthorizedDefaultNetworkDevicesRoute
   '/openid': typeof AuthorizedDefaultOpenidRoute
+  '/posture-checks': typeof AuthorizedDefaultPostureChecksRoute
   '/support': typeof AuthorizedDefaultSupportRoute
   '/users': typeof AuthorizedDefaultUsersRoute
   '/webhooks': typeof AuthorizedDefaultWebhooksRoute
@@ -445,6 +453,7 @@ export interface FileRoutesByTo {
   '/groups': typeof AuthorizedDefaultGroupsRoute
   '/network-devices': typeof AuthorizedDefaultNetworkDevicesRoute
   '/openid': typeof AuthorizedDefaultOpenidRoute
+  '/posture-checks': typeof AuthorizedDefaultPostureChecksRoute
   '/support': typeof AuthorizedDefaultSupportRoute
   '/users': typeof AuthorizedDefaultUsersRoute
   '/webhooks': typeof AuthorizedDefaultWebhooksRoute
@@ -503,6 +512,7 @@ export interface FileRoutesById {
   '/_authorized/_default/groups': typeof AuthorizedDefaultGroupsRoute
   '/_authorized/_default/network-devices': typeof AuthorizedDefaultNetworkDevicesRoute
   '/_authorized/_default/openid': typeof AuthorizedDefaultOpenidRoute
+  '/_authorized/_default/posture-checks': typeof AuthorizedDefaultPostureChecksRoute
   '/_authorized/_default/support': typeof AuthorizedDefaultSupportRoute
   '/_authorized/_default/users': typeof AuthorizedDefaultUsersRoute
   '/_authorized/_default/webhooks': typeof AuthorizedDefaultWebhooksRoute
@@ -560,6 +570,7 @@ export interface FileRouteTypes {
     | '/groups'
     | '/network-devices'
     | '/openid'
+    | '/posture-checks'
     | '/support'
     | '/users'
     | '/webhooks'
@@ -614,6 +625,7 @@ export interface FileRouteTypes {
     | '/groups'
     | '/network-devices'
     | '/openid'
+    | '/posture-checks'
     | '/support'
     | '/users'
     | '/webhooks'
@@ -671,6 +683,7 @@ export interface FileRouteTypes {
     | '/_authorized/_default/groups'
     | '/_authorized/_default/network-devices'
     | '/_authorized/_default/openid'
+    | '/_authorized/_default/posture-checks'
     | '/_authorized/_default/support'
     | '/_authorized/_default/users'
     | '/_authorized/_default/webhooks'
@@ -887,6 +900,13 @@ declare module '@tanstack/react-router' {
       path: '/openid'
       fullPath: '/openid'
       preLoaderRoute: typeof AuthorizedDefaultOpenidRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
+    '/_authorized/_default/posture-checks': {
+      id: '/_authorized/_default/posture-checks'
+      path: '/posture-checks'
+      fullPath: '/posture-checks'
+      preLoaderRoute: typeof AuthorizedDefaultPostureChecksRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
     '/_authorized/_default/support': {
@@ -1117,6 +1137,7 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultGroupsRoute: typeof AuthorizedDefaultGroupsRoute
   AuthorizedDefaultNetworkDevicesRoute: typeof AuthorizedDefaultNetworkDevicesRoute
   AuthorizedDefaultOpenidRoute: typeof AuthorizedDefaultOpenidRoute
+  AuthorizedDefaultPostureChecksRoute: typeof AuthorizedDefaultPostureChecksRoute
   AuthorizedDefaultSupportRoute: typeof AuthorizedDefaultSupportRoute
   AuthorizedDefaultUsersRoute: typeof AuthorizedDefaultUsersRoute
   AuthorizedDefaultWebhooksRoute: typeof AuthorizedDefaultWebhooksRoute
@@ -1148,6 +1169,7 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
   AuthorizedDefaultGroupsRoute: AuthorizedDefaultGroupsRoute,
   AuthorizedDefaultNetworkDevicesRoute: AuthorizedDefaultNetworkDevicesRoute,
   AuthorizedDefaultOpenidRoute: AuthorizedDefaultOpenidRoute,
+  AuthorizedDefaultPostureChecksRoute: AuthorizedDefaultPostureChecksRoute,
   AuthorizedDefaultSupportRoute: AuthorizedDefaultSupportRoute,
   AuthorizedDefaultUsersRoute: AuthorizedDefaultUsersRoute,
   AuthorizedDefaultWebhooksRoute: AuthorizedDefaultWebhooksRoute,

@@ -5,6 +5,7 @@ mod component_setup;
 mod core_certs;
 mod enrollment;
 mod api_tokens;
+mod device_posture;
 mod firewall;
 mod dirsync;
 mod sso;

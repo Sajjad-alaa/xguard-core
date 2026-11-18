@@ -46,6 +46,11 @@ pub async fn build_device_config(
 
     let mtu = network.client_mtu;
 
+    let posture_check_required = network
+        .has_postures(&mut *conn)
+        .await
+        .map_err(|err| DeviceError::Unexpected(err.to_string()))?;
+
     // Resolve the location's MFA flow for this user, carrying the ordered steps (methods only;
     // per-method `configured` flags are computed separately). Empty when MFA is disabled or no
     // flow resolves for the user.
@@ -73,7 +78,7 @@ pub async fn build_device_config(
         mfa_enabled: network.mfa_enabled,
         location_mfa_mode,
         service_location_mode: network.service_location_mode.clone(),
-        posture_check_required: false,
+        posture_check_required,
         steps,
     })
 }

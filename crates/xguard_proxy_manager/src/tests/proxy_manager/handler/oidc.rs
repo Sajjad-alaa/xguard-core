@@ -455,6 +455,7 @@ async fn test_multi_step_mfa_with_openid_is_bound_to_the_attempt(
     let response = request(
         &mut context,
         core_request::Payload::MfaFlowStart(MfaFlowStartRequest {
+            posture: None,
             location_id: network.id,
             pubkey: device.wireguard_pubkey.clone(),
             selected_methods: vec![MfaMethod::Oidc as i32],
@@ -629,6 +630,7 @@ async fn test_mfa_with_openid_requires_a_linked_account(
     let response = request(
         &mut context,
         core_request::Payload::ClientMfaStart(xguard_proto::client_types::ClientMfaStartRequest {
+            posture: None,
             location_id: network.id,
             pubkey: device.wireguard_pubkey.clone(),
             method: MfaMethod::Oidc as i32,

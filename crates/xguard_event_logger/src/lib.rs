@@ -15,12 +15,14 @@ use xguard_core::{
             ActivityLogStreamMetadata, ActivityLogStreamModifiedMetadata, ApiTokenMetadata,
             ApiTokenRenamedMetadata, AuthenticationKeyMetadata, AuthenticationKeyRenamedMetadata,
             ClientConfigurationTokenMetadata, DeviceMetadata, DeviceModifiedMetadata,
+            DevicePostureCheckMetadata, DevicePostureDuplicatedMetadata,
+            DevicePostureLocationsMetadata, DevicePostureMetadata, DevicePostureModifiedMetadata,
             DirectorySyncStartedMetadata, DirectorySyncTestedMetadata,
             EnrollmentDeviceAddedMetadata, EnrollmentTokenMetadata, FirewallRuleMetadata,
             FirewallRuleModifiedMetadata, GatewayDeletedMetadata, GatewayModifiedMetadata,
             GroupAssignedMetadata, GroupMembersModifiedMetadata, GroupMetadata,
-            GroupModifiedMetadata, GroupsBulkAssignedMetadata, LoginFailedMetadata,
-            MfaLoginFailedMetadata, MfaLoginMetadata, MfaSecurityKeyMetadata,
+            GroupModifiedMetadata, GroupsBulkAssignedMetadata, LocationPosturesMetadata,
+            LoginFailedMetadata, MfaLoginFailedMetadata, MfaLoginMetadata, MfaSecurityKeyMetadata,
             NetworkDeviceMetadata, NetworkDeviceModifiedMetadata,
             OidcDirectorySyncGroupMemberMetadata, OidcDirectorySyncGroupMetadata,
             OidcDirectorySyncUserMetadata, OpenIdAppMetadata, OpenIdAppModifiedMetadata,
@@ -622,6 +624,55 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     }))
                     .ok(),
                 ),
+                ApiEventType::DevicePostureCreated { posture } => (
+                    EventType::DevicePostureCreated,
+                    serde_json::to_value(DevicePostureMetadata { posture }).ok(),
+                ),
+                ApiEventType::DevicePostureUpdated { before, after } => (
+                    EventType::DevicePostureUpdated,
+                    serde_json::to_value(DevicePostureModifiedMetadata { before, after }).ok(),
+                ),
+                ApiEventType::DevicePostureDeleted { posture } => (
+                    EventType::DevicePostureDeleted,
+                    serde_json::to_value(DevicePostureMetadata { posture }).ok(),
+                ),
+                ApiEventType::DevicePostureDuplicated {
+                    original,
+                    duplicate,
+                } => (
+                    EventType::DevicePostureDuplicated,
+                    serde_json::to_value(DevicePostureDuplicatedMetadata {
+                        original,
+                        duplicate,
+                    })
+                    .ok(),
+                ),
+                ApiEventType::DevicePostureLocationsAssigned {
+                    posture_id,
+                    posture_name,
+                    location_ids,
+                } => (
+                    EventType::DevicePostureLocationsAssigned,
+                    serde_json::to_value(DevicePostureLocationsMetadata {
+                        posture_id,
+                        posture_name,
+                        location_ids,
+                    })
+                    .ok(),
+                ),
+                ApiEventType::LocationPosturesAssigned {
+                    location_id,
+                    location_name,
+                    posture_ids,
+                } => (
+                    EventType::LocationPosturesAssigned,
+                    serde_json::to_value(LocationPosturesMetadata {
+                        location_id,
+                        location_name,
+                        posture_ids,
+                    })
+                    .ok(),
+                ),
                 ApiEventType::EnrollmentTokenAdded { user } => (
                     EventType::EnrollmentTokenAdded,
                     serde_json::to_value(EnrollmentTokenMetadata { user: user.into() }).ok(),
@@ -681,6 +732,20 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 )),
                 DesktopClientMfaEvent::MfaLoginSuperseded { device, location } => Some(format!(
                     "MFA login for {device} in location {location} superseded by a new login attempt"
+                )),
+                DesktopClientMfaEvent::PostureCheckPassed {
+                    device, location, ..
+                } => Some(format!(
+                    "Device {device} passed the posture check for location {location}"
+                )),
+                DesktopClientMfaEvent::PostureCheckFailed {
+                    device,
+                    location,
+                    failed_checks,
+                    ..
+                } => Some(format!(
+                    "Device {device} failed the posture check for location {location}: {}",
+                    failed_checks.join("; ")
                 )),
             };
             let (event_type, metadata) = match *event {
@@ -764,6 +829,35 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 DesktopClientMfaEvent::MfaLoginSuperseded { location, device } => (
                     EventType::VpnClientMfaLoginSuperseded,
                     serde_json::to_value(VpnClientMetadata { location, device }).ok(),
+                ),
+                DesktopClientMfaEvent::PostureCheckPassed {
+                    location,
+                    device,
+                    facts,
+                } => (
+                    EventType::DevicePostureCheckPassed,
+                    serde_json::to_value(DevicePostureCheckMetadata {
+                        location,
+                        device,
+                        facts,
+                        failed_checks: Vec::new(),
+                    })
+                    .ok(),
+                ),
+                DesktopClientMfaEvent::PostureCheckFailed {
+                    location,
+                    device,
+                    facts,
+                    failed_checks,
+                } => (
+                    EventType::DevicePostureCheckFailed,
+                    serde_json::to_value(DevicePostureCheckMetadata {
+                        location,
+                        device,
+                        facts,
+                        failed_checks,
+                    })
+                    .ok(),
                 ),
             };
             let module = bidi_event_module(&event_type);

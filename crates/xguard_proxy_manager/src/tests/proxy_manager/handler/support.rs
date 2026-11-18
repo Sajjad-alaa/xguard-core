@@ -611,6 +611,7 @@ pub(crate) async fn send_mfa_start_raw(
         device_info: Some(make_device_info()),
         payload: Some(core_request::Payload::ClientMfaStart(
             ClientMfaStartRequest {
+                posture: None,
                 location_id,
                 pubkey: pubkey.to_owned(),
                 method: method as i32,

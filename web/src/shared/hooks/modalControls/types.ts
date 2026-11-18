@@ -1,6 +1,7 @@
 import type { QueryKey } from '@tanstack/react-query';
 import type { HTMLProps } from 'react';
 import type {
+  ApiDevicePosture,
   AvailableLocationIpResponse,
   Device,
   DeviceLocationIpsResponse,
@@ -96,6 +97,14 @@ export interface OpenCEWebhookModal {
 
 export interface OpenCEFirewallRuleModal {
   rule?: FirewallRule;
+}
+
+export interface OpenCEPostureCheckModal {
+  posture?: ApiDevicePosture;
+}
+
+export interface OpenDevicePostureModal {
+  deviceId: number;
 }
 
 export interface OpenCESnatBindingModal {

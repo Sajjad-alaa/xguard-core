@@ -19,24 +19,27 @@ use xguard_common::{
             device::WireguardNetworkDevice,
             mfa_flow::{MfaFlow, MfaFlowStep},
             vpn_client_mfa_session::{VpnClientMfaSession, VpnMfaFlowKind, hash_token},
-            vpn_client_session::VpnClientMfaMethod,
+            vpn_client_session::{VpnClientMfaMethod, VpnClientSession},
         },
+        wireguard_key::WireguardKey,
     },
+    secret::SecretStringWrapper,
     types::user_info::UserInfo,
 };
 use xguard_proto::{
     client_types::{
         ClientMfaFinishRequest, ClientMfaFinishResponse, ClientMfaStartRequest,
-        ClientMfaStartResponse, MfaAdvanced, MfaAwaitingExternal, MfaBiometricSignature,
-        MfaCodeCredential, MfaCompleted, MfaFido2Assertion, MfaFido2Challenge,
-        MfaFlowApproveRequest, MfaFlowRemoteRejected, MfaFlowRemoteRequest, MfaFlowRemoteResponse,
-        MfaFlowStartAccepted, MfaFlowStartRejected, MfaFlowStartRequest, MfaFlowStartResponse,
-        MfaFlowStepFinishRequest, MfaFlowStepFinishResponse, MfaFlowStepStartRequest,
-        MfaFlowStepStartResponse, MfaMethod, MfaRemoteRejectionReason, MfaSignatureChallenge,
-        MfaStartRejectionReason, MfaStepRejection, MfaStepResult, MfaStepStarted,
-        mfa_flow_remote_response, mfa_flow_start_response, mfa_flow_step_finish_request,
-        mfa_step_result, mfa_step_started,
+        ClientMfaStartResponse, DevicePostureFacts, MfaAdvanced, MfaAwaitingExternal,
+        MfaBiometricSignature, MfaCodeCredential, MfaCompleted, MfaFido2Assertion,
+        MfaFido2Challenge, MfaFlowApproveRequest, MfaFlowRemoteRejected, MfaFlowRemoteRequest,
+        MfaFlowRemoteResponse, MfaFlowStartAccepted, MfaFlowStartRejected, MfaFlowStartRequest,
+        MfaFlowStartResponse, MfaFlowStepFinishRequest, MfaFlowStepFinishResponse,
+        MfaFlowStepStartRequest, MfaFlowStepStartResponse, MfaMethod, MfaRemoteRejectionReason,
+        MfaSignatureChallenge, MfaStartRejectionReason, MfaStepRejection, MfaStepResult,
+        MfaStepStarted, PostureConnectRequest, PostureConnectResponse, mfa_flow_remote_response,
+        mfa_flow_start_response, mfa_flow_step_finish_request, mfa_step_result, mfa_step_started,
     },
+    posture_rejected_status,
     proxy::{
         self, AwaitRemoteMfaFinishRequest, AwaitRemoteMfaFinishResponse,
         ClientMfaTokenValidationRequest, ClientMfaTokenValidationResponse, CoreError,
@@ -49,7 +52,10 @@ use crate::{
     grpc::{GatewayCommand, utils::parse_client_ip_agent},
     mfa_engine::{
         MfaEngine,
-        authorize::{AuthorizeError, ClientMfaServerError, EventChannels},
+        authorize::{
+            AuthorizeError, ClientMfaServerError, EventChannels, SessionDisconnectReason,
+            build_authorized_gateway_network_info, create_new_session, disconnect_session,
+        },
         error::StartError,
         legacy::{FinishError, LegacyProof},
         method::InitiateError,
@@ -60,7 +66,8 @@ use crate::{
         oidc::OidcMfaError,
         types::{FinishOutcome, LegacyFinishOutcome, LegacyStartOutcome, MultiStepStartOutcome},
     },
-    sso::{edge::VpnMfaTarget, flow::Identity},
+    posture::{self, PostureCheck, PostureResult},
+    sso::{constant_time_eq, edge::VpnMfaTarget, flow::Identity},
 };
 
 // Must cover the client's MOBILE_APPROVE_TIMEOUT.
@@ -402,6 +409,7 @@ impl From<FinishError> for Status {
             FinishError::Unauthorized => Code::Unauthenticated,
             FinishError::MissingBiometricChallenge | FinishError::Internal => Code::Internal,
             FinishError::Event(e) => return Self::from(e),
+            FinishError::PostureRejected(failed) => return posture_rejected_status(&failed),
         };
         Self::new(code, err.to_string())
     }
@@ -421,6 +429,7 @@ impl From<StepFinishError> for Status {
                 Code::Internal
             }
             StepFinishError::Event(e) => return Status::from(e),
+            StepFinishError::PostureRejected(failed) => return posture_rejected_status(&failed),
         };
         Status::new(code, err.to_string())
     }
@@ -499,7 +508,12 @@ impl ClientMfaServer {
             user,
             ip,
         } = self
-            .prepare_client_mfa_start(request.location_id, &request.pubkey, info)
+            .prepare_client_mfa_start(
+                request.location_id,
+                &request.pubkey,
+                request.posture.as_ref(),
+                info,
+            )
             .await?;
 
         let (flow_id, step_methods) = self.resolve_legacy_mfa_flow(&location, &user).await?;
@@ -544,7 +558,12 @@ impl ClientMfaServer {
             user,
             ip,
         } = self
-            .prepare_client_mfa_start(request.location_id, &request.pubkey, info)
+            .prepare_client_mfa_start(
+                request.location_id,
+                &request.pubkey,
+                request.posture.as_ref(),
+                info,
+            )
             .await?;
 
         let (flow, steps) = self
@@ -672,6 +691,7 @@ impl ClientMfaServer {
         &self,
         location_id: Id,
         pubkey: &str,
+        posture: Option<&DevicePostureFacts>,
         info: Option<proxy::DeviceInfo>,
     ) -> Result<ClientMfaStartContext, Status> {
         let location = WireguardNetwork::find_by_id(&self.pool, location_id)
@@ -720,6 +740,11 @@ impl ClientMfaServer {
 
         let (ip, _user_agent) = parse_client_ip_agent(&info).map_err(Status::internal)?;
 
+        // Fail fast, before the user is asked for a code. The stored snapshot is checked again
+        // when the session is authorized.
+        self.check_posture(&location, &device, &user, ip, posture)
+            .await?;
+
         user.verify_mfa_state(&self.pool).await.map_err(|err| {
             error!(
                 "Failed to verify MFA state for user {}: {err}",
@@ -733,6 +758,246 @@ impl ClientMfaServer {
             device,
             user,
             ip,
+        })
+    }
+
+    /// Evaluates the posture of `device` for `location` (when the location has posture
+    /// policies), records the snapshot and the audit event, and refuses a non-compliant device.
+    ///
+    /// A refused device also loses its active sessions in the location.
+    async fn check_posture(
+        &self,
+        location: &WireguardNetwork<Id>,
+        device: &Device<Id>,
+        user: &User<Id>,
+        ip: IpAddr,
+        posture: Option<&DevicePostureFacts>,
+    ) -> Result<(), Status> {
+        let mut conn = self.acquire_conn().await?;
+        let Some(check) = posture::check_connection(&mut conn, location.id, device.id, posture)
+            .await
+            .map_err(|err| {
+                error!("Failed to evaluate posture of device {device} for {location}: {err}");
+                Status::internal("unexpected error")
+            })?
+        else {
+            return Ok(());
+        };
+        drop(conn);
+
+        let context =
+            BidiRequestContext::new(user.id, user.username.clone(), ip, device.name.clone());
+        let PostureCheck { result, facts } = check;
+        match result {
+            PostureResult::Pass => {
+                info!("Device {device} passed the posture check for location {location}");
+                if let Err(err) = self.emit_event(BidiStreamEvent {
+                    context,
+                    event: BidiStreamEventType::DesktopClientMfa(Box::new(
+                        DesktopClientMfaEvent::PostureCheckPassed {
+                            device: device.clone(),
+                            location: location.clone(),
+                            facts,
+                        },
+                    )),
+                }) {
+                    error!("Failed to emit posture event: {err}");
+                }
+                Ok(())
+            }
+            PostureResult::Fail(failed_checks) => {
+                warn!(
+                    "Device {device} of {} failed the posture check for location {location}: {}",
+                    user.username,
+                    failed_checks.join("; ")
+                );
+                if let Err(err) = self.emit_event(BidiStreamEvent {
+                    context,
+                    event: BidiStreamEventType::DesktopClientMfa(Box::new(
+                        DesktopClientMfaEvent::PostureCheckFailed {
+                            device: device.clone(),
+                            location: location.clone(),
+                            facts,
+                            failed_checks: failed_checks.clone(),
+                        },
+                    )),
+                }) {
+                    error!("Failed to emit posture event: {err}");
+                }
+                self.revoke_sessions(location, user, device).await?;
+                Err(posture_rejected_status(&failed_checks))
+            }
+        }
+    }
+
+    /// Disconnects the active sessions of a device in a location.
+    async fn revoke_sessions(
+        &self,
+        location: &WireguardNetwork<Id>,
+        user: &User<Id>,
+        device: &Device<Id>,
+    ) -> Result<(), Status> {
+        let internal = |err: &dyn std::fmt::Display| {
+            error!("Failed to revoke sessions of {device} in {location}: {err}");
+            Status::internal("unexpected error")
+        };
+        let mut transaction = self.pool.begin().await.map_err(|err| internal(&err))?;
+        let sessions = VpnClientSession::get_all_active_device_sessions_in_location(
+            &mut *transaction,
+            location.id,
+            device.id,
+        )
+        .await
+        .map_err(|err| internal(&err))?;
+        for session in sessions {
+            disconnect_session(
+                &self.channels,
+                &mut transaction,
+                session,
+                location,
+                user,
+                device,
+                SessionDisconnectReason::Disconnected,
+            )
+            .await
+            .map_err(|err| internal(&err))?;
+        }
+        transaction.commit().await.map_err(|err| internal(&err))?;
+        Ok(())
+    }
+
+    /// Posture-only connection: a location with posture policies but without MFA.
+    ///
+    /// The caller proves it holds the device's enrollment with the device's polling token
+    /// (compared in constant time). On success a session with a fresh preshared key is
+    /// authorized, exactly as at the end of MFA.
+    #[instrument(skip_all)]
+    pub async fn posture_connect(
+        &self,
+        request: PostureConnectRequest,
+        info: Option<proxy::DeviceInfo>,
+    ) -> Result<PostureConnectResponse, Status> {
+        // Authenticate before anything else, so the errors below cannot be used to probe which
+        // locations or keys exist.
+        if request.token.is_empty() || request.token.len() > 256 {
+            return Err(Status::unauthenticated("unauthorized"));
+        }
+        let device = match Device::find_by_pubkey(&self.pool, &request.pubkey).await {
+            Ok(Some(device)) => device,
+            Ok(None) => {
+                warn!("Posture connect for an unknown public key");
+                return Err(Status::unauthenticated("unauthorized"));
+            }
+            Err(err) => {
+                error!("Posture connect: failed to load device: {err}");
+                return Err(Status::internal("unexpected error"));
+            }
+        };
+        let tokens: Vec<String> =
+            sqlx::query_scalar("SELECT token FROM pollingtoken WHERE device_id = $1")
+                .bind(device.id)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|err| {
+                    error!("Posture connect: failed to load polling token: {err}");
+                    Status::internal("unexpected error")
+                })?;
+        if !tokens
+            .iter()
+            .any(|token| constant_time_eq(token.as_bytes(), request.token.as_bytes()))
+        {
+            warn!("Posture connect for device {device} with a wrong token");
+            return Err(Status::unauthenticated("unauthorized"));
+        }
+
+        let location = WireguardNetwork::find_by_id(&self.pool, request.location_id)
+            .await
+            .map_err(|err| {
+                error!("Posture connect: failed to load location: {err}");
+                Status::internal("unexpected error")
+            })?
+            .ok_or_else(|| Status::invalid_argument("location not found"))?;
+        if location.mfa_enabled {
+            return Err(Status::invalid_argument(
+                "location requires MFA; posture is checked during MFA",
+            ));
+        }
+        let user = User::find_by_id(&self.pool, device.user_id)
+            .await
+            .map_err(|err| {
+                error!("Posture connect: failed to load user: {err}");
+                Status::internal("unexpected error")
+            })?
+            .ok_or_else(|| Status::internal("unexpected error"))?;
+        if !user.is_active {
+            return Err(Status::permission_denied("user is inactive"));
+        }
+        let user_info = UserInfo::from_user(&self.pool, user.clone(), false)
+            .await
+            .map_err(|err| {
+                error!("Posture connect: failed to load user info: {err}");
+                Status::internal("unexpected error")
+            })?;
+        Self::validate_location_access(&self.pool, &location, &device, &user_info).await?;
+        let (ip, _user_agent) = parse_client_ip_agent(&info).map_err(Status::internal)?;
+
+        let has_postures = location.has_postures(&self.pool).await.map_err(|err| {
+            error!("Posture connect: failed to load policies: {err}");
+            Status::internal("unexpected error")
+        })?;
+        if !has_postures {
+            // The policies were removed after the client fetched its configuration. Its peer is
+            // configured without a preshared key now, so an empty key lets it connect.
+            info!("Posture connect to {location}, which has no posture policies any more");
+            return Ok(PostureConnectResponse {
+                preshared_key: String::new(),
+            });
+        }
+
+        self.check_posture(&location, &device, &user, ip, request.posture.as_ref())
+            .await?;
+
+        let key = WireguardKey::generate();
+        let preshared_key = SecretStringWrapper::from(key.public());
+        let internal = |err: &dyn std::fmt::Display| {
+            error!("Posture connect: failed to authorize a session for {device}: {err}");
+            Status::internal("unexpected error")
+        };
+        let mut transaction = self.pool.begin().await.map_err(|err| internal(&err))?;
+        let network_device =
+            WireguardNetworkDevice::find(&mut *transaction, device.id, location.id)
+                .await
+                .map_err(|err| internal(&err))?
+                .ok_or_else(|| Status::internal("unexpected error"))?;
+        create_new_session(
+            &self.channels,
+            &mut transaction,
+            &location,
+            &user,
+            &device,
+            false,
+            preshared_key.clone(),
+        )
+        .await
+        .map_err(|err| internal(&err))?;
+        transaction.commit().await.map_err(|err| internal(&err))?;
+
+        let gateway_network_info =
+            build_authorized_gateway_network_info(network_device, preshared_key);
+        self.channels
+            .gateway_tx
+            .send(GatewayCommand::VpnSessionAuthorized(
+                location.id,
+                device.clone(),
+                gateway_network_info,
+            ))
+            .map_err(|err| internal(&err))?;
+        info!(
+            "Device {device} of {} authorized in location {location} after a posture check",
+            user.username
+        );
+        Ok(PostureConnectResponse {
+            preshared_key: key.public(),
         })
     }
 

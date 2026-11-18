@@ -39,6 +39,9 @@ pub(super) enum FinishCoreError {
     UninitializedStep,
     #[error("stale MFA attempt")]
     StaleAttempt,
+    /// The device no longer meets the location's posture policies.
+    #[error("device posture check failed")]
+    PostureRejected(Vec<String>),
     #[error("unexpected error")]
     Internal,
     #[error(transparent)]

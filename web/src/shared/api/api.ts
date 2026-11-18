@@ -22,6 +22,7 @@ import type {
   AddUsersToGroupsRequest,
   AddWebhookRequest,
   AdminChangeUserPasswordRequest,
+  ApiDevicePosture,
   ApiToken,
   ApplicationInfo,
   AssignStaticIpsRequest,
@@ -42,11 +43,15 @@ import type {
   DeleteAuthKeyRequest,
   Device,
   DeviceLocationIpsResponse,
+  DevicePostureSnapshot,
+  DevicePostureVersionCatalog,
+  DevicePostureView,
   DirectorySyncConnectionTest,
   DirectorySyncReport,
   DirectorySyncStatus,
   Edge,
   EdgeInfo,
+  EditDevicePostureRequest,
   EditGroupRequest,
   EditNetworkDeviceRequest,
   EditNetworkLocationRequest,
@@ -275,6 +280,26 @@ const api = {
         disable: (username: string) => client.delete(`/user/${username}/email`),
       },
     },
+  },
+  devicePosture: {
+    getDevicePostures: () => client.get<ApiDevicePosture[]>('/device-posture'),
+    getDevicePosture: (id: number) =>
+      client.get<ApiDevicePosture>(`/device-posture/${id}`),
+    getVersionCatalog: () =>
+      client.get<DevicePostureVersionCatalog>('/device-posture/versions'),
+    addDevicePosture: (data: EditDevicePostureRequest) =>
+      client.post<ApiDevicePosture>('/device-posture', data),
+    editDevicePosture: ({ id, ...data }: EditDevicePostureRequest & { id: number }) =>
+      client.put<ApiDevicePosture>(`/device-posture/${id}`, data),
+    deleteDevicePosture: (id: number) => client.delete(`/device-posture/${id}`),
+    duplicateDevicePosture: (id: number) =>
+      client.post<ApiDevicePosture>(`/device-posture/${id}/duplicate`),
+    setLocationsForDevicePosture: (id: number, locations: number[]) =>
+      client.put<ApiDevicePosture>(`/device-posture/${id}/locations`, { locations }),
+    getDeviceSnapshot: (deviceId: number) =>
+      client.get<DevicePostureView>(`/device/${deviceId}/posture`),
+    getUserSnapshots: (username: string) =>
+      client.get<DevicePostureSnapshot[]>(`/user/${username}/device-posture`),
   },
   firewall: {
     getRules: () => client.get<FirewallRule[]>('/firewall/rule'),
