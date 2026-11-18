@@ -48,6 +48,7 @@ pub mod network_devices;
 pub mod openid_clients;
 pub mod openid_flow;
 pub(crate) mod pagination;
+pub(crate) mod provisioning;
 pub mod proxy;
 pub(crate) mod reserved;
 pub mod resource_display;

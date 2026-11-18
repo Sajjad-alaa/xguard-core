@@ -25,6 +25,7 @@ import {
   type BulkStartEnrollmentResponse,
   type BulkStoreEnrollmentTokenLdapResponse,
   type Device,
+  type ProvisioningFile,
   type StartEnrollmentResponse,
   type User,
   type UserSortKey,
@@ -44,6 +45,7 @@ import {
   getSettingsQueryOptions,
 } from '../../shared/query';
 import { displayDate } from '../../shared/utils/displayDate';
+import { downloadProvisioningFile } from '../../shared/utils/provisioning';
 import { isDeviceOnline, isUserOnline } from '../../shared/utils/userOnlineStatus';
 import { Avatar } from '../../shared/xguard-ui/components/Avatar/Avatar';
 import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
@@ -588,6 +590,29 @@ export const UsersTable = () => {
                 });
               },
             });
+            if (rowData.is_active) {
+              enrolledItems.push({
+                text: m.users_row_menu_provisioning_file(),
+                icon: IconKind.Download,
+                onClick: () => {
+                  openModal(ModalName.ConfirmAction, {
+                    title: m.users_modal_provisioning_title(),
+                    contentMd: m.users_modal_provisioning_content({
+                      name: rowData.name,
+                    }),
+                    actionPromise: () =>
+                      api.user.createProvisioningFile({ username: rowData.username }),
+                    submitProps: { text: m.users_modal_provisioning_submit() },
+                    onSuccess: (result) => {
+                      downloadProvisioningFile(
+                        (result as { data: ProvisioningFile }).data,
+                      );
+                    },
+                    onError: () => Snackbar.error(m.users_provisioning_error()),
+                  });
+                },
+              });
+            }
             menuItems.splice(1, 0, { items: enrolledItems });
           }
           if (rowData.mfa_enabled) {

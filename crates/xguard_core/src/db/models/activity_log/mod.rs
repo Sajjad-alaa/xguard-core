@@ -71,6 +71,7 @@ pub enum EventType {
     ActivityLogStreamModified,
     ActivityLogStreamRemoved,
     ClientConfigurationTokenAdded,
+    ProvisioningFileCreated,
     // OpenID app management
     OpenIdAppAdded,
     OpenIdAppRemoved,

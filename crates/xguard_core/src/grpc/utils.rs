@@ -147,7 +147,7 @@ pub async fn build_device_config_response(
             };
             if should_prevent_service_location_usage(&location) {
                 warn!(
-                    "Skipping service location {}: service locations are not supported.",
+                    "Skipping service location {}: it has location MFA, which service locations cannot use.",
                     location.name
                 );
                 continue;

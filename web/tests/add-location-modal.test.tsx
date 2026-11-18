@@ -11,10 +11,10 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 describe('AddLocationModalContent service-location option', () => {
   const getServiceOption = () => screen.getByTestId('add-service-location');
 
-  it('is disabled because XGuard does not support service locations', () => {
+  it('is available: XGuard clients run service locations', () => {
     render(<AddLocationModalContent modalData={{ license: null }} />);
 
-    expect(getServiceOption()).toHaveClass('disabled');
+    expect(getServiceOption()).not.toHaveClass('disabled');
   });
 
   it('does not advertise a paid tier', () => {

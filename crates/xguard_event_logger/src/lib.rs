@@ -27,10 +27,10 @@ use xguard_core::{
             OidcDirectorySyncGroupMemberMetadata, OidcDirectorySyncGroupMetadata,
             OidcDirectorySyncUserMetadata, OpenIdAppMetadata, OpenIdAppModifiedMetadata,
             OpenIdAppStateChangedMetadata, OpenIdProviderMetadata, PasswordChangedByAdminMetadata,
-            PasswordResetMetadata, ProxyDeletedMetadata, ProxyModifiedMetadata,
-            SettingsUpdateMetadata, SnatBindingMetadata, SnatBindingModifiedMetadata,
-            UserGroupsModifiedMetadata, UserImportBlockedMetadata, UserMetadata,
-            UserMfaDisabledMetadata, UserModifiedMetadata, VpnClientMetadata,
+            PasswordResetMetadata, ProvisioningFileMetadata, ProxyDeletedMetadata,
+            ProxyModifiedMetadata, SettingsUpdateMetadata, SnatBindingMetadata,
+            SnatBindingModifiedMetadata, UserGroupsModifiedMetadata, UserImportBlockedMetadata,
+            UserMetadata, UserMfaDisabledMetadata, UserModifiedMetadata, VpnClientMetadata,
             VpnClientMfaAbortedMetadata, VpnClientMfaFailedMetadata, VpnClientMfaMetadata,
             VpnLocationMetadata, VpnLocationModifiedMetadata, WebHookMetadata,
             WebHookModifiedMetadata, WebHookStateChangedMetadata,
@@ -581,6 +581,14 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     EventType::ClientConfigurationTokenAdded,
                     serde_json::to_value(ClientConfigurationTokenMetadata { user: user.into() })
                         .ok(),
+                ),
+                ApiEventType::ProvisioningFileCreated { user, expires_at } => (
+                    EventType::ProvisioningFileCreated,
+                    serde_json::to_value(ProvisioningFileMetadata {
+                        user: user.into(),
+                        expires_at,
+                    })
+                    .ok(),
                 ),
                 ApiEventType::ProxyModified { before, after } => (
                     EventType::ProxyModified,

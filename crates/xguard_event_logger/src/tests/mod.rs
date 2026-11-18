@@ -1141,6 +1141,19 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("Added"),
         },
         EventTestCase {
+            name: "ProvisioningFileCreated",
+            message: api_message(ApiEventType::ProvisioningFileCreated {
+                user: user.clone(),
+                expires_at: chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            }),
+            event_type: EventType::ProvisioningFileCreated,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("provisioning file"),
+        },
+        EventTestCase {
             name: "ProxyModified",
             message: api_message(ApiEventType::ProxyModified {
                 before: proxy.clone(),

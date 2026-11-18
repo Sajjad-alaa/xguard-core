@@ -25,7 +25,10 @@ use xguard_common::{
 
 use crate::{
     db::AppEvent,
-    features::{is_service_location, supported_mfa_authorize_methods, supported_mfa_setup_methods},
+    features::{
+        is_unservable_service_location, supported_mfa_authorize_methods,
+        supported_mfa_setup_methods,
+    },
     grpc::{interceptor::JwtInterceptor, worker::WorkerServer},
     sso::{
         edge::edge_public_url,
@@ -277,9 +280,9 @@ pub use xguard_common::gateway_event::{
     GatewayCommand, send_gateway_command, send_multiple_gateway_commands,
 };
 
-/// Service locations are not supported by XGuard (see [`crate::features`]), so peers are never
-/// handed out for them.
+/// Service locations combined with location MFA cannot work (see [`crate::features`]), so
+/// peers and configurations are never handed out for them.
 #[must_use]
 pub fn should_prevent_service_location_usage(location: &WireguardNetwork<Id>) -> bool {
-    is_service_location(location)
+    is_unservable_service_location(location)
 }

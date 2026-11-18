@@ -118,6 +118,7 @@
   "location_edit_section_general_network_settings": "General network settings",
   "location_edit_section_mtu_settings": "Maximum transfer unit (MTU) settings",
   "location_service_mode_mfa_warning": "MFA-protected locations can't be set as service locations. Disable MFA to use a service location type.",
+  "location_service_mode_posture_warning": "Service locations run without a signed-in user, so posture policies can't be attached to them. Remove the policies or select the Regular location type.",
   "location_access_section_label": "Location Access",
   "location_access_selected_group_count_one": "+{count} group",
   "location_access_selected_group_count_other": "+{count} groups",

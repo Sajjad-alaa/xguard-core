@@ -69,11 +69,11 @@ async fn test_posture_connect_through_bidi(_: PgPoolOptions, options: PgConnectO
     complete_proxy_handshake(&mut context).await;
     let network = create_network(&context.pool).await;
     let (_, device) = create_user_with_device(&context.pool).await;
-    let token = PollingToken::new(device.id)
-        .save(&context.pool)
-        .await
-        .unwrap()
-        .token;
+    let token = {
+        let (token, secret) = PollingToken::new(device.id);
+        token.save(&context.pool).await.unwrap();
+        secret
+    };
     require_disk_encryption(&context.pool, network.id).await;
 
     let request = |id, disk_encrypted| CoreRequest {

@@ -81,6 +81,7 @@
   "activity_event_password_changed_by_admin": "Password changed by admin",
   "activity_event_password_reset": "Password reset",
   "activity_event_client_configuration_token_added": "Client configuration token added",
+  "activity_event_provisioning_file_created": "Client provisioning file created",
   "activity_event_user_snat_binding_added": "User SNAT binding added",
   "activity_event_user_snat_binding_modified": "User SNAT binding modified",
   "activity_event_user_snat_binding_removed": "User SNAT binding removed",

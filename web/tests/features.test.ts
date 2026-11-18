@@ -24,29 +24,24 @@ describe('XGuard feature availability (no license tiers)', () => {
     expect(canUseEnterpriseFeature(null, LicenseFeature.GroupMTUOverride).result).toBe(
       true,
     );
+    // Service locations are implemented in XGuard (daemon-managed tunnels).
+    expect(isFeatureSupported(LicenseFeature.ServiceLocations)).toBe(true);
+    expect(canUseServiceLocations(null)).toBe(true);
   });
 
   it('reports features XGuard does not implement as unavailable', () => {
-    for (const feature of [
-      LicenseFeature.ServiceLocations,
-      LicenseFeature.AclAllowedIps,
-      LicenseFeature.Fido2,
-    ]) {
+    for (const feature of [LicenseFeature.AclAllowedIps, LicenseFeature.Fido2]) {
       expect(isFeatureSupported(feature)).toBe(false);
       expect(canUseEnterpriseFeature(null, feature).result).toBe(false);
       expect(isNavItemLocked(null, LicenseTier.Enterprise, feature)).toBe(true);
     }
-    expect(canUseServiceLocations(null)).toBe(false);
   });
 
   it('runs the action only for available features', () => {
     const action = vi.fn();
     licenseActionCheck(canUseBusinessFeature(null), action);
     expect(action).toHaveBeenCalledTimes(1);
-    licenseActionCheck(
-      canUseEnterpriseFeature(null, LicenseFeature.ServiceLocations),
-      action,
-    );
+    licenseActionCheck(canUseEnterpriseFeature(null, LicenseFeature.Fido2), action);
     expect(action).toHaveBeenCalledTimes(1);
     // Device posture is implemented in XGuard.
     licenseActionCheck(

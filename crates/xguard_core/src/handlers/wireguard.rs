@@ -212,13 +212,25 @@ impl WireguardNetworkData {
     /// Rejects service-location mode combined with location MFA: core cannot serve it and the
     /// client cannot represent it (`Location::is_service_location()` requires MFA disabled).
     pub(crate) fn validate_service_location_mfa(&self) -> Result<(), WebError> {
-        if self.service_location_mode == ServiceLocationMode::Disabled || !self.mfa_enabled {
+        if self.service_location_mode == ServiceLocationMode::Disabled {
             return Ok(());
         }
-
-        Err(WebError::BadRequest(
-            "Service location mode cannot be combined with location MFA".into(),
-        ))
+        if self.mfa_enabled {
+            return Err(WebError::BadRequest(
+                "Service location mode cannot be combined with location MFA".into(),
+            ));
+        }
+        // A service location runs without a user session, so nothing could report posture.
+        if self
+            .posture_checks
+            .as_deref()
+            .is_some_and(|checks| !checks.is_empty())
+        {
+            return Err(WebError::BadRequest(
+                "Service location mode cannot be combined with posture policies".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Rejects a zero (or negative) keepalive interval to prevent idle service locations
@@ -382,17 +394,6 @@ pub(crate) async fn create_network(
         session.user.username
     );
 
-    // service locations need the desktop client's service-location module (not in XGuard)
-    if data.service_location_mode != ServiceLocationMode::Disabled {
-        error!("Adding location {network_name} blocked! Service locations are not supported.");
-        return Ok(ApiResponse {
-            json: json!({
-                "msg": "Service locations are not supported.",
-            }),
-            status: StatusCode::BAD_REQUEST,
-        });
-    }
-
     data.validate_peer_disconnect_threshold()?;
     data.validate_service_location_mfa()?;
     data.validate_keepalive_interval()?;
@@ -554,18 +555,6 @@ pub(crate) async fn modify_network(
         session.user.username
     );
 
-    // service locations need the desktop client's service-location module (not in XGuard)
-    if data.service_location_mode != ServiceLocationMode::Disabled {
-        let name = data.name;
-        error!("Modification of location {name} blocked! Service locations are not supported.");
-        return Ok(ApiResponse {
-            json: json!({
-                "msg": "Service locations are not supported.",
-            }),
-            status: StatusCode::BAD_REQUEST,
-        });
-    }
-
     data.validate_peer_disconnect_threshold()?;
     data.validate_service_location_mfa()?;
     data.validate_keepalive_interval()?;
@@ -670,6 +659,15 @@ pub(crate) async fn modify_network(
     } else {
         None
     };
+    if network.service_location_mode != ServiceLocationMode::Disabled
+        && !LocationPostures::find(&mut *transaction, network.id)
+            .await?
+            .is_empty()
+    {
+        return Err(WebError::BadRequest(
+            "Service location mode cannot be combined with posture policies".into(),
+        ));
+    }
 
     // `NetworkModified` sends the complete peer list. The gateway compares the peer count and
     // public keys, then replaces its peers, so separate device events are not needed.

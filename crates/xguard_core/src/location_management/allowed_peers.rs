@@ -11,7 +11,8 @@ use crate::grpc::should_prevent_service_location_usage;
 /// Each device is marked as allowed or not allowed in a given network,
 /// which enables enforcing peer disconnect in MFA-protected networks.
 ///
-/// Service locations are not supported, so they never return peers.
+/// Service locations with location MFA cannot be served, so they never return peers; other
+/// service locations are treated like any location without MFA.
 /// MFA-enabled and posture-checked locations only return peers backed by an active session with a
 /// runtime preshared key.
 pub async fn get_location_allowed_peers(
@@ -22,7 +23,7 @@ pub async fn get_location_allowed_peers(
 
     if should_prevent_service_location_usage(location) {
         warn!(
-            "Location {} is a service location, which XGuard does not support. No clients will be allowed to connect.",
+            "Location {} is a service location with MFA, which cannot be served. No clients will be allowed to connect.",
             location.name
         );
         return Ok(Vec::new());

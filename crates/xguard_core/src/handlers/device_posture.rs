@@ -369,6 +369,19 @@ pub async fn set_device_posture_locations(
     if usize::try_from(existing).ok() != Some(locations.len()) {
         return Err(WebError::BadRequest("Unknown location.".into()));
     }
+    // Service locations run without a user session, so nothing could report posture for them.
+    let service_locations: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM wireguard_network \
+        WHERE id = ANY($1) AND service_location_mode <> 'disabled'",
+    )
+    .bind(&locations)
+    .fetch_one(&mut *transaction)
+    .await?;
+    if service_locations > 0 {
+        return Err(WebError::BadRequest(
+            "Posture policies cannot be attached to service locations.".into(),
+        ));
+    }
     let current = posture.location_ids(&mut *transaction).await?;
     if current == locations {
         let unchanged = find_posture(&mut transaction, id).await?;
