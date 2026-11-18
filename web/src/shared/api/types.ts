@@ -610,6 +610,22 @@ export interface StartEnrollmentResponse {
   enrollment_token: string;
 }
 
+export interface CreateProvisioningFileRequest {
+  username: string;
+  /** Hours the single-use enrollment token stays valid (1-168, default 24). */
+  valid_hours?: number;
+}
+
+/** Desktop client provisioning file, deployed as `provisioning.json`. */
+export interface ProvisioningFile {
+  version: number;
+  instance_name: string;
+  enrollment_url: string;
+  enrollment_token: string;
+  expires_at: string;
+  username: string;
+}
+
 export interface BulkStartEnrollmentRequest {
   users: number[];
   send_enrollment_notification: boolean;

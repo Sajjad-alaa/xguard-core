@@ -2212,11 +2212,11 @@ mod posture {
         let user = create_user(&pool).await;
         let device = create_device(&pool, user.id).await;
         attach_device_to_location(&pool, location.id, device.id).await;
-        let token = PollingToken::new(device.id)
-            .save(&pool)
-            .await
-            .unwrap()
-            .token;
+        let token = {
+            let (token, secret) = PollingToken::new(device.id);
+            token.save(&pool).await.unwrap();
+            secret
+        };
         let (server, mut event_rx, mut gateway_rx) = make_server(pool.clone());
         let request = |token: &str, pubkey: &str, disk_encrypted: bool| PostureConnectRequest {
             location_id: location.id,
@@ -2324,11 +2324,11 @@ mod posture {
         let user = create_user(&pool).await;
         let device = create_device(&pool, user.id).await;
         attach_device_to_location(&pool, location.id, device.id).await;
-        let token = PollingToken::new(device.id)
-            .save(&pool)
-            .await
-            .unwrap()
-            .token;
+        let token = {
+            let (token, secret) = PollingToken::new(device.id);
+            token.save(&pool).await.unwrap();
+            secret
+        };
         let posture_id = attach_policy(&pool, location.id, false).await;
         let (server, mut event_rx, mut gateway_rx) = make_server(pool.clone());
         server

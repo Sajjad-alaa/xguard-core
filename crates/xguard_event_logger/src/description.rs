@@ -277,6 +277,9 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::ClientConfigurationTokenAdded { user } => {
             Some(format!("Added client configuration token for user {user}"))
         }
+        ApiEventType::ProvisioningFileCreated { user, expires_at } => Some(format!(
+            "Created a desktop client provisioning file for user {user}, valid until {expires_at}"
+        )),
         ApiEventType::ProxyModified { before: _, after } => Some(format!("Modified proxy {after}")),
         ApiEventType::ProxyDeleted { proxy } => Some(format!("Deleted proxy {proxy}")),
         ApiEventType::GatewayModified { before: _, after } => {

@@ -326,11 +326,14 @@ pub(crate) async fn create_enrollment_token(
 
 /// Insert a polling token for the given device, returning the raw token string.
 pub(crate) async fn create_polling_token(pool: &PgPool, device_id: Id) -> String {
-    PollingToken::new(device_id)
-        .save(pool)
-        .await
-        .expect("failed to save polling token")
-        .token
+    {
+        let (token, secret) = PollingToken::new(device_id);
+        token
+            .save(pool)
+            .await
+            .expect("failed to save polling token");
+        secret
+    }
 }
 
 /// Send an `EnrollmentStart` request to the handler and consume the response.

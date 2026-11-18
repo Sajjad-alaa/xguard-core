@@ -333,6 +333,11 @@ pub enum ApiEventType {
     ClientConfigurationTokenAdded {
         user: User<Id>,
     },
+    /// An admin generated a desktop client provisioning file (single-use enrollment token).
+    ProvisioningFileCreated {
+        user: User<Id>,
+        expires_at: NaiveDateTime,
+    },
     ProxyModified {
         before: Proxy<Id>,
         after: Proxy<Id>,

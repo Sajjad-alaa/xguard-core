@@ -1754,18 +1754,21 @@ fn location_json_with_group_client_mtus(name: &str, group_client_mtus: Value) ->
     })
 }
 
+/// Service locations can be created and edited; they cannot be combined with location MFA or
+/// with posture policies, from either side.
 #[sqlx::test]
-async fn test_service_locations_are_not_supported(_: PgPoolOptions, options: PgConnectOptions) {
+async fn test_service_locations_are_supported(_: PgPoolOptions, options: PgConnectOptions) {
     let pool = setup_pool(options).await;
     let (mut client, _client_state) = make_test_client(pool).await;
     authenticate_admin(&mut client).await;
 
-    for service_location_mode in ["prelogon", "alwayson"] {
+    let mut ids = Vec::new();
+    for (index, service_location_mode) in ["prelogon", "alwayson"].into_iter().enumerate() {
         let response = client
             .post("/api/v1/network")
             .json(&location_payload(
-                "service-location",
-                "10.1.1.1/24",
+                &format!("service-location-{index}"),
+                &format!("10.{}.1.1/24", index + 1),
                 false,
                 service_location_mode,
             ))
@@ -1773,10 +1776,73 @@ async fn test_service_locations_are_not_supported(_: PgPoolOptions, options: PgC
             .await;
         assert_eq!(
             response.status(),
-            StatusCode::BAD_REQUEST,
-            "service location mode {service_location_mode} must be rejected"
+            StatusCode::CREATED,
+            "service location mode {service_location_mode} must be accepted"
         );
+        let created: Value = response.json().await;
+        assert_eq!(created["service_location_mode"], service_location_mode);
+        ids.push(created["id"].as_i64().unwrap());
     }
+
+    // Turning MFA on for a service location is refused.
+    make_mfa_flow(&client).await;
+    let response = client
+        .put(format!("/api/v1/network/{}", ids[0]))
+        .json(&location_payload(
+            "service-location-0",
+            "10.1.1.1/24",
+            true,
+            "prelogon",
+        ))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // Posture policies and service locations exclude each other.
+    let response = client
+        .post("/api/v1/device-posture")
+        .json(&json!({"name": "laptops"}))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let posture_id = response.json::<Value>().await["id"].as_i64().unwrap();
+    let response = client
+        .put(format!("/api/v1/device-posture/{posture_id}/locations"))
+        .json(&json!({"locations": [ids[1]]}))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let mut payload = location_payload("service-posture", "10.9.1.1/24", false, "alwayson");
+    payload["posture_checks"] = json!([posture_id]);
+    let response = client.post("/api/v1/network").json(&payload).send().await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let mut payload = location_payload("plain-posture", "10.8.1.1/24", false, "disabled");
+    payload["posture_checks"] = json!([posture_id]);
+    let response = client.post("/api/v1/network").json(&payload).send().await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let plain_id = response.json::<Value>().await["id"].as_i64().unwrap();
+    let mut payload = location_payload("plain-posture", "10.8.1.1/24", false, "alwayson");
+    payload.as_object_mut().unwrap().remove("posture_checks");
+    let response = client
+        .put(format!("/api/v1/network/{plain_id}"))
+        .json(&payload)
+        .send()
+        .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "a location keeping its posture policies cannot become a service location"
+    );
+    let response = client
+        .get(format!("/api/v1/network/{plain_id}"))
+        .send()
+        .await;
+    assert_eq!(
+        response.json::<Value>().await["service_location_mode"],
+        "disabled"
+    );
 }
 
 #[sqlx::test]

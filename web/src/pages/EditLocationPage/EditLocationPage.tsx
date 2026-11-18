@@ -1014,6 +1014,24 @@ const EditLocationForm = ({
             text={m.location_posture_checks_info()}
             variant="info"
           />
+          <form.Subscribe
+            selector={(s) =>
+              s.values.service_location_mode !== LocationServiceMode.Disabled
+            }
+          >
+            {(isServiceLocation) =>
+              isServiceLocation ? (
+                <>
+                  <SizedBox height={ThemeSpacing.Md} />
+                  <InfoBanner
+                    icon={IconKind.InfoOutlined}
+                    text={m.location_service_mode_posture_warning()}
+                    variant="warning"
+                  />
+                </>
+              ) : null
+            }
+          </form.Subscribe>
           <SizedBox height={ThemeSpacing.Xl2} />
           {postureChecksSectionState.showEmptyState && (
             <div className="location-empty-state">

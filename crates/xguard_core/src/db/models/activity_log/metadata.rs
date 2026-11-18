@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use xguard_common::db::{
     Id,
     models::{
@@ -604,6 +605,12 @@ pub struct UserMfaDisabledMetadata {
 #[derive(Serialize)]
 pub struct ClientConfigurationTokenMetadata {
     pub user: UserNoSecrets,
+}
+
+#[derive(Serialize)]
+pub struct ProvisioningFileMetadata {
+    pub user: UserNoSecrets,
+    pub expires_at: NaiveDateTime,
 }
 
 #[derive(Serialize)]

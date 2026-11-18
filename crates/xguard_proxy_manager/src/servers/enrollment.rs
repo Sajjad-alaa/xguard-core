@@ -913,16 +913,14 @@ impl EnrollmentServer {
             "Creating polling token for further client communication for device {}, user {}({:?})",
             device.wireguard_pubkey, user.username, user.id,
         );
-        let token = PollingToken::new(device.id)
-            .save(&mut *transaction)
-            .await
-            .map_err(|err| {
-                error!(
-                    "Failed to save PollingToken for device {}, user {}({:?}): {err}",
-                    device.wireguard_pubkey, user.username, user.id
-                );
-                Status::internal("failed to save polling token")
-            })?;
+        let (token, token_secret) = PollingToken::new(device.id);
+        token.save(&mut *transaction).await.map_err(|err| {
+            error!(
+                "Failed to save PollingToken for device {}, user {}({:?}): {err}",
+                device.wireguard_pubkey, user.username, user.id
+            );
+            Status::internal("failed to save polling token")
+        })?;
         info!(
             "Created polling token for further client communication for device: {}, user {}({:?})",
             device.wireguard_pubkey, user.username, user.id,
@@ -1006,7 +1004,7 @@ impl EnrollmentServer {
             device: Some(device.clone().into()),
             configs: wire_configs,
             instance: Some(instance_info.into()),
-            token: Some(token.token),
+            token: Some(token_secret),
         };
 
         // Prepare event context and push the event
@@ -1248,13 +1246,11 @@ pub async fn new_polling_token(pool: &PgPool, device: &Device<Id>) -> Result<Str
             error!("Failed to delete polling token: {err}");
             Status::internal(format!("unexpected error: {err}"))
         })?;
-    let new_token = PollingToken::new(device.id)
-        .save(&mut *transaction)
-        .await
-        .map_err(|err| {
-            error!("Failed to save new polling token: {err}");
-            Status::internal(format!("unexpected error: {err}"))
-        })?;
+    let (new_token, secret) = PollingToken::new(device.id);
+    new_token.save(&mut *transaction).await.map_err(|err| {
+        error!("Failed to save new polling token: {err}");
+        Status::internal(format!("unexpected error: {err}"))
+    })?;
 
     transaction.commit().await.map_err(|err| {
         error!("Failed to commit transaction while making a new polling token: {err}");
@@ -1265,7 +1261,7 @@ pub async fn new_polling_token(pool: &PgPool, device: &Device<Id>) -> Result<Str
         device.wireguard_pubkey
     );
 
-    Ok(new_token.token)
+    Ok(secret)
 }
 
 #[cfg(test)]

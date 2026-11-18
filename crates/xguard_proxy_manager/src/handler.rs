@@ -28,7 +28,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 #[cfg(test)]
 use tonic::transport::Endpoint;
 use tonic::{
-    Code, Request, Status, Streaming, service::interceptor::InterceptedService, transport::Channel,
+    Code, Request, Streaming, service::interceptor::InterceptedService, transport::Channel,
 };
 use xguard_common::{
     VERSION,
@@ -59,7 +59,9 @@ use xguard_version::{
 use crate::ProxyManagerTestSupport;
 use crate::{
     HandlerTxMap, ProxyError, ProxyTxSet, TEN_SECS,
-    servers::{EnrollmentServer, MfaConfigServer, OpenIdServer, PasswordResetServer},
+    servers::{
+        EnrollmentServer, MfaConfigServer, OpenIdServer, PasswordResetServer, PollingServer,
+    },
 };
 
 const VERSION_ZERO: Version = Version::new(0, 0, 0);
@@ -927,13 +929,14 @@ impl ProxyHandler {
                 }
             }
             // rpc LocationInfo (LocationInfoRequest) returns (LocationInfoResponse)
-            Some(core_request::Payload::InstanceInfo(_)) => {
-                // Instance config polling (desktop client config sync) is not part of XGuard.
-                // Clients treat FailedPrecondition as "feature unavailable".
-                debug!("A client tried to fetch the instance config, which is not supported.");
-                Some(core_response::Payload::CoreError(
-                    Status::failed_precondition("instance config polling is not supported").into(),
-                ))
+            Some(core_request::Payload::InstanceInfo(request)) => {
+                match boxed(services.polling.info(request, received.device_info)).await {
+                    Ok(response) => Some(core_response::Payload::InstanceInfo(response)),
+                    Err(err) => {
+                        debug!("Config polling refused: {err}");
+                        Some(core_response::Payload::CoreError(err.into()))
+                    }
+                }
             }
             // rpc AuthInfo (AuthInfoRequest) returns (AuthInfoResponse)
             Some(core_request::Payload::AuthInfo(request)) => {
@@ -1286,6 +1289,7 @@ struct ProxyServices {
     client_mfa: ClientMfaServer,
     mfa_config: MfaConfigServer,
     openid: OpenIdServer,
+    polling: PollingServer,
     // Directory-sync channels are reserved for the XGuard LDAP / directory sync rebuild.
     #[allow(dead_code)]
     ldap: UnboundedSender<LdapSyncEventType>,
@@ -1314,6 +1318,7 @@ impl ProxyServices {
         );
         let mfa_config = MfaConfigServer::new(pool.clone(), tx.event_tx.clone());
         let openid = OpenIdServer::new(pool.clone());
+        let polling = PollingServer::new(pool.clone());
 
         Self {
             enrollment,
@@ -1321,6 +1326,7 @@ impl ProxyServices {
             client_mfa,
             mfa_config,
             openid,
+            polling,
             ldap: tx.ldap.clone(),
             dirsync: tx.dirsync.clone(),
             event_tx: tx.event_tx.clone(),

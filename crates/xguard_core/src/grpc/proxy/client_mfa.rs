@@ -18,6 +18,7 @@ use xguard_common::{
             Device, User, WireguardNetwork,
             device::WireguardNetworkDevice,
             mfa_flow::{MfaFlow, MfaFlowStep},
+            polling_token::polling_token_digest,
             vpn_client_mfa_session::{VpnClientMfaSession, VpnMfaFlowKind, hash_token},
             vpn_client_session::{VpnClientMfaMethod, VpnClientSession},
         },
@@ -893,6 +894,8 @@ impl ClientMfaServer {
                 return Err(Status::internal("unexpected error"));
             }
         };
+        // Stored tokens are digests; compare the digest of the presented one.
+        let presented = polling_token_digest(&request.token);
         let tokens: Vec<String> =
             sqlx::query_scalar("SELECT token FROM pollingtoken WHERE device_id = $1")
                 .bind(device.id)
@@ -904,7 +907,7 @@ impl ClientMfaServer {
                 })?;
         if !tokens
             .iter()
-            .any(|token| constant_time_eq(token.as_bytes(), request.token.as_bytes()))
+            .any(|digest| constant_time_eq(digest.as_bytes(), presented.as_bytes()))
         {
             warn!("Posture connect for device {device} with a wrong token");
             return Err(Status::unauthenticated("unauthorized"));

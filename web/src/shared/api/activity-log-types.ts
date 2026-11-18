@@ -119,6 +119,7 @@ export const ActivityLogEventType = {
   PasswordReset: 'password_reset',
 
   ClientConfigurationTokenAdded: 'client_configuration_token_added',
+  ProvisioningFileCreated: 'provisioning_file_created',
 
   UserSnatBindingAdded: 'user_snat_binding_added',
   UserSnatBindingModified: 'user_snat_binding_modified',

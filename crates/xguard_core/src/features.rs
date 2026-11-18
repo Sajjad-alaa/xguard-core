@@ -36,12 +36,20 @@ pub fn supported_mfa_authorize_methods() -> Vec<VpnClientMfaMethod> {
         .collect()
 }
 
-/// Service locations (pre-logon / always-on tunnels) need the desktop client's
-/// service-location module, which XGuard does not include. Such locations are
-/// skipped so no client is handed a configuration it cannot honour.
+/// Whether a location is a service location (a pre-logon or always-on tunnel that the desktop
+/// client's background service keeps up without a user session).
 #[must_use]
 pub fn is_service_location(location: &WireguardNetwork<Id>) -> bool {
     location.service_location_mode != ServiceLocationMode::Disabled
+}
+
+/// Whether a service location cannot be served: it has location MFA, which needs a user to
+/// authorize each session. The API refuses this combination; this guards rows written before
+/// (or around) that check, so no client is handed a configuration it cannot honour and the
+/// gateway never gets peers for it.
+#[must_use]
+pub fn is_unservable_service_location(location: &WireguardNetwork<Id>) -> bool {
+    is_service_location(location) && location.mfa_enabled
 }
 
 #[cfg(test)]
@@ -60,5 +68,17 @@ mod tests {
         assert!(!supported_mfa_setup_methods().contains(&VpnClientMfaMethod::Oidc));
         assert!(supported_mfa_authorize_methods().contains(&VpnClientMfaMethod::Oidc));
         assert!(!supported_mfa_authorize_methods().contains(&VpnClientMfaMethod::Fido2));
+    }
+
+    #[test]
+    fn service_locations_with_mfa_are_unservable() {
+        let mut location = WireguardNetwork::default().with_id(1);
+        assert!(!is_service_location(&location));
+        assert!(!is_unservable_service_location(&location));
+        location.service_location_mode = ServiceLocationMode::AlwaysOn;
+        assert!(is_service_location(&location));
+        assert!(!is_unservable_service_location(&location));
+        location.mfa_enabled = true;
+        assert!(is_unservable_service_location(&location));
     }
 }

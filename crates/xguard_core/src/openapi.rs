@@ -18,8 +18,8 @@ use super::handlers::{
     firewall, forward_auth, gateway,
     group::{self, BulkAssignToGroupsRequest},
     location_stats, log_stream, mail, mfa_flow, network_devices, openid_clients, openid_flow,
-    proxy, reserved, resource_display, session_info, settings, ssh_authorized_keys, sso,
-    static_ips, support, updates,
+    provisioning, proxy, reserved, resource_display, session_info, settings, ssh_authorized_keys,
+    sso, static_ips, support, updates,
     user::{self, UserDetails},
     webhooks, wireguard as device, wireguard as network,
     wireguard::AddDeviceResult,
@@ -89,6 +89,7 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         user::reset_password,
         user::delete_security_key,
         user::start_remote_desktop_configuration,
+        provisioning::create_provisioning_file,
         user::start_enrollment,
         auth::totp_disable,
         // group

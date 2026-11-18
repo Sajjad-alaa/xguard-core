@@ -41,6 +41,7 @@ import type {
   CreateCARequest,
   CreateGroupRequest,
   CreateMfaFlowRequest,
+  CreateProvisioningFileRequest,
   DeleteApiTokenRequest,
   DeleteAuthKeyRequest,
   Device,
@@ -99,6 +100,7 @@ import type {
   NetworkLocation,
   OpenIdAuthInfo,
   OpenIdClient,
+  ProvisioningFile,
   PublicKeyCredentialJSON,
   RenameApiTokenRequest,
   RenameAuthKeyRequest,
@@ -230,6 +232,8 @@ const api = {
     resetPassword: (username: string) => client.post(`/user/${username}/reset_password`),
     getUserDevices: (username: string) =>
       client.get<UserDevice[]>(`/device/user/${username}`),
+    createProvisioningFile: ({ username, valid_hours }: CreateProvisioningFileRequest) =>
+      client.post<ProvisioningFile>(`/user/${username}/provisioning`, { valid_hours }),
     startClientActivation: (data: StartEnrollmentRequest) =>
       client.post<StartEnrollmentResponse>(`/user/${data.username}/start_desktop`, data),
     startEnrollment: (data: StartEnrollmentRequest) =>

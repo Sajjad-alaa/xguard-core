@@ -116,6 +116,10 @@ use crate::{
             update_device_posture,
         },
         directory::{preview_directory_sync, sync_directory, test_directory},
+        dirsync::{
+            directory_sync_status, preview_directory_sync as preview_cloud_directory_sync,
+            sync_directory_now, test_directory_sync,
+        },
         firewall::{
             create_firewall_rule, create_snat_binding, delete_firewall_rule, delete_snat_binding,
             get_firewall_rule, list_firewall_rules, list_snat_bindings, location_firewall_policy,
@@ -141,6 +145,7 @@ use crate::{
             authorization, discovery_keys, openid_configuration, secure_authorization, token,
             userinfo,
         },
+        provisioning::create_provisioning_file,
         proxy::{delete_proxy, proxy_details, proxy_list, update_proxy},
         resource_display::get_locations_display,
         settings::{
@@ -148,10 +153,6 @@ use crate::{
             update_settings,
         },
         ssh_authorized_keys::get_authorized_keys,
-        dirsync::{
-            directory_sync_status, preview_directory_sync as preview_cloud_directory_sync,
-            sync_directory_now, test_directory_sync,
-        },
         sso::{auth_info, callback, delete_provider, get_provider, set_provider, test_provider},
         static_ips::{
             assign_static_ips, get_all_user_device_ips, get_device_ips, validate_ip_assignment,
@@ -339,6 +340,10 @@ pub fn build_webapp(
             .route(
                 "/user/{username}/start_desktop",
                 post(start_remote_desktop_configuration),
+            )
+            .route(
+                "/user/{username}/provisioning",
+                post(create_provisioning_file),
             )
             .route("/user/available", post(username_available))
             .route("/user/bulk-disable", post(bulk_disable_users))
