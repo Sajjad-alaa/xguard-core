@@ -136,7 +136,7 @@ use crate::{
             location_connected_users, location_stats, locations_overview_stats,
         },
         log_stream::{create_stream, delete_stream, list_streams, test_stream, update_stream},
-        mail::{send_support_data, test_mail},
+        mail::{send_support_data, smtp_oauth_callback, smtp_oauth_start, test_mail},
         openid_clients::{
             add_openid_client, change_openid_client, change_openid_client_state,
             delete_openid_client, get_openid_client, list_openid_clients,
@@ -297,6 +297,7 @@ pub fn build_webapp(
     tls_active: Arc<AtomicBool>,
     server_config: &XGuardConfig,
 ) -> Router {
+    crate::mail::xoauth2::register_pool(&pool);
     let webapp: Router<AppState> = Router::new()
         .route("/", get(index))
         .route("/{*path}", get(index))
@@ -421,6 +422,8 @@ pub fn build_webapp(
             .route("/groups-assign", post(bulk_assign_to_groups))
             // mail
             .route("/mail/test", post(test_mail))
+            .route("/mail/oauth/start", post(smtp_oauth_start))
+            .route("/mail/oauth/callback", post(smtp_oauth_callback))
             .route("/mail/support", post(send_support_data))
             // settings
             .route(

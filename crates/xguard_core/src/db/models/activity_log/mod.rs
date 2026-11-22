@@ -117,6 +117,7 @@ pub enum EventType {
     SettingsUpdatedPartial,
     SettingsDefaultBrandingRestored,
     EnterpriseSettingsUpdated,
+    SmtpOAuthConnected,
     // Groups management
     GroupsBulkAssigned,
     GroupAdded,

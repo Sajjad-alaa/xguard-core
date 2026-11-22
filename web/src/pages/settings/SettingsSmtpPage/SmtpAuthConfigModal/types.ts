@@ -40,5 +40,6 @@ export type SmtpAuthApplyResult = {
 export type FormProps = {
   initialValues: SmtpAuthModalValues;
   onApply: (result: SmtpAuthApplyResult) => Promise<void>;
+  onOAuthConnected: () => Promise<void>;
   onClose: () => void;
 };

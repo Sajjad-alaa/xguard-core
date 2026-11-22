@@ -3,7 +3,6 @@ import { m } from '../../../../paraglide/messages';
 import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
 import type { SmtpAuthCardVariant } from '../components/SmtpAuthMethodCard/SmtpAuthMethodCard';
 import { BasicAuthForm } from './BasicAuthForm';
-import { CustomAuthForm } from './CustomAuthForm';
 import { GoogleAuthForm } from './GoogleAuthForm';
 import { MicrosoftAuthForm } from './MicrosoftAuthForm';
 import { NoneAuthForm } from './NoneAuthForm';
@@ -16,6 +15,7 @@ type Props = {
   variant: SmtpAuthCardVariant | null;
   initialValues: SmtpAuthModalValues;
   onApply: (result: SmtpAuthApplyResult) => Promise<void>;
+  onOAuthConnected: () => Promise<void>;
   onClose: () => void;
 };
 
@@ -27,12 +27,11 @@ const modalTitles: Record<SmtpAuthCardVariant, () => string> = {
   microsoft: m.settings_smtp_auth_modal_microsoft_title,
 };
 
-const forms: Record<SmtpAuthCardVariant, ComponentType<FormProps>> = {
+const forms: Partial<Record<SmtpAuthCardVariant, ComponentType<FormProps>>> = {
   none: NoneAuthForm,
   basic: BasicAuthForm,
   google: GoogleAuthForm,
   microsoft: MicrosoftAuthForm,
-  custom: CustomAuthForm,
 };
 
 export const SmtpAuthConfigModal = ({
@@ -40,6 +39,7 @@ export const SmtpAuthConfigModal = ({
   variant,
   initialValues,
   onApply,
+  onOAuthConnected,
   onClose,
 }: Props) => {
   const FormComponent = variant ? forms[variant] : null;
@@ -55,6 +55,7 @@ export const SmtpAuthConfigModal = ({
           key={variant}
           initialValues={initialValues}
           onApply={onApply}
+          onOAuthConnected={onOAuthConnected}
           onClose={onClose}
         />
       )}

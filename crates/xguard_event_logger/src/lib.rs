@@ -28,12 +28,12 @@ use xguard_core::{
             OidcDirectorySyncUserMetadata, OpenIdAppMetadata, OpenIdAppModifiedMetadata,
             OpenIdAppStateChangedMetadata, OpenIdProviderMetadata, PasswordChangedByAdminMetadata,
             PasswordResetMetadata, ProvisioningFileMetadata, ProxyDeletedMetadata,
-            ProxyModifiedMetadata, SettingsUpdateMetadata, SnatBindingMetadata,
-            SnatBindingModifiedMetadata, UserGroupsModifiedMetadata, UserImportBlockedMetadata,
-            UserMetadata, UserMfaDisabledMetadata, UserModifiedMetadata, VpnClientMetadata,
-            VpnClientMfaAbortedMetadata, VpnClientMfaFailedMetadata, VpnClientMfaMetadata,
-            VpnLocationMetadata, VpnLocationModifiedMetadata, WebHookMetadata,
-            WebHookModifiedMetadata, WebHookStateChangedMetadata,
+            ProxyModifiedMetadata, SettingsUpdateMetadata, SmtpOAuthConnectedMetadata,
+            SnatBindingMetadata, SnatBindingModifiedMetadata, UserGroupsModifiedMetadata,
+            UserImportBlockedMetadata, UserMetadata, UserMfaDisabledMetadata, UserModifiedMetadata,
+            VpnClientMetadata, VpnClientMfaAbortedMetadata, VpnClientMfaFailedMetadata,
+            VpnClientMfaMetadata, VpnLocationMetadata, VpnLocationModifiedMetadata,
+            WebHookMetadata, WebHookModifiedMetadata, WebHookStateChangedMetadata,
         },
     },
     events::{
@@ -484,6 +484,10 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 ApiEventType::SettingsDefaultBrandingRestored => {
                     (EventType::SettingsDefaultBrandingRestored, None)
                 }
+                ApiEventType::SmtpOAuthConnected { provider, sender } => (
+                    EventType::SmtpOAuthConnected,
+                    serde_json::to_value(SmtpOAuthConnectedMetadata { provider, sender }).ok(),
+                ),
                 ApiEventType::GroupsBulkAssigned { users, groups } => (
                     EventType::GroupsBulkAssigned,
                     serde_json::to_value(GroupsBulkAssignedMetadata {

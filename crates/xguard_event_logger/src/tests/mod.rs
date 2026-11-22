@@ -841,6 +841,16 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("Restored"),
         },
         EventTestCase {
+            name: "SmtpOAuthConnected",
+            message: api_message(ApiEventType::SmtpOAuthConnected {
+                provider: "Google".into(),
+                sender: "mailer@example.org".into(),
+            }),
+            event_type: EventType::SmtpOAuthConnected,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Connected SMTP mailbox"),
+        },
+        EventTestCase {
             name: "GroupsBulkAssigned",
             message: api_message(ApiEventType::GroupsBulkAssigned {
                 users: vec![user.clone()],

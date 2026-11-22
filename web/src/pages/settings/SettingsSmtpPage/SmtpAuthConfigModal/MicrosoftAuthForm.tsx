@@ -1,40 +1,63 @@
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
-import { SmtpAuthentication, SmtpEncryption } from '../../../../shared/api/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import { patternValidEmail } from '../../../../shared/patterns';
 import { EvenSplit } from '../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
+import { FieldError } from '../../../../shared/xguard-ui/components/FieldError/FieldError';
 import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { isMicrosoftIssuerUrl } from '../smtpAuthUtils';
-import {
-  MICROSOFT_ISSUER_URL,
-  MICROSOFT_SMTP_SERVER,
-  PROVIDER_SMTP_PORT,
-} from './oauthFlow';
+import { runSmtpOAuthFlow } from './oauthFlow';
 import type { FormProps } from './types';
+import { useOAuthSubmit } from './useOAuthSubmit';
 
-const schema = z.object({
-  smtp_sender: z
-    .string()
-    .trim()
-    .min(1, m.form_error_required())
-    .regex(patternValidEmail, m.form_error_email()),
-  smtp_oauth_tenant_id: z.string().trim().nullable(),
-  smtp_oauth_client_id: z.string().trim().nullable(),
-  smtp_oauth_client_secret: z.string().trim().nullable().optional(),
-  smtp_tls_verify_cert: z.boolean(),
-});
+const createSchema = (storedSecret: boolean, storedClientId: string | null) =>
+  z
+    .object({
+      smtp_sender: z
+        .string()
+        .trim()
+        .min(1, m.form_error_required())
+        .regex(patternValidEmail, m.form_error_email()),
+      smtp_oauth_tenant_id: z.string().trim().nullable(),
+      smtp_oauth_client_id: z.string().trim().min(1, m.form_error_required()),
+      smtp_oauth_client_secret: z.string().trim().nullable().optional(),
+      smtp_tls_verify_cert: z.boolean(),
+    })
+    .superRefine((value, ctx) => {
+      const canReuseSecret =
+        storedSecret &&
+        Boolean(storedClientId) &&
+        value.smtp_oauth_client_id === storedClientId;
+      if (!value.smtp_oauth_client_secret && !canReuseSecret) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['smtp_oauth_client_secret'],
+          message: m.form_error_required(),
+        });
+      }
+    });
 
-type FormFields = z.infer<typeof schema>;
+type FormFields = z.infer<ReturnType<typeof createSchema>>;
 
-export const MicrosoftAuthForm = ({ initialValues, onApply, onClose }: FormProps) => {
+export const MicrosoftAuthForm = ({
+  initialValues,
+  onOAuthConnected,
+  onClose,
+}: FormProps) => {
+  const { oauthError, setOauthError, handleCancel, beginOAuth, handleOAuthError } =
+    useOAuthSubmit(onClose);
+
+  const schema = createSchema(
+    initialValues.smtp_oauth_client_secret_set,
+    initialValues.smtp_oauth_client_id,
+  );
+
   const defaultValues: FormFields = {
     smtp_sender: initialValues.smtp_sender,
     smtp_oauth_tenant_id: initialValues.smtp_oauth_tenant_id,
-    smtp_oauth_client_id: initialValues.smtp_oauth_client_id,
+    smtp_oauth_client_id: initialValues.smtp_oauth_client_id ?? '',
     smtp_oauth_client_secret: initialValues.smtp_oauth_client_secret,
     smtp_tls_verify_cert: initialValues.smtp_tls_verify_cert,
   };
@@ -44,20 +67,23 @@ export const MicrosoftAuthForm = ({ initialValues, onApply, onClose }: FormProps
     validationLogic: formChangeLogic,
     validators: { onSubmit: schema, onChange: schema },
     onSubmit: async ({ value }) => {
-      await onApply({
-        authentication: SmtpAuthentication.XOAuth2,
-        smtp_sender: value.smtp_sender,
-        smtp_server: MICROSOFT_SMTP_SERVER,
-        smtp_port: PROVIDER_SMTP_PORT,
-        smtp_encryption: SmtpEncryption.StartTls,
-        smtp_tls_verify_cert: value.smtp_tls_verify_cert,
-        smtp_oauth_issuer_url: isMicrosoftIssuerUrl(initialValues.smtp_oauth_issuer_url)
-          ? initialValues.smtp_oauth_issuer_url
-          : MICROSOFT_ISSUER_URL,
-        smtp_oauth_tenant_id: value.smtp_oauth_tenant_id,
-        smtp_oauth_client_id: value.smtp_oauth_client_id,
-        smtp_oauth_client_secret: value.smtp_oauth_client_secret,
-      });
+      setOauthError(null);
+      try {
+        await runSmtpOAuthFlow(
+          {
+            provider: 'microsoft',
+            client_id: value.smtp_oauth_client_id.trim(),
+            client_secret: value.smtp_oauth_client_secret?.trim() || undefined,
+            tenant_id: value.smtp_oauth_tenant_id?.trim() || undefined,
+            sender: value.smtp_sender.trim(),
+            tls_verify_cert: value.smtp_tls_verify_cert,
+          },
+          beginOAuth(),
+        );
+        await onOAuthConnected();
+      } catch (err) {
+        handleOAuthError(err);
+      }
     },
   });
 
@@ -83,7 +109,6 @@ export const MicrosoftAuthForm = ({ initialValues, onApply, onClose }: FormProps
           <form.AppField name="smtp_oauth_tenant_id">
             {(field) => (
               <field.FormInput
-                required
                 label={m.settings_smtp_label_oauth_tenant_id()}
                 helper={m.settings_smtp_helper_oauth_tenant_id()}
               />
@@ -120,6 +145,9 @@ export const MicrosoftAuthForm = ({ initialValues, onApply, onClose }: FormProps
             />
           )}
         </form.AppField>
+        <SizedBox height={ThemeSpacing.Md} />
+        <p className="smtp-auth-oauth-info">{m.settings_smtp_auth_oauth_info()}</p>
+        <FieldError error={oauthError} />
         <form.Subscribe selector={(s) => ({ isSubmitting: s.isSubmitting })}>
           {({ isSubmitting }) => (
             <ModalControls
@@ -132,8 +160,7 @@ export const MicrosoftAuthForm = ({ initialValues, onApply, onClose }: FormProps
               cancelProps={{
                 testId: 'cancel',
                 text: m.controls_cancel(),
-                disabled: isSubmitting,
-                onClick: onClose,
+                onClick: handleCancel,
               }}
             />
           )}

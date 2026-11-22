@@ -144,6 +144,9 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::SettingsDefaultBrandingRestored => {
             Some("Restored default branding settings".into())
         }
+        ApiEventType::SmtpOAuthConnected { provider, sender } => Some(format!(
+            "Connected SMTP mailbox {sender} using {provider} (XOAUTH2)"
+        )),
         ApiEventType::GroupsBulkAssigned { users, groups } => Some(format!(
             "Assigned {} users to {} groups",
             users.len(),

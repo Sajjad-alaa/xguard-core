@@ -215,6 +215,10 @@ pub enum ApiEventType {
         after: Settings,
     },
     SettingsDefaultBrandingRestored,
+    SmtpOAuthConnected {
+        provider: String,
+        sender: String,
+    },
     GroupsBulkAssigned {
         users: Vec<User<Id>>,
         groups: Vec<Group<Id>>,

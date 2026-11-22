@@ -724,3 +724,9 @@ pub struct DevicePostureCheckMetadata {
     pub facts: Option<crate::posture::PostureFacts>,
     pub failed_checks: Vec<String>,
 }
+
+#[derive(Serialize)]
+pub struct SmtpOAuthConnectedMetadata {
+    pub provider: String,
+    pub sender: String,
+}

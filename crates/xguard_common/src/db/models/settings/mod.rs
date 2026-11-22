@@ -987,16 +987,11 @@ impl Settings {
     }
 
     /// Check if all required SMTP options are configured.
-    /// User & password can be empty for no-auth servers.
     ///
     /// Meant to be used to check if sending emails is enabled in current instance.
     #[must_use]
     pub fn smtp_configured(&self) -> bool {
-        self.smtp.server.is_some()
-            && self.smtp.port.is_some()
-            && self.smtp.sender.is_some()
-            && self.smtp.server != Some(String::new())
-            && self.smtp.sender != Some(String::new())
+        self.smtp.is_configured()
     }
 
     /// Check if all required LDAP options are configured.

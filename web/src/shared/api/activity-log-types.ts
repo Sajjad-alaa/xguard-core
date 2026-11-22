@@ -95,6 +95,7 @@ export const ActivityLogEventType = {
   SettingsUpdatedPartial: 'settings_updated_partial',
   SettingsDefaultBrandingRestored: 'settings_default_branding_restored',
   EnterpriseSettingsUpdated: 'enterprise_settings_updated',
+  SmtpOAuthConnected: 'smtp_oauth_connected',
 
   GroupsBulkAssigned: 'groups_bulk_assigned',
   GroupAdded: 'group_added',

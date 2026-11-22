@@ -14,6 +14,7 @@ import { Route as R404RouteImport } from './routes/404'
 import { Route as AuthorizedRouteImport } from './routes/_authorized'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ConsentRouteImport } from './routes/consent'
+import { Route as SmtpOauthCallbackRouteImport } from './routes/smtp-oauth-callback'
 import { Route as SnackbarRouteImport } from './routes/snackbar'
 import { Route as AuthorizedDefaultRouteImport } from './routes/_authorized/_default'
 import { Route as AuthorizedPlaygroundRouteImport } from './routes/_authorized/playground'
@@ -89,6 +90,11 @@ const AuthRoute = AuthRouteImport.update({
 const ConsentRoute = ConsentRouteImport.update({
   id: '/consent',
   path: '/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SmtpOauthCallbackRoute = SmtpOauthCallbackRouteImport.update({
+  id: '/smtp-oauth-callback',
+  path: '/smtp-oauth-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SnackbarRoute = SnackbarRouteImport.update({
@@ -387,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/404': typeof R404Route
   '/auth': typeof AuthRouteWithChildren
   '/consent': typeof ConsentRoute
+  '/smtp-oauth-callback': typeof SmtpOauthCallbackRoute
   '/snackbar': typeof SnackbarRoute
   '/playground': typeof AuthorizedPlaygroundRoute
   '/setup': typeof WizardSetupRoute
@@ -443,6 +450,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/404': typeof R404Route
   '/consent': typeof ConsentRoute
+  '/smtp-oauth-callback': typeof SmtpOauthCallbackRoute
   '/snackbar': typeof SnackbarRoute
   '/playground': typeof AuthorizedPlaygroundRoute
   '/setup': typeof WizardSetupRoute
@@ -502,6 +510,7 @@ export interface FileRoutesById {
   '/_authorized': typeof AuthorizedRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/consent': typeof ConsentRoute
+  '/smtp-oauth-callback': typeof SmtpOauthCallbackRoute
   '/snackbar': typeof SnackbarRoute
   '/_authorized/_default': typeof AuthorizedDefaultRouteWithChildren
   '/_authorized/playground': typeof AuthorizedPlaygroundRoute
@@ -562,6 +571,7 @@ export interface FileRouteTypes {
     | '/404'
     | '/auth'
     | '/consent'
+    | '/smtp-oauth-callback'
     | '/snackbar'
     | '/playground'
     | '/setup'
@@ -618,6 +628,7 @@ export interface FileRouteTypes {
     | '/'
     | '/404'
     | '/consent'
+    | '/smtp-oauth-callback'
     | '/snackbar'
     | '/playground'
     | '/setup'
@@ -676,6 +687,7 @@ export interface FileRouteTypes {
     | '/_authorized'
     | '/auth'
     | '/consent'
+    | '/smtp-oauth-callback'
     | '/snackbar'
     | '/_authorized/_default'
     | '/_authorized/playground'
@@ -736,6 +748,7 @@ export interface RootRouteChildren {
   AuthorizedRoute: typeof AuthorizedRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
   ConsentRoute: typeof ConsentRoute
+  SmtpOauthCallbackRoute: typeof SmtpOauthCallbackRoute
   SnackbarRoute: typeof SnackbarRoute
   WizardSetupRoute: typeof WizardSetupRoute
   WizardSetupGatewayRoute: typeof WizardSetupGatewayRoute
@@ -780,6 +793,13 @@ declare module '@tanstack/react-router' {
       path: '/consent'
       fullPath: '/consent'
       preLoaderRoute: typeof ConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/smtp-oauth-callback': {
+      id: '/smtp-oauth-callback'
+      path: '/smtp-oauth-callback'
+      fullPath: '/smtp-oauth-callback'
+      preLoaderRoute: typeof SmtpOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/snackbar': {
@@ -1289,6 +1309,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthorizedRoute: AuthorizedRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
   ConsentRoute: ConsentRoute,
+  SmtpOauthCallbackRoute: SmtpOauthCallbackRoute,
   SnackbarRoute: SnackbarRoute,
   WizardSetupRoute: WizardSetupRoute,
   WizardSetupGatewayRoute: WizardSetupGatewayRoute,

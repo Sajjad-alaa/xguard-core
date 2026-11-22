@@ -1,6 +1,5 @@
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
-import { SmtpAuthentication, SmtpEncryption } from '../../../../shared/api/types';
 import { useAppForm } from '../../../../shared/form';
 import { formChangeLogic } from '../../../../shared/formLogic';
 import { patternValidEmail } from '../../../../shared/patterns';
@@ -9,89 +8,76 @@ import { FieldError } from '../../../../shared/xguard-ui/components/FieldError/F
 import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import {
-  buildAuthUrl,
-  exchangeCodeForToken,
-  GOOGLE_AUTH_URL,
-  GOOGLE_ISSUER_URL,
-  GOOGLE_OAUTH_SCOPE,
-  GOOGLE_SMTP_SERVER,
-  GOOGLE_TOKEN_URL,
-  PROVIDER_SMTP_PORT,
-  waitForOAuthCode,
-} from './oauthFlow';
+import { runSmtpOAuthFlow } from './oauthFlow';
 import type { FormProps } from './types';
 import { useOAuthSubmit } from './useOAuthSubmit';
 
-const schema = z.object({
-  smtp_sender: z
-    .string()
-    .trim()
-    .min(1, m.form_error_required())
-    .regex(patternValidEmail, m.form_error_email()),
-  smtp_oauth_client_id: z.string().trim().nullable(),
-  smtp_oauth_client_secret: z
-    .string(m.form_error_required())
-    .trim()
-    .min(1, m.form_error_required()),
-  smtp_tls_verify_cert: z.boolean(),
-});
+const createSchema = (storedSecret: boolean, storedClientId: string | null) =>
+  z
+    .object({
+      smtp_sender: z
+        .string()
+        .trim()
+        .min(1, m.form_error_required())
+        .regex(patternValidEmail, m.form_error_email()),
+      smtp_oauth_client_id: z.string().trim().min(1, m.form_error_required()),
+      smtp_oauth_client_secret: z.string().trim().nullable().optional(),
+      smtp_tls_verify_cert: z.boolean(),
+    })
+    .superRefine((value, ctx) => {
+      const canReuseSecret =
+        storedSecret &&
+        Boolean(storedClientId) &&
+        value.smtp_oauth_client_id === storedClientId;
+      if (!value.smtp_oauth_client_secret && !canReuseSecret) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['smtp_oauth_client_secret'],
+          message: m.form_error_required(),
+        });
+      }
+    });
 
-export const GoogleAuthForm = ({ initialValues, onApply, onClose }: FormProps) => {
+type FormFields = z.infer<ReturnType<typeof createSchema>>;
+
+export const GoogleAuthForm = ({
+  initialValues,
+  onOAuthConnected,
+  onClose,
+}: FormProps) => {
   const { oauthError, setOauthError, handleCancel, beginOAuth, handleOAuthError } =
     useOAuthSubmit(onClose);
 
+  const schema = createSchema(
+    initialValues.smtp_oauth_client_secret_set,
+    initialValues.smtp_oauth_client_id,
+  );
+
+  const defaultValues: FormFields = {
+    smtp_sender: initialValues.smtp_sender,
+    smtp_oauth_client_id: initialValues.smtp_oauth_client_id ?? '',
+    smtp_oauth_client_secret: initialValues.smtp_oauth_client_secret,
+    smtp_tls_verify_cert: initialValues.smtp_tls_verify_cert,
+  };
+
   const form = useAppForm({
-    defaultValues: {
-      smtp_sender: initialValues.smtp_sender,
-      smtp_oauth_client_id: initialValues.smtp_oauth_client_id,
-      smtp_oauth_client_secret: initialValues.smtp_oauth_client_secret ?? null,
-      smtp_tls_verify_cert: initialValues.smtp_tls_verify_cert,
-    },
+    defaultValues,
     validationLogic: formChangeLogic,
     validators: { onSubmit: schema, onChange: schema },
     onSubmit: async ({ value }) => {
       setOauthError(null);
-      const redirectUri = `${window.location.origin}/smtp-oauth-callback`;
-      const authUrl = buildAuthUrl(
-        GOOGLE_AUTH_URL,
-        value.smtp_oauth_client_id ?? '',
-        redirectUri,
-        GOOGLE_OAUTH_SCOPE,
-        { access_type: 'offline' },
-      );
-
-      const popup = window.open(
-        authUrl,
-        'smtp-oauth',
-        'width=600,height=700,noopener=no',
-      );
-      if (!popup) {
-        setOauthError(m.settings_smtp_auth_oauth_popup_blocked());
-        return;
-      }
-
       try {
-        const code = await waitForOAuthCode(popup, beginOAuth());
-        const refreshToken = await exchangeCodeForToken(
-          GOOGLE_TOKEN_URL,
-          code,
-          value.smtp_oauth_client_id ?? '',
-          value.smtp_oauth_client_secret ?? '',
-          redirectUri,
+        await runSmtpOAuthFlow(
+          {
+            provider: 'google',
+            client_id: value.smtp_oauth_client_id.trim(),
+            client_secret: value.smtp_oauth_client_secret?.trim() || undefined,
+            sender: value.smtp_sender.trim(),
+            tls_verify_cert: value.smtp_tls_verify_cert,
+          },
+          beginOAuth(),
         );
-        await onApply({
-          authentication: SmtpAuthentication.XOAuth2,
-          smtp_sender: value.smtp_sender,
-          smtp_oauth_issuer_url: GOOGLE_ISSUER_URL,
-          smtp_oauth_client_id: value.smtp_oauth_client_id,
-          smtp_oauth_client_secret: value.smtp_oauth_client_secret,
-          smtp_oauth_refresh_token: refreshToken,
-          smtp_server: GOOGLE_SMTP_SERVER,
-          smtp_port: PROVIDER_SMTP_PORT,
-          smtp_encryption: SmtpEncryption.StartTls,
-          smtp_tls_verify_cert: value.smtp_tls_verify_cert,
-        });
+        await onOAuthConnected();
       } catch (err) {
         handleOAuthError(err);
       }
@@ -131,11 +117,11 @@ export const GoogleAuthForm = ({ initialValues, onApply, onClose }: FormProps) =
           </form.AppField>
           <form.AppField name="smtp_oauth_client_secret">
             {(field) => (
-              <field.FormInput
+              <field.FormSecretInput
                 required
+                stored={initialValues.smtp_oauth_client_secret_set}
                 label={m.settings_smtp_label_oauth_client_secret()}
                 helper={m.settings_smtp_helper_oauth_client_secret()}
-                type="password"
               />
             )}
           </form.AppField>

@@ -29,6 +29,16 @@ fn test_smtp_config() {
     settings.smtp.user = Some("smtp_user".into());
     settings.smtp.password = Some(SecretStringWrapper::from("hunter2"));
     assert!(settings.smtp_configured());
+
+    // XOAUTH2 requires issuer, client ID, client secret, and refresh token
+    settings.smtp.authentication = SmtpAuthentication::XOAuth2;
+    assert!(!settings.smtp_configured());
+    settings.smtp.oauth_issuer_url = Some("https://accounts.google.com".into());
+    settings.smtp.oauth_client_id = Some("client-id".into());
+    settings.smtp.oauth_client_secret = Some(SecretStringWrapper::from("client-secret"));
+    assert!(!settings.smtp_configured());
+    settings.smtp.oauth_refresh_token = Some(SecretStringWrapper::from("refresh-token"));
+    assert!(settings.smtp_configured());
 }
 
 #[test]

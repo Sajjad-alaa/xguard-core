@@ -11,7 +11,9 @@ use uuid::Uuid;
 use xguard_common::{
     db::models::{
         Settings, User,
-        settings::{LdapSyncStatus, SettingsPatch, update_current_settings},
+        settings::{
+            LdapSyncStatus, SettingsPatch, smtp::SmtpAuthentication, update_current_settings,
+        },
     },
     secret::SecretStringWrapper,
     types::proxy::ProxyControlMessage,
@@ -261,14 +263,24 @@ async fn test_ldap_remote_enrollment_validation(_: PgPoolOptions, options: PgCon
     let response = client.patch("/api/v1/settings").json(&patch).send().await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    // enabling remote enrollment with LDAP configured but no SMTP must still fail
+    // enabling remote enrollment without invitations needs LDAP only (no SMTP)
     let patch: SettingsPatch =
         serde_json::from_str(r#"{ "ldap_remote_enrollment_enabled": true }"#).unwrap();
     let response = client.patch("/api/v1/settings").json(&patch).send().await;
     assert_eq!(
         response.status(),
+        StatusCode::OK,
+        "enabling remote enrollment without invitations should not require SMTP"
+    );
+
+    // enabling invitations alongside remote enrollment without SMTP must fail
+    let patch: SettingsPatch =
+        serde_json::from_str(r#"{ "ldap_remote_enrollment_send_invite": true }"#).unwrap();
+    let response = client.patch("/api/v1/settings").json(&patch).send().await;
+    assert_eq!(
+        response.status(),
         StatusCode::BAD_REQUEST,
-        "enabling remote enrollment without SMTP configured should return 400"
+        "enabling remote enrollment invitations without SMTP configured should return 400"
     );
 
     // configure SMTP via direct DB mutation (same pattern used for test setup in auth tests)
@@ -280,20 +292,24 @@ async fn test_ldap_remote_enrollment_validation(_: PgPoolOptions, options: PgCon
         .await
         .unwrap();
 
-    // enabling remote enrollment with both LDAP and SMTP configured must succeed
+    // enabling remote enrollment invitations with both LDAP and SMTP configured must succeed
     let patch: SettingsPatch =
-        serde_json::from_str(r#"{ "ldap_remote_enrollment_enabled": true }"#).unwrap();
+        serde_json::from_str(r#"{ "ldap_remote_enrollment_send_invite": true }"#).unwrap();
     let response = client.patch("/api/v1/settings").json(&patch).send().await;
     assert_eq!(
         response.status(),
         StatusCode::OK,
-        "enabling remote enrollment with LDAP and SMTP configured should return 200"
+        "enabling remote enrollment invitations with LDAP and SMTP configured should return 200"
     );
-    // verify the flag was actually persisted to the database (not just held in memory)
+    // verify both flags were persisted to the database
     let from_db = Settings::get(&pool).await.unwrap().unwrap();
     assert!(
         from_db.ldap_remote_enrollment_enabled,
         "ldap_remote_enrollment_enabled must be persisted to DB after enabling"
+    );
+    assert!(
+        from_db.ldap_remote_enrollment_send_invite,
+        "ldap_remote_enrollment_send_invite must be persisted to DB after enabling"
     );
 
     // enabling send_invite while remote enrollment is disabled is allowed: the flag
@@ -374,6 +390,7 @@ async fn test_patch_empty_smtp_rejects_enabled_dependents(
             {VALID_LDAP_FIELDS_NO_URL},
             {VALID_LDAP_URL},
             "ldap_remote_enrollment_enabled": true,
+            "ldap_remote_enrollment_send_invite": true,
             "gateway_disconnect_notifications_enabled": true
         }}"#
     ))
@@ -396,7 +413,10 @@ async fn test_patch_empty_smtp_rejects_enabled_dependents(
     let message = body["msg"]
         .as_str()
         .expect("error response should include msg");
-    assert!(message.contains("LDAP remote enrollment"), "{message}");
+    assert!(
+        message.contains("LDAP remote enrollment invitations"),
+        "{message}"
+    );
     assert!(
         message.contains("gateway disconnect notifications"),
         "{message}"
@@ -425,6 +445,7 @@ async fn test_patch_enabling_smtp_dependents_requires_configuration(
     let patch: SettingsPatch = serde_json::from_str(
         r#"{
             "ldap_remote_enrollment_enabled": true,
+            "ldap_remote_enrollment_send_invite": true,
             "gateway_disconnect_notifications_enabled": true
         }"#,
     )
@@ -435,7 +456,7 @@ async fn test_patch_enabling_smtp_dependents_requires_configuration(
     let body: serde_json::Value = response.json().await;
     assert_eq!(
         body["msg"].as_str().unwrap(),
-        "SMTP is required by: LDAP remote enrollment, gateway disconnect notifications. Configure SMTP before enabling these features."
+        "SMTP is required by: LDAP remote enrollment invitations, gateway disconnect notifications. Configure SMTP before enabling these features."
     );
 }
 
@@ -1015,4 +1036,163 @@ async fn test_patch_settings_secrets(_: PgPoolOptions, options: PgConnectOptions
     assert!(from_db.smtp.password.is_none());
     assert!(from_db.smtp.oauth_client_secret.is_none());
     assert!(from_db.smtp.oauth_refresh_token.is_none());
+}
+
+#[sqlx::test]
+async fn test_smtp_oauth_endpoints_and_protection(_: PgPoolOptions, options: PgConnectOptions) {
+    let pool = setup_pool(options).await;
+    let (client, _client_state) = make_test_client(pool.clone()).await;
+
+    // Non-admin user is forbidden from calling /mail/oauth/*.
+    let auth = Auth::new("hpotter", "pass123");
+    let response = client.post("/api/v1/auth").json(&auth).send().await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let start_payload = json!({
+        "provider": "google",
+        "client_id": "client-id.apps.googleusercontent.com",
+        "client_secret": "super-secret",
+        "sender": "mailer@example.org",
+        "tls_verify_cert": true
+    });
+    let response = client
+        .post("/api/v1/mail/oauth/start")
+        .json(&start_payload)
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let response = client
+        .post("/api/v1/mail/oauth/callback")
+        .json(&json!({ "state": "abc", "code": "123" }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    // Admin can start Google and Microsoft flows with PKCE.
+    let response = client
+        .post("/api/v1/auth")
+        .json(&Auth::new("admin", "pass123"))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = client
+        .post("/api/v1/mail/oauth/start")
+        .json(&start_payload)
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = response.json().await;
+    let auth_url = reqwest::Url::parse(body["authorization_url"].as_str().unwrap()).unwrap();
+    let params: std::collections::HashMap<String, String> =
+        auth_url.query_pairs().into_owned().collect();
+    assert_eq!(params["code_challenge_method"], "S256");
+    let state = params["state"].clone();
+    assert!(!state.is_empty());
+    assert!(!auth_url.as_str().contains("super-secret"));
+
+    // Callback with error cancels the pending state and returns 400; replay also returns 400.
+    let response = client
+        .post("/api/v1/mail/oauth/callback")
+        .json(&json!({ "state": state, "error": "access_denied" }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let response = client
+        .post("/api/v1/mail/oauth/callback")
+        .json(&json!({ "state": state, "code": "code-1" }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // Callback with unknown or empty state returns 400.
+    let response = client
+        .post("/api/v1/mail/oauth/callback")
+        .json(&json!({ "state": "", "code": "code-1" }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // Microsoft start works and rejects invalid inputs.
+    let response = client
+        .post("/api/v1/mail/oauth/start")
+        .json(&json!({
+            "provider": "microsoft",
+            "client_id": "ms-client-id",
+            "client_secret": "ms-secret",
+            "tenant_id": "contoso.onmicrosoft.com",
+            "sender": "mailer@contoso.com",
+            "tls_verify_cert": true
+        }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = client
+        .post("/api/v1/mail/oauth/start")
+        .json(&json!({
+            "provider": "microsoft",
+            "client_id": "ms-client-id",
+            "client_secret": "ms-secret",
+            "tenant_id": "../evil",
+            "sender": "not-an-email",
+            "tls_verify_cert": true
+        }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // PUT and PATCH cannot inject smtp_oauth_refresh_token.
+    let response = client
+        .patch("/api/v1/settings")
+        .json(&json!({ "smtp_oauth_refresh_token": "injected-refresh-token" }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let current = Settings::get(&pool).await.unwrap().unwrap();
+    assert!(current.smtp.oauth_refresh_token.is_none());
+
+    let response = client.get("/api/v1/settings").send().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut put_body: serde_json::Value = response.json().await;
+    put_body["smtp_oauth_refresh_token"] = json!("injected-via-put");
+    let response = client.put("/api/v1/settings").json(&put_body).send().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let current = Settings::get(&pool).await.unwrap().unwrap();
+    assert!(current.smtp.oauth_refresh_token.is_none());
+
+    // GET /api/v1/info reflects XOAUTH2 smtp_enabled only when refresh token is present.
+    let mut settings = Settings::get_current_settings();
+    settings.smtp.server = Some("smtp.gmail.com".into());
+    settings.smtp.port = Some(587);
+    settings.smtp.sender = Some("mailer@example.org".into());
+    settings.smtp.authentication = SmtpAuthentication::XOAuth2;
+    settings.smtp.oauth_issuer_url = Some("https://accounts.google.com".into());
+    settings.smtp.oauth_client_id = Some("client-id".into());
+    settings.smtp.oauth_client_secret = secret("client-secret");
+    settings.smtp.oauth_refresh_token = None;
+    update_current_settings(&pool, settings.clone())
+        .await
+        .unwrap();
+    let info: serde_json::Value = client.get("/api/v1/info").send().await.json().await;
+    assert_eq!(info["smtp_enabled"], false);
+
+    settings.smtp.oauth_refresh_token = secret("stored-refresh-token");
+    update_current_settings(&pool, settings).await.unwrap();
+    let info: serde_json::Value = client.get("/api/v1/info").send().await.json().await;
+    assert_eq!(info["smtp_enabled"], true);
+
+    // Switching from XOAuth2 to Login via PATCH clears both OAuth secrets.
+    let response = client
+        .patch("/api/v1/settings")
+        .json(&json!({
+            "smtp_authentication": "Login",
+            "smtp_user": "user",
+            "smtp_password": "password"
+        }))
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let after = Settings::get(&pool).await.unwrap().unwrap();
+    assert!(after.smtp.oauth_refresh_token.is_none());
+    assert!(after.smtp.oauth_client_secret.is_none());
 }

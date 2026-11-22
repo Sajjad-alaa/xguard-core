@@ -9,6 +9,7 @@ mod qr;
 pub mod templates;
 #[cfg(test)]
 mod tests;
+pub mod xoauth2;
 
 use std::{str::FromStr, time::Duration};
 
@@ -16,7 +17,7 @@ use lettre::{
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
     message::{Body, Mailbox, MultiPart, SinglePart, header::ContentType},
     transport::smtp::{
-        authentication::Credentials,
+        authentication::{Credentials, Mechanism},
         client::{Tls, TlsParameters},
     },
 };
@@ -51,6 +52,9 @@ pub enum MailError {
 
     #[error("Invalid port: {0}")]
     InvalidPort(i32),
+
+    #[error(transparent)]
+    OAuth2(#[from] xoauth2::OAuthError),
 }
 
 use self::{
@@ -307,9 +311,13 @@ impl Mail {
                     builder.credentials(Credentials::new(user, password.expose_secret().into()));
             }
             SmtpAuthentication::XOAuth2 => {
-                // XOAUTH2 needs the Microsoft OAuth2 integration, which XGuard does not include.
-                error!("XOAUTH2 SMTP authentication is not supported");
-                return Err(MailError::SmtpNotConfigured);
+                let Some(sender) = smtp_settings.sender.as_deref().filter(|s| !s.is_empty()) else {
+                    return Err(MailError::SmtpNotConfigured);
+                };
+                let token = xoauth2::access_token(&smtp_settings).await?;
+                builder = builder
+                    .authentication(vec![Mechanism::Xoauth2])
+                    .credentials(Credentials::new(sender.to_owned(), token));
             }
         }
 
