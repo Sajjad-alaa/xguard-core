@@ -15,7 +15,7 @@ use xguard_common::{
     db::{
         Id,
         models::{
-            Device, User, WireguardNetwork,
+            Device, ThrottleScope, User, WireguardNetwork,
             device::WireguardNetworkDevice,
             mfa_flow::{MfaFlow, MfaFlowStep},
             polling_token::polling_token_digest,
@@ -107,6 +107,7 @@ struct ClientMfaStartContext {
     device: Device<Id>,
     user: User<Id>,
     ip: IpAddr,
+    posture_facts: Option<serde_json::Value>,
 }
 
 pub struct ClientMfaServer {
@@ -393,7 +394,9 @@ impl From<StartError> for Status {
 impl From<StepError> for Status {
     fn from(err: StepError) -> Self {
         let code = match err {
-            StepError::SessionNotFound | StepError::MethodNotInStep => Code::InvalidArgument,
+            StepError::SessionNotFound | StepError::StaleStep | StepError::MethodNotInStep => {
+                Code::InvalidArgument
+            }
             StepError::MethodNotConfigured => Code::FailedPrecondition,
             StepError::Internal => Code::Internal,
             StepError::Initiate(e) => return Self::from(e),
@@ -512,6 +515,7 @@ impl ClientMfaServer {
             device,
             user,
             ip,
+            posture_facts,
         } = self
             .prepare_client_mfa_start(
                 request.location_id,
@@ -524,13 +528,14 @@ impl ClientMfaServer {
         let (flow_id, step_methods) = self.resolve_legacy_mfa_flow(&location, &user).await?;
         let start_outcome = self
             .engine
-            .start_legacy(
+            .start_legacy_with_posture(
                 &location,
                 &device,
                 &user,
                 flow_id,
                 step_methods,
                 selected_client_method,
+                posture_facts,
             )
             .await
             .map_err(Status::from)?;
@@ -562,6 +567,7 @@ impl ClientMfaServer {
             device,
             user,
             ip,
+            posture_facts,
         } = self
             .prepare_client_mfa_start(
                 request.location_id,
@@ -582,13 +588,14 @@ impl ClientMfaServer {
 
         match self
             .engine
-            .start_multi_step(
+            .start_multi_step_with_posture(
                 &location,
                 &device,
                 &user,
                 flow.id,
                 step_methods,
                 selected_methods,
+                posture_facts,
             )
             .await
             .map_err(Status::from)?
@@ -745,10 +752,21 @@ impl ClientMfaServer {
 
         let (ip, _user_agent) = parse_client_ip_agent(&info).map_err(Status::internal)?;
 
-        // Fail fast, before the user is asked for a code. The stored snapshot is checked again
-        // when the session is authorized.
-        self.check_posture(&location, &device, &user, ip, posture)
-            .await?;
+        let initiate_key = format!("{}:{}", location.id, device.id);
+        if ThrottleScope::VpnMfaInitiate
+            .is_blocked(&self.pool, &initiate_key)
+            .await
+            .map_err(|err| {
+                error!("Failed to read MFA initiate throttle: {err}");
+                Status::internal("unexpected error")
+            })?
+        {
+            return Err(Status::from(InitiateError::TooManyRequests));
+        }
+
+        // Fail fast, before the user is asked for a code, without mutating posture snapshots or
+        // revoking existing sessions before MFA proves identity.
+        let posture_facts = self.evaluate_start_posture(&location, posture).await?;
 
         user.verify_mfa_state(&self.pool).await.map_err(|err| {
             error!(
@@ -763,7 +781,29 @@ impl ClientMfaServer {
             device,
             user,
             ip,
+            posture_facts,
         })
+    }
+
+    async fn evaluate_start_posture(
+        &self,
+        location: &WireguardNetwork<Id>,
+        posture: Option<&DevicePostureFacts>,
+    ) -> Result<Option<serde_json::Value>, Status> {
+        let mut conn = self.acquire_conn().await?;
+        let Some(check) = posture::evaluate_connection(&mut conn, location.id, posture)
+            .await
+            .map_err(|err| {
+                error!("Failed to evaluate posture for {location}: {err}");
+                Status::internal("unexpected error")
+            })?
+        else {
+            return Ok(None);
+        };
+        match check.result {
+            PostureResult::Pass => Ok(check.facts.map(|facts| facts.to_json())),
+            PostureResult::Fail(failed_checks) => Err(posture_rejected_status(&failed_checks)),
+        }
     }
 
     /// Evaluates the posture of `device` for `location` (when the location has posture

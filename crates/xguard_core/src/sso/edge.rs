@@ -119,6 +119,8 @@ struct Pending {
     created: Instant,
     ip: Option<IpAddr>,
     provider_id: Id,
+    issuer: String,
+    client_id: String,
     redirect_url: String,
     login: PendingLogin,
     purpose: Purpose,
@@ -270,6 +272,8 @@ pub(crate) async fn start_at(
             created: now,
             ip,
             provider_id: config.provider.id,
+            issuer: config.provider.issuer.clone(),
+            client_id: config.provider.client_id.clone(),
             redirect_url,
             login,
             purpose,
@@ -327,6 +331,8 @@ pub async fn finish(
     if pending.created.elapsed() >= PENDING_TTL
         || pending.purpose.flow() != flow_type
         || pending.provider_id != config.provider.id
+        || pending.issuer != config.provider.issuer
+        || pending.client_id != config.provider.client_id
     {
         return Err(EdgeError::Expired.into());
     }
@@ -386,11 +392,16 @@ mod tests {
             created,
             ip,
             provider_id: 1,
+            issuer: String::new(),
+            client_id: String::new(),
             redirect_url: String::new(),
             login: PendingLogin {
                 state: String::new(),
                 nonce: String::new(),
                 verifier: String::new(),
+                expires_at: 0,
+                issuer: String::new(),
+                client_id: String::new(),
             },
             purpose: Purpose::Enrollment,
         }

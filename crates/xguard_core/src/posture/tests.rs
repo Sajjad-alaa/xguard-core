@@ -243,4 +243,9 @@ fn broken_stored_requirement_fails_closed() {
     linux.min_kernel_version = Some("six".into());
     let result = evaluate(&[policy("p", vec![linux])], Some(&linux_facts()), today());
     assert!(failures(&result).contains("requirement is invalid"));
+
+    let mut invalid_client_policy = policy("p", vec![]);
+    invalid_client_policy.posture.min_desktop_client_version = Some("not-a-semver".into());
+    let result = evaluate(&[invalid_client_policy], Some(&linux_facts()), today());
+    assert!(failures(&result).contains("version requirement is invalid"));
 }

@@ -233,7 +233,6 @@ pub fn plan(
     users.sort_by(|a, b| a.username.cmp(&b.username));
     let mut directory: Vec<&DirectoryUser> = snapshot.users.iter().collect();
     directory.sort_by(|a, b| a.id.cmp(&b.id));
-    let directory_ids: HashSet<&str> = directory.iter().map(|d| d.id.as_str()).collect();
 
     // Who is in scope.
     let scope_members: Option<HashSet<&str>> = (!config.user_groups.is_empty()).then(|| {
@@ -288,17 +287,24 @@ pub fn plan(
             let candidates = by_email.get(&key(email)).map_or(&[][..], Vec::as_slice);
             if let [candidate] = candidates {
                 let unique_in_directory = directory_emails.get(&key(email)) == Some(&1);
-                // Linked to a directory account that still exists: someone else.
+                // Any stored directory external_id or subject belonging to another directory ID
+                // must never be silently reassigned on email match.
                 let linked_elsewhere = candidate
                     .external_id
                     .as_deref()
-                    .is_some_and(|id| id != d.id && directory_ids.contains(id));
+                    .is_some_and(|id| id != d.id);
                 let other_subject = subject_is_id
                     && candidate
                         .openid_sub
                         .as_deref()
-                        .is_some_and(|sub| sub != d.id && directory_ids.contains(sub));
-                if !unique_in_directory {
+                        .is_some_and(|sub| sub != d.id);
+                let out_of_scope_unlinked = candidate.external_id.is_none()
+                    && candidate.openid_sub.is_none()
+                    && !in_scope(d);
+                if out_of_scope_unlinked {
+                    // Leave unlinked local accounts untouched when the directory user is outside
+                    // the configured `user_groups`.
+                } else if !unique_in_directory {
                     plan.skipped.push(format!(
                         "{email}: several directory users have this email, so it is not linked \
                          to {}",
@@ -586,6 +592,8 @@ pub fn plan(
             .copied()
             .collect();
 
+        let disabled_ids: HashSet<Id> = plan.disable_users.iter().map(|c| c.user_id).collect();
+        let enabled_ids: HashSet<Id> = plan.enable_users.iter().map(|c| c.user_id).collect();
         // Additions first: someone who joins an admin group keeps an admin around, so others
         // may then leave it.
         for (user, d) in &in_scope_matched {
@@ -596,7 +604,9 @@ pub fn plan(
                     add(&mut plan, name_key, &user.username, Some(user.id));
                 }
             }
-            if becomes_admin && user.is_active && !user.is_admin {
+            let will_be_active = (user.is_active && !disabled_ids.contains(&user.id))
+                || enabled_ids.contains(&user.id);
+            if becomes_admin && will_be_active && !user.is_admin {
                 active_admins += 1;
             }
         }

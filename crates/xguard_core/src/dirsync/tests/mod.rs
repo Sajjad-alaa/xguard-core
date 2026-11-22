@@ -1078,3 +1078,45 @@ fn jumpcloud_regions() {
         "https://console.in.jumpcloud.com/"
     );
 }
+
+#[test]
+fn does_not_relink_deleted_external_id_or_touch_out_of_scope_unlinked() {
+    let mut previously_linked = local(1, "alice", &[]);
+    previously_linked.external_id = Some("old-id".into());
+    previously_linked.email = "alice@example.org".into();
+
+    let mut out_of_scope_local = local(2, "localbob", &[]);
+    out_of_scope_local.email = "bob@example.org".into();
+
+    let users = vec![previously_linked, out_of_scope_local];
+    let mut cfg = offline(ProviderKind::Okta);
+    cfg.user_groups = crate::dirsync::Patterns::new(&["Engineering".into()]);
+    cfg.user_behavior = MissingUserAction::Disable;
+
+    let directory = DirectorySnapshot {
+        users: vec![
+            remote("new-id-reused-email", "alice", true),
+            remote("out-of-scope-bob", "bob", true),
+        ],
+        groups: vec![DirectoryGroup {
+            id: "g1".into(),
+            name: "Engineering".into(),
+            members: vec!["new-id-reused-email".into()],
+        }],
+        total_groups: 1,
+    };
+
+    let result = plan(&cfg, &users, &[], &directory);
+    assert!(
+        result.link_users.is_empty(),
+        "must not relink stale external_id or out-of-scope local user: {:?}",
+        result.link_users
+    );
+    assert!(
+        result
+            .disable_users
+            .iter()
+            .all(|change| change.username != "localbob"),
+        "out-of-scope local user must stay untouched"
+    );
+}

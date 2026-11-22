@@ -146,6 +146,7 @@ pub(crate) fn filter_supported_mfa_methods(
 struct CompletedFlow {
     outcome: FinishOutcome,
     gateway_command: GatewayCommand,
+    posture_event: Option<BidiStreamEvent>,
     event: BidiStreamEvent,
 }
 
@@ -169,8 +170,10 @@ impl MfaEngine {
         }
     }
 
-    /// Create and persist the initial MFA session and attempt.
-    async fn start_session(
+    /// Create and persist the initial MFA session and attempt, carrying optional posture facts
+    /// to commit only once authentication succeeds.
+    #[allow(clippy::too_many_arguments)]
+    async fn start_session_with_posture(
         &self,
         location: &WireguardNetwork<Id>,
         device: &Device<Id>,
@@ -179,6 +182,7 @@ impl MfaEngine {
         steps: Vec<HashSet<VpnClientMfaMethod>>,
         flow_kind: VpnMfaFlowKind,
         method: VpnClientMfaMethod,
+        posture_facts: Option<serde_json::Value>,
     ) -> Result<StartedSession, StartError> {
         // Refuse before `initiate` so that a locked device receives no further email code.
         if is_code_method(method)
@@ -216,7 +220,7 @@ impl MfaEngine {
             StartError::Internal
         })?;
         let step_methods = steps.iter().map(VpnClientMfaMethod::ordered_set).collect();
-        let (session, outcome) = VpnClientMfaSession::<Id>::start(
+        let (session, outcome) = VpnClientMfaSession::<Id>::start_with_posture(
             &mut transaction,
             location.id,
             device.id,
@@ -226,6 +230,7 @@ impl MfaEngine {
             flow_kind,
             method,
             initiated.signature,
+            posture_facts,
             VPN_MFA_SESSION_TIMEOUT,
         )
         .await
@@ -391,6 +396,9 @@ impl MfaEngine {
                 error!("Error sending WireGuard event: {err}");
                 FinishCoreError::Internal
             })?;
+        if let Some(posture_event) = completed.posture_event {
+            self.channels.emit_event(posture_event)?;
+        }
         self.channels.emit_event(completed.event)?;
         Ok(completed.outcome)
     }
@@ -416,40 +424,72 @@ impl MfaEngine {
             return Err(FinishCoreError::Internal);
         };
 
-        // Authorization point: the stored posture snapshot must still comply with the
-        // location's policies as they are now.
-        let posture = crate::posture::check_stored_snapshot(
-            &mut *transaction,
-            ctx.location.id,
-            ctx.device.id,
-        )
-        .await
-        .map_err(|err| {
-            error!("Failed to check the posture of {}: {err}", ctx.device);
-            FinishCoreError::Internal
-        })?;
-        if let crate::posture::PostureResult::Fail(failed_checks) = posture {
-            warn!(
-                "Refusing to authorize {} in {}: {}",
-                ctx.device,
-                ctx.location,
-                failed_checks.join("; ")
-            );
-            if let Err(err) = self.channels.emit_event(BidiStreamEvent {
+        // Authorization point: evaluate/commit any deferred MFA-start posture facts or verify the
+        // stored posture snapshot against the location's current policies.
+        let (posture_result, posture_facts, emit_passed) =
+            if let Some(facts_json) = &snapshot.posture_facts {
+                match crate::posture::commit_and_check_facts(
+                    &mut *transaction,
+                    ctx.location.id,
+                    ctx.device.id,
+                    facts_json,
+                    session.created_at,
+                )
+                .await
+                .map_err(|err| {
+                    error!("Failed to check the posture of {}: {err}", ctx.device);
+                    FinishCoreError::Internal
+                })? {
+                    Some(check) => (check.result, check.facts, true),
+                    None => (crate::posture::PostureResult::Pass, None, false),
+                }
+            } else {
+                let result = crate::posture::check_stored_snapshot(
+                    &mut *transaction,
+                    ctx.location.id,
+                    ctx.device.id,
+                )
+                .await
+                .map_err(|err| {
+                    error!("Failed to check the posture of {}: {err}", ctx.device);
+                    FinishCoreError::Internal
+                })?;
+                (result, None, false)
+            };
+        let posture_event = match posture_result {
+            crate::posture::PostureResult::Pass => emit_passed.then(|| BidiStreamEvent {
                 context: context.clone(),
                 event: BidiStreamEventType::DesktopClientMfa(Box::new(
-                    DesktopClientMfaEvent::PostureCheckFailed {
+                    DesktopClientMfaEvent::PostureCheckPassed {
                         device: ctx.device.clone(),
                         location: ctx.location.clone(),
-                        facts: None,
-                        failed_checks: failed_checks.clone(),
+                        facts: posture_facts,
                     },
                 )),
-            }) {
-                error!("Failed to emit posture event: {err}");
+            }),
+            crate::posture::PostureResult::Fail(failed_checks) => {
+                warn!(
+                    "Refusing to authorize {} in {}: {}",
+                    ctx.device,
+                    ctx.location,
+                    failed_checks.join("; ")
+                );
+                if let Err(err) = self.channels.emit_event(BidiStreamEvent {
+                    context: context.clone(),
+                    event: BidiStreamEventType::DesktopClientMfa(Box::new(
+                        DesktopClientMfaEvent::PostureCheckFailed {
+                            device: ctx.device.clone(),
+                            location: ctx.location.clone(),
+                            facts: posture_facts,
+                            failed_checks: failed_checks.clone(),
+                        },
+                    )),
+                }) {
+                    error!("Failed to emit posture event: {err}");
+                }
+                return Err(FinishCoreError::PostureRejected(failed_checks));
             }
-            return Err(FinishCoreError::PostureRejected(failed_checks));
-        }
+        };
 
         let flow_name = MfaFlow::find_by_id(&mut *transaction, snapshot.flow_id)
             .await
@@ -524,6 +564,7 @@ impl MfaEngine {
         Ok(CompletedFlow {
             outcome: FinishOutcome::Completed { preshared_key },
             gateway_command,
+            posture_event,
             event,
         })
     }

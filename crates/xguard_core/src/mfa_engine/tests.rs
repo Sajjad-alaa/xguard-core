@@ -2821,3 +2821,93 @@ async fn test_fido2_start_requires_a_vpn_key(_: PgPoolOptions, options: PgConnec
     assert_eq!(rejections[0].reason, StartRejectionReason::StepUnavailable);
     assert_eq!(session_count(&pool, location.id, device.id).await, 0);
 }
+
+#[sqlx::test]
+async fn test_finish_step_rejects_method_not_in_current_step(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    set_test_license_business();
+    let pool = setup_pool(options).await;
+    initialize_current_settings(&pool)
+        .await
+        .expect("failed to init settings");
+    let _smtp = configure_working_smtp(&pool).await;
+
+    let location = create_mfa_location(&pool).await;
+    create_and_assign_flow(
+        &pool,
+        location.id,
+        vec![
+            vec![VpnClientMfaMethod::Totp],
+            vec![VpnClientMfaMethod::Email],
+        ],
+    )
+    .await;
+    let mut user = create_user(&pool).await;
+    setup_user_totp_and_email(&pool, &mut user).await;
+    let device = create_device(&pool, user.id).await;
+    attach_device_to_location(&pool, location.id, device.id).await;
+
+    let (flow_id, step_methods) = resolve_flow(&pool, location.id, user.id).await;
+    let (engine, _event_rx, _gateway_rx) = make_engine(pool.clone());
+
+    let StartResult::Accepted(outcome) = engine
+        .start_multi_step(
+            &location,
+            &device,
+            &user,
+            flow_id,
+            step_methods,
+            vec![VpnClientMfaMethod::Totp, VpnClientMfaMethod::Email],
+        )
+        .await
+        .expect("start should succeed")
+    else {
+        panic!("expected an accepted plan");
+    };
+
+    // Simulate a racing begin_attempt/stale state where current_step already advanced to step 1
+    // (Email) while ephemeral_state still holds an attempt for step 0's method (Totp).
+    let outcome_step = engine
+        .finish_step(
+            outcome.token.clone(),
+            code_proof(outcome.step_attempt_id.clone(), totp_code(&user)),
+            test_ip(),
+        )
+        .await
+        .expect("step 0 finish should advance to step 1");
+    assert!(matches!(
+        outcome_step,
+        FinishOutcome::Advanced { next_step: 1, .. }
+    ));
+
+    let stale_attempt_id = "stale-step0-attempt";
+    let state = serde_json::json!({
+        "step_attempt_id": stale_attempt_id,
+        "selected_method": VpnClientMfaMethod::Totp,
+        "biometric_challenge": null,
+        "openid_auth_completed": false,
+        "mobile_approved": false,
+        "mobile_auth_device_name": null,
+        "fido2": null,
+    });
+    sqlx::query("UPDATE vpn_client_mfa_session SET ephemeral_state = $1")
+        .bind(state)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let err = engine
+        .finish_step(
+            outcome.token,
+            code_proof(stale_attempt_id.to_owned(), totp_code(&user)),
+            test_ip(),
+        )
+        .await
+        .expect_err("finish_step must reject an attempt whose method belongs to another step");
+    assert!(matches!(
+        err,
+        super::multi_step::StepFinishError::StaleAttempt
+    ));
+}

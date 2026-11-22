@@ -1509,3 +1509,77 @@ async fn test_enrollment_config_carries_client_mtu(_: PgPoolOptions, options: Pg
 
     context.finish().await.expect_server_finished().await;
 }
+
+#[sqlx::test]
+async fn test_register_mobile_auth_rejects_self_service_token_for_enrolled_user(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    let mut context = HandlerTestContext::new(options).await;
+    complete_proxy_handshake(&mut context).await;
+
+    let (mut user, device) = create_user_with_device(&context.pool).await;
+    user.set_password(STRONG_PASSWORD);
+    user.save(&context.pool).await.unwrap();
+    assert!(user.is_enrolled());
+    // Self-service tokens carry admin_id = None and must not alter enrolled users' mobile auth.
+    let token = create_enrollment_token(&context.pool, user.id, None).await;
+    start_enrollment_session(&mut context, &token.id).await;
+
+    context.mock_proxy().send_request(CoreRequest {
+        id: 305,
+        device_info: None,
+        payload: Some(core_request::Payload::RegisterMobileAuth(
+            RegisterMobileAuthRequest {
+                token: token.id.clone(),
+                auth_pub_key: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=".to_owned(),
+                device_pub_key: device.wireguard_pubkey.clone(),
+            },
+        )),
+    });
+
+    let response = context.mock_proxy_mut().recv_outbound().await;
+    assert_eq!(
+        assert_error_response(&response),
+        tonic::Code::PermissionDenied
+    );
+
+    context.finish().await.expect_server_finished().await;
+}
+
+#[sqlx::test]
+async fn test_self_service_token_cannot_create_device_when_admin_device_management_enabled(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    let mut context = HandlerTestContext::new(options).await;
+    complete_proxy_handshake(&mut context).await;
+
+    let client_settings = xguard_common::db::models::ClientSettings {
+        admin_device_management: true,
+        ..Default::default()
+    };
+    client_settings.save(&context.pool).await.unwrap();
+
+    let user = create_user(&context.pool).await;
+    let token = create_enrollment_token(&context.pool, user.id, None).await;
+    start_enrollment_session(&mut context, &token.id).await;
+
+    context.mock_proxy().send_request(CoreRequest {
+        id: 306,
+        device_info: Some(make_device_info()),
+        payload: Some(core_request::Payload::NewDevice(NewDevice {
+            name: "Blocked Self-Enrolled Device".to_owned(),
+            pubkey: "AA0aJzRBTltodYKPnKm2w9Dd6vcEER4rOEVSX2x5hpM=".to_owned(),
+            token: Some(token.id.clone()),
+        })),
+    });
+
+    let response = context.mock_proxy_mut().recv_outbound().await;
+    assert_eq!(
+        assert_error_response(&response),
+        tonic::Code::PermissionDenied
+    );
+
+    context.finish().await.expect_server_finished().await;
+}

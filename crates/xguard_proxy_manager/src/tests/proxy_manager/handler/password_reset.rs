@@ -622,3 +622,45 @@ async fn test_password_reset_completes_for_oidc_user(_: PgPoolOptions, options: 
 
     context.finish().await.expect_server_finished().await;
 }
+
+#[sqlx::test]
+async fn test_password_reset_blocked_when_disabled_in_client_settings(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    let mut context = HandlerTestContext::new(options).await;
+    complete_proxy_handshake(&mut context).await;
+
+    let mut user = create_user(&context.pool).await;
+    user.set_password(STRONG_PASSWORD);
+    user.save(&context.pool)
+        .await
+        .expect("failed to save user with password");
+    let token = create_password_reset_token(&context.pool, &user).await;
+
+    let client_settings = xguard_common::db::models::ClientSettings {
+        display_password_reset: false,
+        ..Default::default()
+    };
+    client_settings.save(&context.pool).await.unwrap();
+
+    let init_resp = send_password_reset_init(&mut context, &user.email).await;
+    assert_eq!(
+        assert_error_response(&init_resp),
+        tonic::Code::PermissionDenied
+    );
+
+    let start_resp = send_password_reset_start(&mut context, &token.id).await;
+    assert_eq!(
+        assert_error_response(&start_resp),
+        tonic::Code::PermissionDenied
+    );
+
+    let reset_resp = send_password_reset(&mut context, &token.id, "NewPass2!").await;
+    assert_eq!(
+        assert_error_response(&reset_resp),
+        tonic::Code::PermissionDenied
+    );
+
+    context.finish().await.expect_server_finished().await;
+}

@@ -1050,6 +1050,7 @@ fn build_vpn_event(
                     satisfied: Some(satisfied),
                     mobile_auth_device_name: None,
                 }],
+                posture_facts: None,
             };
             (
                 get_vpn_event_description(&VpnEvent::ClientMfaSuccess {

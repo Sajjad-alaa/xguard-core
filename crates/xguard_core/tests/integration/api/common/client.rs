@@ -332,6 +332,7 @@ impl TestResponse {
     // }
 
     /// Get the inner [`reqwest::Response`] for less convenient but more complete access.
+    #[allow(dead_code)]
     pub fn into_inner(self) -> reqwest::Response {
         self.response
     }

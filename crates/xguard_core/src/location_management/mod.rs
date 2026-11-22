@@ -166,7 +166,8 @@ pub async fn process_device_access_changes(
     // when necessary; remove processed entry from all devices list initial list should
     // now contain only devices to be added.
     let mut used_ips = location.all_used_ip_addresses(&mut *conn).await?;
-    let active_sessions = if location.mfa_enabled {
+    let requires_authorization = location.mfa_enabled || location.has_postures(&mut *conn).await?;
+    let active_sessions = if requires_authorization {
         VpnClientSession::get_all_active_for_location(&mut *conn, location.id)
             .await?
             .into_iter()
@@ -192,8 +193,11 @@ pub async fn process_device_access_changes(
                     )
                     .await?;
                 used_ips.extend(wireguard_network_device.wireguard_ips.iter().copied());
-                let network_info = wireguard_network_device
-                    .to_device_network_info(location, active_sessions.get(&device.id));
+                let network_info = wireguard_network_device.to_device_network_info(
+                    location,
+                    requires_authorization,
+                    active_sessions.get(&device.id),
+                );
                 events.push(GatewayCommand::DeviceModified(DeviceInfo {
                     device,
                     network_info: vec![network_info],
@@ -211,7 +215,11 @@ pub async fn process_device_access_changes(
             if let Some(device) =
                 Device::find_by_id(&mut *conn, device_network_config.device_id).await?
             {
-                let network_info = device_network_config.to_device_network_info(location, None);
+                let network_info = device_network_config.to_device_network_info(
+                    location,
+                    requires_authorization,
+                    None,
+                );
                 events.push(GatewayCommand::DeviceDeleted(DeviceInfo {
                     device,
                     network_info: vec![network_info],

@@ -176,10 +176,10 @@ impl<'a> GatewayUpdatesHandler<'a> {
             Ok(has_postures) => has_postures,
             Err(err) => {
                 error!(
-                    "Failed to fetch postures for location {}: {err}",
+                    "Failed to fetch postures for location {}: {err}; failing closed",
                     self.network
                 );
-                false
+                true
             }
         };
     }

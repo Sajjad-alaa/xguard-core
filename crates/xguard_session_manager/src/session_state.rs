@@ -358,9 +358,11 @@ impl ActiveSessionsMap {
 
         // check location MFA mode since MFA sessions should be created elsewhere
         // once MFA auth is successful
-        if location.mfa_enabled {
+        let requires_authorization =
+            location.mfa_enabled || location.has_postures(&mut *transaction).await?;
+        if requires_authorization {
             warn!(
-                "Received peer stats update for MFA-enabled location {location}, but VPN session does not exist yet. Skipping creating a new session..."
+                "Received peer stats update for runtime-authorized location {location}, but VPN session does not exist yet. Skipping creating a new session..."
             );
             return Ok(None);
         }

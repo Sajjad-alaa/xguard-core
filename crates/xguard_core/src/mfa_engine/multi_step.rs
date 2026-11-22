@@ -78,6 +78,8 @@ pub struct VerifiedLegacyMobileProof {
 pub enum StepError {
     #[error("login session not found")]
     SessionNotFound,
+    #[error("MFA step is no longer current")]
+    StaleStep,
     #[error("MFA method is not in the current step")]
     MethodNotInStep,
     #[error("MFA method is not configured for this user")]
@@ -176,6 +178,30 @@ impl MfaEngine {
         steps: Vec<HashSet<VpnClientMfaMethod>>,
         selected_methods: Vec<VpnClientMfaMethod>,
     ) -> Result<StartResult, StartError> {
+        self.start_multi_step_with_posture(
+            location,
+            device,
+            user,
+            flow_id,
+            steps,
+            selected_methods,
+            None,
+        )
+        .await
+    }
+
+    /// Variant of [`Self::start_multi_step`] carrying optional posture facts to persist after MFA.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_multi_step_with_posture(
+        &self,
+        location: &WireguardNetwork<Id>,
+        device: &Device<Id>,
+        user: &User<Id>,
+        flow_id: Id,
+        steps: Vec<HashSet<VpnClientMfaMethod>>,
+        selected_methods: Vec<VpnClientMfaMethod>,
+        posture_facts: Option<serde_json::Value>,
+    ) -> Result<StartResult, StartError> {
         if selected_methods.len() != steps.len() {
             error!(
                 "MFA plan length {} does not match the {}-step flow of location {}",
@@ -239,7 +265,7 @@ impl MfaEngine {
         }
 
         let outcome = self
-            .start_session(
+            .start_session_with_posture(
                 location,
                 device,
                 user,
@@ -247,6 +273,7 @@ impl MfaEngine {
                 filtered_steps,
                 VpnMfaFlowKind::MultiStep,
                 selected_methods[0],
+                posture_facts,
             )
             .await?;
         Ok(StartResult::Accepted(MultiStepStartOutcome {
@@ -337,13 +364,20 @@ impl MfaEngine {
             error!("Failed to begin transaction: {err}");
             StepError::Internal
         })?;
-        let step_attempt_id = session
+        let Some(step_attempt_id) = session
             .begin_attempt(&mut transaction, method, initiated.signature)
             .await
             .map_err(|err| {
                 error!("Failed to begin MFA attempt: {err}");
                 StepError::Internal
-            })?;
+            })?
+        else {
+            warn!(
+                "Discarded step_start for MFA session {}: step {} is no longer current",
+                session.id, session.current_step
+            );
+            return Err(StepError::StaleStep);
+        };
         if let Some(issued) = &initiated.fido2
             && !session
                 .set_fido2_state(&mut transaction, &step_attempt_id, &issued.state)
@@ -396,6 +430,16 @@ impl MfaEngine {
         }
 
         let method = ephemeral.selected_method;
+        if !session
+            .current_step_methods()
+            .is_some_and(|methods| methods.contains(&method))
+        {
+            warn!(
+                "Rejected finish_step for MFA session {}: selected method {method:?} is not in step {}",
+                session.id, session.current_step
+            );
+            return Err(StepFinishError::StaleAttempt);
+        }
         let valid_credential = matches!(
             (&credential, method),
             (

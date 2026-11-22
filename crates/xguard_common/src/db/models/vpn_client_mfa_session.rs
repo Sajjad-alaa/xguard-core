@@ -51,6 +51,8 @@ pub enum VpnMfaFlowKind {
 pub struct StepsSnapshot {
     pub flow_id: Id,
     pub steps: Vec<Step>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub posture_facts: Option<serde_json::Value>,
 }
 
 /// Attribution for a completed MFA session: the frozen step snapshot plus the governing flow's
@@ -234,6 +236,38 @@ impl VpnClientMfaSession<Id> {
         challenge: Option<BiometricChallenge>,
         ttl: Duration,
     ) -> sqlx::Result<(Self, StartOutcome)> {
+        Self::start_with_posture(
+            conn,
+            location_id,
+            device_id,
+            user_id,
+            flow_id,
+            steps,
+            flow_kind,
+            method,
+            challenge,
+            None,
+            ttl,
+        )
+        .await
+    }
+
+    /// Variant of [`Self::start`] that carries unpersisted posture facts inside the session
+    /// snapshot so posture snapshots are only committed once MFA authentication succeeds.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_with_posture(
+        conn: &mut PgConnection,
+        location_id: Id,
+        device_id: Id,
+        user_id: Id,
+        flow_id: Id,
+        steps: Vec<Vec<VpnClientMfaMethod>>,
+        flow_kind: VpnMfaFlowKind,
+        method: VpnClientMfaMethod,
+        challenge: Option<BiometricChallenge>,
+        posture_facts: Option<serde_json::Value>,
+        ttl: Duration,
+    ) -> sqlx::Result<(Self, StartOutcome)> {
         let token = gen_alphanumeric(32);
         let hash = hash_token(&token);
         let snapshot = StepsSnapshot {
@@ -248,6 +282,7 @@ impl VpnClientMfaSession<Id> {
                     })
                 })
                 .collect::<sqlx::Result<Vec<_>>>()?,
+            posture_facts,
         };
         let snapshot_json =
             serde_json::to_value(&snapshot).map_err(|err| sqlx::Error::Decode(Box::new(err)))?;
@@ -385,23 +420,31 @@ impl VpnClientMfaSession<Id> {
     ///
     /// The *first* attempt of a session is not minted here: `start` writes it inline, so this is
     /// for re-issuing an attempt on the current step and for initializing each subsequent step.
+    /// Replaces `ephemeral_state` with a fresh attempt if `self.current_step` is still the
+    /// active step and the session has not expired.
+    ///
+    /// Returns `Ok(None)` when a concurrent step advance moved `current_step` forward or the
+    /// session expired before this write ran.
     pub async fn begin_attempt(
         &self,
         conn: &mut PgConnection,
         method: VpnClientMfaMethod,
         challenge: Option<BiometricChallenge>,
-    ) -> sqlx::Result<String> {
+    ) -> sqlx::Result<Option<String>> {
         let (step_attempt_id, state_json) = new_attempt_state(method, challenge)?;
 
-        query!(
-            "UPDATE vpn_client_mfa_session SET ephemeral_state = $2 WHERE id = $1",
-            self.id,
-            state_json,
+        let res = sqlx::query(
+            "UPDATE vpn_client_mfa_session \
+             SET ephemeral_state = $2 \
+             WHERE id = $1 AND current_step = $3 AND expires_at > (now() AT TIME ZONE 'UTC')",
         )
+        .bind(self.id)
+        .bind(state_json)
+        .bind(self.current_step)
         .execute(&mut *conn)
         .await?;
 
-        Ok(step_attempt_id)
+        Ok((res.rows_affected() > 0).then_some(step_attempt_id))
     }
 
     /// Mark the current attempt's OIDC verification complete.

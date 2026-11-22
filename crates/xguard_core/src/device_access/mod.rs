@@ -62,7 +62,7 @@ async fn build_config(
 ) -> Result<DeviceConfig, DeviceError> {
     let effective_ips = network.allowed_ips.clone();
 
-    let config = create_wireguard_config(network, wireguard_network_device, &effective_ips);
+    let config = create_wireguard_config(network, wireguard_network_device, &effective_ips, mtu);
 
     // `None` when the location's flow configuration has no legacy equivalent. Carried through as
     // absent rather than coerced to `Disabled`, which would advertise an MFA-enabled location as

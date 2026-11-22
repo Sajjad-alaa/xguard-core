@@ -70,6 +70,22 @@ impl MfaEngine {
         step: HashSet<VpnClientMfaMethod>,
         selected_method: VpnClientMfaMethod,
     ) -> Result<LegacyStartOutcome, StartError> {
+        self.start_legacy_with_posture(location, device, user, flow_id, step, selected_method, None)
+            .await
+    }
+
+    /// Variant of [`Self::start_legacy`] carrying optional posture facts to persist after MFA.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_legacy_with_posture(
+        &self,
+        location: &WireguardNetwork<Id>,
+        device: &Device<Id>,
+        user: &User<Id>,
+        flow_id: Id,
+        step: HashSet<VpnClientMfaMethod>,
+        selected_method: VpnClientMfaMethod,
+        posture_facts: Option<serde_json::Value>,
+    ) -> Result<LegacyStartOutcome, StartError> {
         // The legacy contract carries no assertion or credential list, so a FIDO2 session could be
         // started but never finished. Reject it here rather than relying on the caller to.
         if selected_method == VpnClientMfaMethod::Fido2 {
@@ -119,7 +135,7 @@ impl MfaEngine {
         }
 
         let started = self
-            .start_session(
+            .start_session_with_posture(
                 location,
                 device,
                 user,
@@ -127,6 +143,7 @@ impl MfaEngine {
                 vec![step],
                 VpnMfaFlowKind::Legacy,
                 selected_method,
+                posture_facts,
             )
             .await?;
 

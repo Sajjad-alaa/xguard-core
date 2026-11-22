@@ -100,14 +100,21 @@ fn evaluate_policy(
         .client_version
         .as_deref()
         .and_then(parse_client_version);
-    match (&client, minimum.and_then(parse_client_version)) {
+    match (&client, minimum) {
         (None, _) => failures.push("the XGuard client version could not be determined".into()),
-        (Some(actual), Some(minimum)) if !client_meets_minimum(&minimum, actual) => {
-            failures.push(format!(
-                "XGuard client {actual} is older than the required {minimum}"
-            ));
+        (Some(_), Some(raw)) if parse_client_version(raw).is_none() => {
+            failures.push("XGuard client version requirement is invalid".into());
         }
-        _ => {}
+        (Some(actual), Some(raw)) => {
+            if let Some(minimum) = parse_client_version(raw)
+                && !client_meets_minimum(&minimum, actual)
+            {
+                failures.push(format!(
+                    "XGuard client {actual} is older than the required {minimum}"
+                ));
+            }
+        }
+        (Some(_), None) => {}
     }
     if let Some(actual) = client.as_ref().filter(|actual| !actual.pre.is_empty())
         && !posture.allow_prerelease_client

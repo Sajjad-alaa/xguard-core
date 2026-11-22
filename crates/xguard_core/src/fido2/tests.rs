@@ -405,3 +405,61 @@ async fn test_registration_refuses_synced_and_duplicate_keys(
         Err(Fido2Error::Malformed(_))
     ));
 }
+
+#[sqlx::test]
+async fn test_stored_counter_and_empty_name_fallback(_: PgPoolOptions, options: PgConnectOptions) {
+    let pool = setup(options).await;
+    let user = User::new(
+        "blankname",
+        Some("pass123"),
+        "   ",
+        "\t",
+        "blankname@example.com",
+        None,
+    )
+    .save(&pool)
+    .await
+    .expect("failed to create user");
+    let mut authenticator = TestAuthenticator::new();
+    let (reg_options, state) = start_registration(&pool, &user)
+        .await
+        .expect("blank first/last name should fall back to username");
+    let reg_json: serde_json::Value = serde_json::from_str(&reg_options).unwrap();
+    assert_eq!(reg_json["publicKey"]["user"]["displayName"], "blankname");
+
+    let response = authenticator.register(&reg_options, ORIGIN);
+    let passkey = finish_registration(&state, &response).expect("registration must finish");
+    assert_eq!(super::stored_counter(&passkey), Some(0));
+
+    let key = WebAuthn::new(
+        user.id,
+        "blank-name key".to_owned(),
+        &passkey,
+        AuthenticatorInfo::unattested(RegistrationSource::Desktop),
+    )
+    .unwrap()
+    .save(&pool)
+    .await
+    .unwrap();
+    key.enable_vpn_mfa(&pool).await.unwrap();
+
+    // Advance counter with a later assertion, then confirm a lower/equal-counter assertion is refused.
+    let first = issue_challenge(&pool, user.id).await.unwrap();
+    let second = issue_challenge(&pool, user.id).await.unwrap();
+    let client_data_second = client_data_json(ClientDataType::Get, &second.challenge, ORIGIN);
+    let assertion_second =
+        authenticator.assert_client_data_with_counter(RP_ID, &client_data_second, 2);
+    verify_assertion(&pool, user.id, &second.state, &assertion_second)
+        .await
+        .expect("counter 2 must verify");
+    let stored = WebAuthn::vpn_keys_for_user(&pool, user.id).await.unwrap();
+    assert_eq!(super::stored_counter(&stored[0].passkey), Some(2));
+
+    let client_data_first = client_data_json(ClientDataType::Get, &first.challenge, ORIGIN);
+    let assertion_first =
+        authenticator.assert_client_data_with_counter(RP_ID, &client_data_first, 2);
+    let err = verify_assertion(&pool, user.id, &first.state, &assertion_first)
+        .await
+        .expect_err("stale equal counter must be rejected against fresh DB state");
+    assert!(matches!(err, Fido2Error::Rejected(_)), "{err:?}");
+}

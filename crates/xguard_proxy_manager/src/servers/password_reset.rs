@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 use tonic::Status;
-use xguard_common::db::models::{Settings, User};
+use xguard_common::db::models::{ClientSettings, Settings, User};
 use xguard_core::{
     db::models::enrollment::{PASSWORD_RESET_TOKEN_TYPE, Token},
     events::{
@@ -77,6 +77,17 @@ impl PasswordResetServer {
         }
     }
 
+    async fn ensure_password_reset_enabled(&self) -> Result<(), Status> {
+        let client_settings = ClientSettings::current(&self.pool).await.map_err(|err| {
+            error!("Failed to check password reset setting: {err}");
+            Status::internal("unexpected error")
+        })?;
+        if !client_settings.display_password_reset {
+            return Err(Status::permission_denied("password reset is disabled"));
+        }
+        Ok(())
+    }
+
     // Send event to the dedicated bidi stream event channel
     fn emit_event(
         &self,
@@ -98,6 +109,7 @@ impl PasswordResetServer {
         req_device_info: Option<DeviceInfo>,
     ) -> Result<(), Status> {
         debug!("Starting password reset request");
+        self.ensure_password_reset_enabled().await?;
 
         let ip_address;
         let device_info;
@@ -256,6 +268,7 @@ impl PasswordResetServer {
         info: Option<DeviceInfo>,
     ) -> Result<PasswordResetStartResponse, Status> {
         debug!("Starting password reset session.");
+        self.ensure_password_reset_enabled().await?;
 
         let mut enrollment = Token::find_by_id(&self.pool, &request.token).await?;
 
@@ -325,6 +338,7 @@ impl PasswordResetServer {
         req_device_info: Option<DeviceInfo>,
     ) -> Result<(), Status> {
         debug!("Starting password reset");
+        self.ensure_password_reset_enabled().await?;
 
         let enrollment = self.validate_session(request.token.as_ref()).await?;
 
@@ -352,6 +366,24 @@ impl PasswordResetServer {
                 user.username
             );
             return Err(Status::permission_denied("user disabled"));
+        }
+
+        let is_admin = user.is_admin(&self.pool).await.map_err(|err| {
+            error!("Failed to check if user is admin: {err}");
+            Status::internal("unexpected error")
+        })?;
+        let settings = Settings::get_current_settings();
+        let oidc_disable_password_management = disables_password_management(&self.pool)
+            .await
+            .map_err(|err| {
+                error!("Failed to check the OpenID password management setting: {err}");
+                Status::internal("unexpected error")
+            })?;
+        if user.password_management_disabled(is_admin, &settings, oidc_disable_password_management)
+        {
+            return Err(Status::permission_denied(
+                "password management is disabled for this user",
+            ));
         }
 
         let mut transaction = self.pool.begin().await.map_err(|_| {

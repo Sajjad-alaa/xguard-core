@@ -693,19 +693,56 @@ pub async fn webauthn_end(
         let webauthn = appstate.webauthn()?;
         match webauthn.finish_passkey_authentication(&pubkey, &passkey_auth) {
             Ok(auth_result) => {
-                if auth_result.needs_update() {
-                    // Find `Passkey` and try to update its credentials
-                    // Store the new signature counter, so a cloned key is detected later.
-                    for mut webauthn in
-                        WebAuthn::all_for_user(&appstate.pool, session.user_id).await?
-                    {
-                        let mut passkey = webauthn.passkey()?;
-                        if let Some(true) = passkey.update_credential(&auth_result) {
-                            webauthn.passkey = serde_cbor::to_vec(&passkey)
-                                .map_err(|_| WebError::Http(StatusCode::INTERNAL_SERVER_ERROR))?;
-                            webauthn.save(&appstate.pool).await?;
-                        }
+                let Some(mut webauthn) = WebAuthn::all_for_user(&appstate.pool, session.user_id)
+                    .await?
+                    .into_iter()
+                    .find(|row| {
+                        row.passkey()
+                            .is_ok_and(|key| key.cred_id() == auth_result.cred_id())
+                    })
+                else {
+                    return Err(WebError::Authorization(
+                        "Security key is not registered".into(),
+                    ));
+                };
+                let stored_cbor = webauthn.passkey.clone();
+                let mut passkey = webauthn.passkey()?;
+                let prev_counter = crate::fido2::stored_counter(&passkey).unwrap_or(0);
+                if (auth_result.counter() > 0 || prev_counter > 0)
+                    && auth_result.counter() <= prev_counter
+                {
+                    warn!(
+                        "WebAuthn key {} of user {} did not advance its signature counter ({} <= {prev_counter})",
+                        webauthn.id,
+                        session.user_id,
+                        auth_result.counter()
+                    );
+                    return Err(WebError::Authorization(
+                        "Possible cloned security key: the signature counter did not increase"
+                            .into(),
+                    ));
+                }
+                if auth_result.needs_update()
+                    && passkey.update_credential(&auth_result) == Some(true)
+                {
+                    // Store the new signature counter using compare-and-swap so concurrent uses
+                    // cannot overwrite a higher counter with a lower one.
+                    let updated_cbor = serde_cbor::to_vec(&passkey)
+                        .map_err(|_| WebError::Http(StatusCode::INTERNAL_SERVER_ERROR))?;
+                    let res = sqlx::query(
+                        "UPDATE webauthn SET passkey = $3 WHERE id = $1 AND passkey = $2",
+                    )
+                    .bind(webauthn.id)
+                    .bind(&stored_cbor)
+                    .bind(&updated_cbor)
+                    .execute(&appstate.pool)
+                    .await?;
+                    if res.rows_affected() == 0 {
+                        return Err(WebError::Authorization(
+                            "Security key state changed concurrently".into(),
+                        ));
                     }
+                    webauthn.passkey = updated_cbor;
                 }
 
                 session

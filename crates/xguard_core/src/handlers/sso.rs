@@ -1,6 +1,18 @@
 //! Sign-in with an external OpenID Connect provider, and its settings.
 
-use axum::{Json, extract::State, http::StatusCode};
+use std::{
+    collections::HashMap,
+    net::IpAddr,
+    sync::{LazyLock, Mutex},
+    time::{Duration as StdDuration, Instant},
+};
+
+use axum::{
+    Json,
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use axum_extra::{
     TypedHeader,
     extract::{
@@ -12,7 +24,10 @@ use axum_extra::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::Duration;
-use xguard_common::{config::server_config, db::models::Settings};
+use xguard_common::{
+    config::server_config,
+    db::models::{Settings, vpn_client_mfa_session::hash_token},
+};
 
 use super::{
     ApiResponse, ApiResult, AuthResponse, ClientIpAddr,
@@ -36,6 +51,39 @@ use crate::{
 const PENDING_COOKIE: &str = "xguard_openid_login";
 const PENDING_COOKIE_PATH: &str = "/api/v1/openid";
 const PENDING_LIFETIME: Duration = Duration::minutes(10);
+const WEB_PENDING_TTL: StdDuration = StdDuration::from_secs(600);
+const MAX_WEB_PENDING_STATES: usize = 10_000;
+
+static WEB_PENDING_STATES: LazyLock<Mutex<HashMap<String, Instant>>> =
+    LazyLock::new(Mutex::default);
+
+fn record_pending_state(state: &str) {
+    let mut store = WEB_PENDING_STATES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let now = Instant::now();
+    store.retain(|_, created| now.duration_since(*created) < WEB_PENDING_TTL);
+    if store.len() >= MAX_WEB_PENDING_STATES
+        && let Some(oldest) = store
+            .iter()
+            .min_by_key(|(_, created)| *created)
+            .map(|(k, _)| k.clone())
+    {
+        store.remove(&oldest);
+    }
+    store.insert(hash_token(state), now);
+}
+
+fn take_pending_state(state: &str) -> bool {
+    let mut store = WEB_PENDING_STATES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let now = Instant::now();
+    store.retain(|_, created| now.duration_since(*created) < WEB_PENDING_TTL);
+    store
+        .remove(&hash_token(state))
+        .is_some_and(|created| now.duration_since(created) < WEB_PENDING_TTL)
+}
 
 impl From<ProviderError> for WebError {
     fn from(err: ProviderError) -> Self {
@@ -104,6 +152,7 @@ pub(crate) async fn auth_info(
         })?;
     let value = serde_json::to_string(&pending)
         .map_err(|_| WebError::Http(StatusCode::INTERNAL_SERVER_ERROR))?;
+    record_pending_state(&pending.state);
     let cookie = Cookie::build((PENDING_COOKIE, value))
         .path(PENDING_COOKIE_PATH)
         .http_only(true)
@@ -130,35 +179,14 @@ pub struct CallbackRequest {
     pub state: String,
 }
 
-/// Finish signing in with the external provider
-///
-/// Exchanges the authorization code, verifies the ID token and signs in the linked account.
-/// Like `POST /api/v1/auth`, answers 201 with MFA details when the account uses MFA.
-#[cfg_attr(feature = "openapi", utoipa::path(
-    post,
-    path = "/api/v1/openid/callback",
-    tag = "auth",
-    request_body = CallbackRequest,
-    responses(
-        (status = 200, description = "Signed in.", body = AuthResponse),
-        (status = 201, description = "A second factor is required."),
-        (status = 401, description = "The sign-in could not be completed.", body = ApiErrorResponse),
-    )
-))]
-pub(crate) async fn callback(
-    State(appstate): State<AppState>,
+async fn finish_callback(
+    appstate: &AppState,
     cookies: CookieJar,
-    private_cookies: PrivateCookieJar,
+    pending: Option<PendingLogin>,
     user_agent: TypedHeader<UserAgent>,
-    ClientIpAddr(ip_addr): ClientIpAddr,
-    Json(request): Json<CallbackRequest>,
-) -> Result<(CookieJar, PrivateCookieJar, ApiResponse), WebError> {
-    // The pending sign-in can be used once, whatever happens next.
-    let pending = private_cookies
-        .get(PENDING_COOKIE)
-        .and_then(|cookie| serde_json::from_str::<PendingLogin>(cookie.value()).ok());
-    let private_cookies =
-        private_cookies.remove(Cookie::build(PENDING_COOKIE).path(PENDING_COOKIE_PATH));
+    ip_addr: IpAddr,
+    request: CallbackRequest,
+) -> Result<(CookieJar, ApiResponse), WebError> {
     let failed = |message: String| {
         warn!("OpenID sign-in failed: {message}");
         WebError::Authorization(message)
@@ -166,6 +194,9 @@ pub(crate) async fn callback(
     let Some(pending) = pending else {
         return Err(failed(FlowError::BadState.to_string()));
     };
+    if !take_pending_state(&pending.state) {
+        return Err(failed(FlowError::BadState.to_string()));
+    }
     let Some(config) = ProviderConfig::enabled(&appstate.pool).await? else {
         return Err(failed("No external provider is enabled".into()));
     };
@@ -191,11 +222,7 @@ pub(crate) async fn callback(
         create_session(&appstate.pool, ip_addr, user_agent.as_str(), &mut user).await?;
     let cookies = cookies.add(session_cookie(&session.id)?);
     if let Some(mfa_info) = mfa_info {
-        return Ok((
-            cookies,
-            private_cookies,
-            ApiResponse::json(mfa_info, StatusCode::CREATED),
-        ));
+        return Ok((cookies, ApiResponse::json(mfa_info, StatusCode::CREATED)));
     }
     let Some(user_info) = user_info else {
         return Err(WebError::Http(StatusCode::INTERNAL_SERVER_ERROR));
@@ -212,7 +239,6 @@ pub(crate) async fn callback(
     })?;
     Ok((
         cookies,
-        private_cookies,
         ApiResponse::json(
             AuthResponse {
                 user: user_info,
@@ -221,6 +247,45 @@ pub(crate) async fn callback(
             StatusCode::OK,
         ),
     ))
+}
+
+/// Finish signing in with the external provider
+///
+/// Exchanges the authorization code, verifies the ID token and signs in the linked account.
+/// Like `POST /api/v1/auth`, answers 201 with MFA details when the account uses MFA.
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/openid/callback",
+    tag = "auth",
+    request_body = CallbackRequest,
+    responses(
+        (status = 200, description = "Signed in.", body = AuthResponse),
+        (status = 201, description = "A second factor is required."),
+        (status = 401, description = "The sign-in could not be completed.", body = ApiErrorResponse),
+    )
+))]
+pub(crate) async fn callback(
+    State(appstate): State<AppState>,
+    cookies: CookieJar,
+    private_cookies: PrivateCookieJar,
+    user_agent: TypedHeader<UserAgent>,
+    ClientIpAddr(ip_addr): ClientIpAddr,
+    Json(request): Json<CallbackRequest>,
+) -> Response {
+    // The pending sign-in can be used once, whatever happens next (including error responses).
+    let pending = private_cookies
+        .get(PENDING_COOKIE)
+        .and_then(|cookie| serde_json::from_str::<PendingLogin>(cookie.value()).ok());
+    let removal = Cookie::build((PENDING_COOKIE, ""))
+        .path(PENDING_COOKIE_PATH)
+        .http_only(true)
+        .secure(secure_cookies().unwrap_or(true))
+        .same_site(SameSite::Lax);
+    let private_cookies = private_cookies.remove(removal);
+    match finish_callback(&appstate, cookies, pending, user_agent, ip_addr, request).await {
+        Ok((cookies, response)) => (cookies, private_cookies, response).into_response(),
+        Err(err) => (private_cookies, err).into_response(),
+    }
 }
 
 /// Get the external OpenID provider
@@ -297,7 +362,9 @@ pub(crate) async fn delete_provider(
     context: ApiRequestContext,
     State(appstate): State<AppState>,
 ) -> ApiResult {
-    let provider = ProviderConfig::delete(&appstate.pool).await?;
+    let mut transaction = appstate.pool.begin().await?;
+    let provider = ProviderConfig::delete(&mut transaction).await?;
+    transaction.commit().await?;
     crate::dirsync::worker::settings_changed();
     info!("User {} removed the OpenID provider", session.user.username);
     appstate.emit_event(ApiEvent {

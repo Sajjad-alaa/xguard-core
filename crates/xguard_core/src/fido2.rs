@@ -236,6 +236,14 @@ fn backup_eligible(passkey: &Passkey) -> bool {
         .unwrap_or(false)
 }
 
+/// Stored signature counter inside a `Passkey`.
+pub(crate) fn stored_counter(passkey: &Passkey) -> Option<u32> {
+    serde_json::to_value(passkey)
+        .ok()
+        .and_then(|value| value.pointer("/cred/counter")?.as_u64())
+        .and_then(|counter| u32::try_from(counter).ok())
+}
+
 /// Verifies an assertion against a challenge taken from an attempt, and records the key's new
 /// signature counter.
 ///
@@ -311,6 +319,18 @@ pub async fn verify_assertion(
         ));
     }
 
+    let prev_counter = stored_counter(&key.passkey).unwrap_or(0);
+    if (result.counter() > 0 || prev_counter > 0) && result.counter() <= prev_counter {
+        warn!(
+            "Security key {} of user {user_id} did not increase its signature counter ({} <= {prev_counter})",
+            key.id,
+            result.counter()
+        );
+        return Err(Fido2Error::Rejected(
+            "Possible cloned security key: the signature counter did not increase",
+        ));
+    }
+
     let VpnSecurityKey {
         id,
         name,
@@ -359,15 +379,16 @@ pub async fn start_registration(
         .map(|key| key.passkey.cred_id().clone())
         .collect();
     let rp = relying_party()?;
-    let display_name = format!("{} {}", user.first_name, user.last_name);
+    let full_name = format!("{} {}", user.first_name, user.last_name);
+    let trimmed_name = full_name.trim();
+    let display_name = if trimmed_name.is_empty() {
+        user.username.as_str()
+    } else {
+        trimmed_name
+    };
     let (ccr, registration) = rp
         .webauthn
-        .start_passkey_registration(
-            Uuid::new_v4(),
-            &user.username,
-            display_name.trim(),
-            Some(exclude),
-        )
+        .start_passkey_registration(Uuid::new_v4(), &user.username, display_name, Some(exclude))
         .map_err(|err| Fido2Error::Internal(format!("failed to start registration: {err}")))?;
     let ccr = serde_json::to_string(&ccr)
         .map_err(|err| Fido2Error::Internal(format!("failed to encode the challenge: {err}")))?;

@@ -405,7 +405,7 @@ impl EnrollmentServer {
             .map_err(Status::from)?;
         let token = Token::new(
             user.id,
-            settings.default_admin_id,
+            None,
             Some(user.email.clone()),
             settings.enrollment_token_timeout().as_secs(),
             Some(ENROLLMENT_TOKEN_TYPE.to_owned()),
@@ -434,6 +434,18 @@ impl EnrollmentServer {
         debug!("Register mobile auth started");
         let enrollment = self.validate_session(Some(&request.token)).await?;
         let user = enrollment.fetch_user(&self.pool).await?;
+        if !user.is_active {
+            return Err(Status::permission_denied("user is disabled"));
+        }
+        if user.is_enrolled() && enrollment.admin_id.is_none() {
+            warn!(
+                "Rejected mobile auth registration via self-service enrollment token for {}",
+                user.username
+            );
+            return Err(Status::permission_denied(
+                "enrollment token cannot register mobile authentication for an enrolled user",
+            ));
+        }
         Device::validate_pubkey(&request.device_pub_key).map_err(|err| {
             error!(
                 "Invalid public key {}, device won't be registered as mobile MFA auth for user {}\
@@ -573,28 +585,31 @@ impl EnrollmentServer {
         }
         debug!("User is active.");
 
-        // Reject password-less activation for users whose password management is NOT
-        // disabled. Externally-managed users (LDAP/AD or OIDC with the flag enabled)
-        // are allowed to skip the password; local users must supply one.
-        if request.password.is_none() {
-            let oidc_disable_password_management = disables_password_management(&self.pool)
-                .await
-                .map_err(|err| {
+        // Enforce password management policy symmetrically: externally-managed users may omit a
+        // password and may not set a local password, while local users must supply one.
+        let oidc_disable_password_management = disables_password_management(&self.pool)
+            .await
+            .map_err(|err| {
                 error!("Failed to check the OpenID password management setting: {err}");
                 Status::internal("unexpected error")
             })?;
-            let settings = Settings::get_current_settings();
-            let is_admin = user.is_admin(&self.pool).await.map_err(|err| {
-                error!("Failed to check if user is admin: {err}");
-                Status::internal("unexpected error")
-            })?;
-            if !user.password_management_disabled(
-                is_admin,
-                &settings,
-                oidc_disable_password_management,
-            ) {
-                return Err(Status::invalid_argument("password required for this user"));
-            }
+        let settings = Settings::get_current_settings();
+        let is_admin = user.is_admin(&self.pool).await.map_err(|err| {
+            error!("Failed to check if user is admin: {err}");
+            Status::internal("unexpected error")
+        })?;
+        let pwd_disabled = user.password_management_disabled(
+            is_admin,
+            &settings,
+            oidc_disable_password_management,
+        );
+        if request.password.is_none() && !pwd_disabled {
+            return Err(Status::invalid_argument("password required for this user"));
+        }
+        if request.password.is_some() && pwd_disabled {
+            return Err(Status::permission_denied(
+                "password management is disabled for this user",
+            ));
         }
 
         let mut transaction = self.pool.begin().await.map_err(|err| {
@@ -680,7 +695,7 @@ impl EnrollmentServer {
         })?;
 
         info!("User {} activated", user.username);
-        if user.from_ldap {
+        if user.from_ldap || user.ldap_user_path.is_some() {
             // A token stored in the directory for this user is no longer needed.
             xguard_core::directory::push::enrollment_completed(&user.username);
         }
@@ -1167,6 +1182,9 @@ impl EnrollmentServer {
             .validate_mfa_setup_session(Some(&request.token))
             .await?;
         let mut user = token.fetch_user(&self.pool).await.map_err(Status::from)?;
+        if !user.is_active {
+            return Err(Status::permission_denied("user is disabled").into());
+        }
         // Enrollment cannot configure an already enrolled user; MFA configuration can.
         if is_enrollment && user.is_enrolled() {
             return Err(Status::permission_denied("User is already enrolled").into());
@@ -1319,6 +1337,9 @@ impl EnrollmentServer {
             return Err(Status::invalid_argument("Method not supported"));
         }
         let mut user = token.fetch_user(&self.pool).await?;
+        if !user.is_active {
+            return Err(Status::permission_denied("user is disabled"));
+        }
         // Enrollment cannot configure an already enrolled user; MFA configuration can.
         if is_enrollment && user.is_enrolled() {
             return Err(Status::permission_denied("User is already enrolled"));

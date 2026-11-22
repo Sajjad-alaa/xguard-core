@@ -257,6 +257,7 @@ async fn test_enrollment_sign_in_creates_account_and_starts_enrollment(
     let token = Token::find_by_id(&context.pool, &callback.token)
         .await
         .unwrap();
+    assert_eq!(token.admin_id, None);
     assert_eq!(token.token_type.as_deref(), Some(ENROLLMENT_TOKEN_TYPE));
     let user = User::find_by_id(&context.pool, token.user_id)
         .await
@@ -714,6 +715,31 @@ async fn test_mfa_configuration_authorized_with_openid(
         "expected MfaConfigAuthorize, got {:?}",
         describe(response.payload.as_ref())
     );
+
+    context.finish().await.expect_server_finished().await;
+}
+
+#[sqlx::test]
+async fn test_enrollment_sign_in_blocks_already_enrolled_mfa_user(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    let mut context = HandlerTestContext::new(options).await;
+    complete_proxy_handshake(&mut context).await;
+    let mock = MockOidcProvider::start().await;
+    create_provider(&context.pool, &mock).await;
+
+    let (mut user, _device) = create_user_with_device(&context.pool).await;
+    user.mfa_enabled = true;
+    link(&context.pool, &mut user, "enrolled-mfa-sub").await;
+
+    let info = auth_info(&mut context, AuthFlowType::Enrollment, None).await;
+    let (code, _) = mock.sign_in(
+        &info.url,
+        &MockIdentity::new("enrolled-mfa-sub", &user.email),
+    );
+    let response = enrollment_callback(&mut context, &code, &info.nonce).await;
+    assert_eq!(assert_error_response(&response), Code::PermissionDenied);
 
     context.finish().await.expect_server_finished().await;
 }

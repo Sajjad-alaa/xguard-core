@@ -34,7 +34,7 @@ use xguard_common::db::{
         settings::{
             SettingsSaveError,
             smtp::{SmtpAuthentication, SmtpEncryption, SmtpSettings},
-            update_current_settings,
+            update_current_settings, update_smtp_oauth_refresh_token,
         },
     },
 };
@@ -292,16 +292,35 @@ pub fn start(admin_id: Id, request: StartRequest, settings: &Settings) -> Result
             }
             SecretString::from(secret)
         }
-        // Reuse the stored secret only for the same client.
-        _ => match (
-            &settings.smtp.oauth_client_secret,
-            &settings.smtp.oauth_client_id,
-        ) {
-            (Some(secret), Some(stored_id)) if *stored_id == client_id => {
-                SecretString::from(secret.expose_secret().to_owned())
+        // Reuse the stored secret only when the provider, tenant, and client ID match.
+        _ => {
+            let stored_provider = settings
+                .smtp
+                .oauth_issuer_url
+                .as_deref()
+                .and_then(Provider::from_issuer);
+            let stored_tenant = settings
+                .smtp
+                .oauth_tenant_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .unwrap_or("organizations");
+            let same_tenant = request.provider != Provider::Microsoft || stored_tenant == tenant;
+            match (
+                &settings.smtp.oauth_client_secret,
+                &settings.smtp.oauth_client_id,
+            ) {
+                (Some(secret), Some(stored_id))
+                    if *stored_id == client_id
+                        && stored_provider == Some(request.provider)
+                        && same_tenant =>
+                {
+                    SecretString::from(secret.expose_secret().to_owned())
+                }
+                _ => return Err(OAuthError::NotConfigured("client secret")),
             }
-            _ => return Err(OAuthError::NotConfigured("client secret")),
-        },
+        }
     };
     let redirect_uri = redirect_uri(&settings.xguard_url)?;
     let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
@@ -634,8 +653,14 @@ pub async fn access_token(smtp: &SmtpSettings) -> Result<String, OAuthError> {
     let tenant = smtp
         .oauth_tenant_id
         .as_deref()
+        .map(str::trim)
         .filter(|tenant| valid_tenant(tenant))
-        .or_else(|| issuer.trim_end_matches('/').rsplit('/').next())
+        .or_else(|| {
+            issuer
+                .trim_end_matches('/')
+                .strip_prefix(&format!("{MICROSOFT_LOGIN}/"))
+                .filter(|tenant| valid_tenant(tenant))
+        })
         .unwrap_or("organizations");
     let endpoints = provider.endpoints(tenant);
     debug!("Refreshing the SMTP OAuth access token");
@@ -643,7 +668,7 @@ pub async fn access_token(smtp: &SmtpSettings) -> Result<String, OAuthError> {
         &endpoints.token,
         &[
             ("grant_type", "refresh_token"),
-            ("refresh_token", &refresh_token),
+            ("refresh_token", &effective_refresh),
             ("client_id", client_id),
             ("client_secret", client_secret.expose_secret()),
             ("scope", provider.scope()),
@@ -653,13 +678,14 @@ pub async fn access_token(smtp: &SmtpSettings) -> Result<String, OAuthError> {
     .inspect_err(|err| warn!("Failed to refresh the SMTP OAuth access token: {err}"))?;
 
     let mut current = smtp.clone();
+    current.oauth_refresh_token = Some(effective_refresh.clone().into());
     if let Some(rotated) = response
         .refresh_token
         .as_deref()
-        .filter(|rotated| !rotated.is_empty() && *rotated != refresh_token)
+        .filter(|rotated| !rotated.is_empty() && *rotated != effective_refresh)
     {
         current.oauth_refresh_token = Some(rotated.to_owned().into());
-        save_rotated_refresh_token(&refresh_token, rotated).await;
+        save_rotated_refresh_token(&effective_refresh, rotated).await;
     }
     cache_token(&current, &response);
     Ok(response.access_token)
@@ -672,17 +698,7 @@ async fn save_rotated_refresh_token(previous: &str, rotated: &str) {
         warn!("The SMTP OAuth refresh token was rotated but cannot be saved yet");
         return;
     };
-    let mut settings = Settings::get_current_settings();
-    let unchanged = settings
-        .smtp
-        .oauth_refresh_token
-        .as_ref()
-        .is_some_and(|token| token.expose_secret() == previous);
-    if !unchanged {
-        return;
-    }
-    settings.smtp.oauth_refresh_token = Some(rotated.to_owned().into());
-    if let Err(err) = update_current_settings(&pool, settings).await {
+    if let Err(err) = update_smtp_oauth_refresh_token(&pool, previous, rotated).await {
         error!("Failed to save the rotated SMTP OAuth refresh token: {err}");
     }
 }
@@ -704,10 +720,18 @@ pub fn protect_settings(before: &SmtpSettings, after: &mut SmtpSettings) {
         after.oauth_refresh_token = None;
         after.oauth_client_secret = None;
     } else if after.authentication == SmtpAuthentication::XOAuth2 {
-        let same_grant = before.authentication == SmtpAuthentication::XOAuth2
+        let same_client = before.authentication == SmtpAuthentication::XOAuth2
             && after.oauth_client_id == before.oauth_client_id
             && after.oauth_issuer_url == before.oauth_issuer_url
             && after.oauth_tenant_id == before.oauth_tenant_id;
+        if !same_client && after.oauth_client_secret == before.oauth_client_secret {
+            after.oauth_client_secret = None;
+        }
+        let same_grant = same_client
+            && after.server == before.server
+            && after.port == before.port
+            && after.sender == before.sender
+            && after.encryption == before.encryption;
         after.oauth_refresh_token = if same_grant { kept_refresh } else { None };
     } else {
         after.oauth_refresh_token = kept_refresh;

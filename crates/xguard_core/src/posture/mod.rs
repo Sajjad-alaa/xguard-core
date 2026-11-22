@@ -27,7 +27,7 @@ pub mod worker;
 #[cfg(test)]
 mod tests;
 
-use chrono::{TimeDelta, Utc};
+use chrono::{NaiveDateTime, TimeDelta, Utc};
 use sqlx::PgConnection;
 use xguard_common::db::{
     Id,
@@ -52,6 +52,83 @@ pub struct PostureCheck {
     pub facts: Option<PostureFacts>,
 }
 
+async fn save_snapshot(
+    conn: &mut PgConnection,
+    location_id: Id,
+    device_id: Id,
+    now: chrono::DateTime<Utc>,
+    result: &PostureResult,
+    facts: Option<&PostureFacts>,
+) -> sqlx::Result<()> {
+    PostureSnapshot {
+        device_id,
+        facts: facts.cloned().unwrap_or_default().to_json(),
+        reported_at: now.naive_utc(),
+        location_id: Some(location_id),
+        compliant: result.is_pass(),
+        failed_checks: result.failures().to_vec(),
+    }
+    .upsert(conn)
+    .await
+}
+
+/// Evaluates the posture of `device_id` for `location_id` without storing a snapshot.
+///
+/// Used at unauthenticated MFA start so an unauthenticated caller cannot overwrite the device's
+/// stored posture state before proving an MFA factor. Returns `None` when the location has no
+/// posture policies.
+pub async fn evaluate_connection(
+    conn: &mut PgConnection,
+    location_id: Id,
+    reported: Option<&DevicePostureFacts>,
+) -> sqlx::Result<Option<PostureCheck>> {
+    let policies = DevicePosture::find_for_location(&mut *conn, location_id).await?;
+    if policies.is_empty() {
+        return Ok(None);
+    }
+    let facts = reported.map(PostureFacts::from_proto);
+    let result = evaluate(&policies, facts.as_ref(), Utc::now().date_naive());
+    Ok(Some(PostureCheck { result, facts }))
+}
+
+/// Evaluates and persists posture facts captured during MFA start once MFA has succeeded.
+///
+/// Refuses facts captured more than [`SNAPSHOT_MAX_AGE`] before completion without overwriting the
+/// stored snapshot. Returns `None` when the location no longer has posture policies.
+pub async fn commit_and_check_facts(
+    conn: &mut PgConnection,
+    location_id: Id,
+    device_id: Id,
+    facts_json: &serde_json::Value,
+    reported_at: NaiveDateTime,
+) -> sqlx::Result<Option<PostureCheck>> {
+    let policies = DevicePosture::find_for_location(&mut *conn, location_id).await?;
+    if policies.is_empty() {
+        return Ok(None);
+    }
+    let facts = PostureFacts::from_json(facts_json);
+    let now = Utc::now();
+    if now.naive_utc() - reported_at > SNAPSHOT_MAX_AGE {
+        return Ok(Some(PostureCheck {
+            result: PostureResult::Fail(vec![
+                "the device posture report is too old; connect again".into(),
+            ]),
+            facts,
+        }));
+    }
+    let result = evaluate(&policies, facts.as_ref(), now.date_naive());
+    save_snapshot(
+        &mut *conn,
+        location_id,
+        device_id,
+        now,
+        &result,
+        facts.as_ref(),
+    )
+    .await?;
+    Ok(Some(PostureCheck { result, facts }))
+}
+
 /// Evaluates the posture of `device_id` for `location_id` and stores the snapshot.
 ///
 /// Returns `None` when the location has no posture policies (nothing is stored then).
@@ -68,15 +145,14 @@ pub async fn check_connection(
     let facts = reported.map(PostureFacts::from_proto);
     let now = Utc::now();
     let result = evaluate(&policies, facts.as_ref(), now.date_naive());
-    PostureSnapshot {
+    save_snapshot(
+        &mut *conn,
+        location_id,
         device_id,
-        facts: facts.clone().unwrap_or_default().to_json(),
-        reported_at: now.naive_utc(),
-        location_id: Some(location_id),
-        compliant: result.is_pass(),
-        failed_checks: result.failures().to_vec(),
-    }
-    .upsert(&mut *conn)
+        now,
+        &result,
+        facts.as_ref(),
+    )
     .await?;
     Ok(Some(PostureCheck { result, facts }))
 }

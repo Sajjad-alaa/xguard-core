@@ -390,7 +390,8 @@ async fn test_advance_clears_ephemeral_state(_: PgPoolOptions, options: PgConnec
     session
         .begin_attempt(&mut tx, VpnClientMfaMethod::Totp, None)
         .await
-        .unwrap();
+        .unwrap()
+        .expect("begin_attempt should succeed");
     tx.commit().await.unwrap();
     assert!(
         refetch(&pool, &outcome.token)
@@ -430,7 +431,8 @@ async fn test_advance_records_satisfied_method(_: PgPoolOptions, options: PgConn
     session
         .begin_attempt(&mut tx, VpnClientMfaMethod::MobileApprove, None)
         .await
-        .unwrap();
+        .unwrap()
+        .expect("begin_attempt should succeed");
     tx.commit().await.unwrap();
 
     let session = refetch(&pool, &outcome.token).await;
@@ -575,6 +577,7 @@ async fn test_mark_oidc_completed_ignores_stale_attempt(
     let attempt_id = session
         .begin_attempt(&mut tx, VpnClientMfaMethod::Oidc, None)
         .await
+        .unwrap()
         .unwrap();
     tx.commit().await.unwrap();
 
@@ -625,6 +628,7 @@ async fn test_mark_mobile_approved_ignores_stale_attempt(
     let attempt_id = session
         .begin_attempt(&mut tx, VpnClientMfaMethod::MobileApprove, None)
         .await
+        .unwrap()
         .unwrap();
     tx.commit().await.unwrap();
 
@@ -671,10 +675,12 @@ async fn test_begin_attempt_replaces_prior_attempt(_: PgPoolOptions, options: Pg
     let first = session
         .begin_attempt(&mut tx, VpnClientMfaMethod::Totp, None)
         .await
+        .unwrap()
         .unwrap();
     let second = session
         .begin_attempt(&mut tx, VpnClientMfaMethod::Email, None)
         .await
+        .unwrap()
         .unwrap();
     tx.commit().await.unwrap();
     assert_ne!(first, second);
@@ -685,6 +691,42 @@ async fn test_begin_attempt_replaces_prior_attempt(_: PgPoolOptions, options: Pg
         .unwrap();
     assert_eq!(state.step_attempt_id, second);
     assert_eq!(state.selected_method, VpnClientMfaMethod::Email);
+}
+
+#[sqlx::test]
+async fn test_begin_attempt_ignores_stale_step(_: PgPoolOptions, options: PgConnectOptions) {
+    let pool = setup_pool(options).await;
+    let (stale_session, outcome) = start_session(&pool).await;
+
+    let mut tx = pool.begin().await.unwrap();
+    let (result, _) = stale_session
+        .advance(
+            &mut tx,
+            stale_session.current_step,
+            Some(&outcome.step_attempt_id),
+            VpnClientMfaMethod::Totp,
+            None,
+        )
+        .await
+        .unwrap()
+        .expect("advance from step 0 should succeed");
+    tx.commit().await.unwrap();
+    assert_eq!(result, StepOutcome::Advanced { next_step: 1 });
+
+    // A stale handle from step 0 must not overwrite ephemeral_state once current_step moved to 1.
+    let mut tx = pool.begin().await.unwrap();
+    let stale = stale_session
+        .begin_attempt(&mut tx, VpnClientMfaMethod::Totp, None)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert!(stale.is_none());
+    assert!(
+        refetch(&pool, &outcome.token)
+            .await
+            .ephemeral_state
+            .is_none()
+    );
 }
 
 #[sqlx::test]

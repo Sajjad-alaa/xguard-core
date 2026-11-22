@@ -176,6 +176,7 @@ const formSchema = z
         value.ldap_username_attr,
         value.ldap_user_rdn_attr,
         value.ldap_member_attr,
+        value.ldap_group_member_attr,
       ])
     ) {
       context.addIssue({
@@ -721,7 +722,7 @@ const PageForm = () => {
                     <field.FormInteractiveBlock
                       variant={'checkbox'}
                       value={true}
-                      disabled={!smtpEnabled}
+                      disabled={!smtpEnabled && !field.state.value}
                       title={m.settings_ldap_label_remote_enrollment_send_invite()}
                       content={
                         smtpEnabled

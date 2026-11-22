@@ -128,10 +128,11 @@ pub async fn build_device_config_response(
             .into_iter()
             .map(|assignment| (assignment.wireguard_network_id, assignment))
             .collect::<HashMap<_, _>>();
-        let locations = WireguardNetwork::all(pool).await.map_err(|err| {
+        let mut locations = WireguardNetwork::all(pool).await.map_err(|err| {
             error!("Failed to fetch all networks: {err}");
             Status::internal(format!("unexpected error: {err}"))
         })?;
+        locations.sort_by_key(|location| location.id);
         let supports_multi_step_mfa =
             ClientFeature::MultiStepMfa.is_supported_by_device(device_info.as_ref());
         // Group MTU overrides for every location, in one query.

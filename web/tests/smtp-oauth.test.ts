@@ -218,5 +218,77 @@ describe('SMTP XOAUTH2 popup flow', () => {
       ).rejects.toThrow('bad client secret');
       expect(close).toHaveBeenCalledTimes(1);
     });
+
+    it('ignores mismatched callback state messages and waits for matching state', async () => {
+      const popup = { close: vi.fn() } as unknown as Window;
+      const promise = waitForOAuthCallback(popup, undefined, 'expected-state');
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: window.location.origin,
+          data: {
+            type: SMTP_OAUTH_CALLBACK_TYPE,
+            code: 'wrong-code',
+            state: 'stale-state',
+          },
+        }),
+      );
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: window.location.origin,
+          data: {
+            type: SMTP_OAUTH_CALLBACK_TYPE,
+            code: 'good-code',
+            state: 'expected-state',
+          },
+        }),
+      );
+
+      await expect(promise).resolves.toEqual({
+        code: 'good-code',
+        state: 'expected-state',
+        error: undefined,
+      });
+    });
+
+    it('closes popup without navigating when aborted during oauthStart', async () => {
+      const close = vi.fn();
+      const setHref = vi.fn();
+      const popup = {
+        close,
+        location: {
+          set href(url: string) {
+            setHref(url);
+          },
+        },
+      } as unknown as Window;
+      vi.spyOn(window, 'open').mockReturnValue(popup);
+      const controller = new AbortController();
+      vi.spyOn(api.mail, 'oauthStart').mockImplementation(async () => {
+        controller.abort();
+        return {
+          data: {
+            authorization_url:
+              'https://accounts.google.com/o/oauth2/v2/auth?state=srv-state',
+          },
+        } as never;
+      });
+
+      await expect(
+        runSmtpOAuthFlow(
+          {
+            provider: 'google',
+            client_id: 'cid',
+            client_secret: 'secret',
+            sender: 'mailer@example.org',
+            tls_verify_cert: true,
+          },
+          controller.signal,
+        ),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(setHref).not.toHaveBeenCalled();
+    });
   });
 });

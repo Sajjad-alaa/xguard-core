@@ -10,7 +10,7 @@ use rand::{
     prelude::Distribution,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgConnection, PgExecutor, PgPool, Type, query, query_as, query_scalar};
+use sqlx::{FromRow, PgConnection, PgExecutor, PgPool, Row, Type, query, query_as, query_scalar};
 use thiserror::Error;
 use tracing::{debug, error, info};
 
@@ -191,18 +191,13 @@ impl DeviceInfo {
         E: PgExecutor<'e>,
     {
         debug!("Generating device info for {device}");
-        let network_info = query_as!(
-            DeviceNetworkInfo,
-            "SELECT wnd.wireguard_network_id network_id, \
-                wnd.wireguard_ips \"device_wireguard_ips: Vec<IpAddr>\", \
-                CASE \
-                    WHEN NOT n.mfa_enabled THEN NULL::text \
-                    ELSE active_session.preshared_key \
-                END \"preshared_key?: _\", \
-                CASE \
-                    WHEN NOT n.mfa_enabled THEN TRUE \
-                    ELSE active_session.preshared_key IS NOT NULL \
-                END \"is_authorized!\" \
+        let rows = query(
+            "SELECT wnd.wireguard_network_id AS network_id, \
+                wnd.wireguard_ips AS device_wireguard_ips, \
+                (n.mfa_enabled OR EXISTS( \
+                    SELECT 1 FROM device_posture_location dpl WHERE dpl.location_id = n.id \
+                )) AS requires_auth, \
+                active_session.preshared_key AS preshared_key \
             FROM wireguard_network_device wnd \
             JOIN wireguard_network n ON n.id = wnd.wireguard_network_id \
             LEFT JOIN LATERAL ( \
@@ -216,10 +211,28 @@ impl DeviceInfo {
             ) active_session ON true \
             WHERE wnd.device_id = $1 \
             ORDER BY wnd.wireguard_network_id ASC",
-            device.id
         )
+        .bind(device.id)
         .fetch_all(executor)
         .await?;
+
+        let network_info = rows
+            .into_iter()
+            .map(|row| -> sqlx::Result<DeviceNetworkInfo> {
+                let requires_auth: bool = row.try_get("requires_auth")?;
+                let preshared_key = row
+                    .try_get::<Option<String>, _>("preshared_key")?
+                    .filter(|_| requires_auth)
+                    .map(SecretStringWrapper::from);
+                let is_authorized = !requires_auth || preshared_key.is_some();
+                Ok(DeviceNetworkInfo {
+                    network_id: row.try_get("network_id")?,
+                    device_wireguard_ips: row.try_get("device_wireguard_ips")?,
+                    preshared_key,
+                    is_authorized,
+                })
+            })
+            .collect::<sqlx::Result<Vec<_>>>()?;
 
         Ok(Self {
             device,
@@ -350,28 +363,14 @@ pub struct ModifyDevice {
 }
 
 impl WireguardNetworkDevice {
-    async fn latest_active_session<'e, E>(
-        executor: E,
-        network: &WireguardNetwork<Id>,
-        device_id: Id,
-    ) -> sqlx::Result<Option<VpnClientSession<Id>>>
-    where
-        E: PgExecutor<'e>,
-    {
-        if !network.mfa_enabled {
-            return Ok(None);
-        }
-
-        VpnClientSession::try_get_active_session(executor, network.id, device_id).await
-    }
-
     #[must_use]
     pub fn to_device_network_info(
         &self,
         network: &WireguardNetwork<Id>,
+        requires_authorization: bool,
         active_session: Option<&VpnClientSession<Id>>,
     ) -> DeviceNetworkInfo {
-        let (preshared_key, is_authorized) = if network.mfa_enabled {
+        let (preshared_key, is_authorized) = if requires_authorization {
             let preshared_key = active_session.and_then(|session| session.preshared_key.clone());
             let is_authorized = preshared_key.is_some();
             (preshared_key, is_authorized)
@@ -395,9 +394,43 @@ impl WireguardNetworkDevice {
     where
         E: PgExecutor<'e>,
     {
-        let active_session = Self::latest_active_session(executor, network, self.device_id).await?;
+        let row = query(
+            "SELECT \
+                (COALESCE(n.mfa_enabled, $3) OR EXISTS( \
+                    SELECT 1 FROM device_posture_location dpl WHERE dpl.location_id = $1 \
+                )) AS requires_auth, \
+                active_session.preshared_key AS preshared_key \
+             FROM (SELECT $1::bigint AS id) target \
+             LEFT JOIN wireguard_network n ON n.id = target.id \
+             LEFT JOIN LATERAL ( \
+                SELECT preshared_key \
+                FROM vpn_client_session \
+                WHERE location_id = $1 \
+                    AND device_id = $2 \
+                    AND state IN ('new', 'connected') \
+                ORDER BY created_at DESC, id DESC \
+                LIMIT 1 \
+             ) active_session ON true",
+        )
+        .bind(network.id)
+        .bind(self.device_id)
+        .bind(network.mfa_enabled)
+        .fetch_one(executor)
+        .await?;
 
-        Ok(self.to_device_network_info(network, active_session.as_ref()))
+        let requires_auth: bool = row.try_get("requires_auth")?;
+        let preshared_key = row
+            .try_get::<Option<String>, _>("preshared_key")?
+            .filter(|_| requires_auth)
+            .map(SecretStringWrapper::from);
+        let is_authorized = !requires_auth || preshared_key.is_some();
+
+        Ok(DeviceNetworkInfo {
+            network_id: network.id,
+            device_wireguard_ips: self.wireguard_ips.clone(),
+            preshared_key,
+            is_authorized,
+        })
     }
 
     #[must_use]

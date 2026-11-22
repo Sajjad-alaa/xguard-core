@@ -188,6 +188,18 @@ const buttonProvider: Record<
   Zitadel: 'custom',
 };
 
+const isSafeExternalAuthUrl = (rawUrl: string): boolean => {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === 'https:') return true;
+    if (parsed.protocol !== 'http:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+};
+
 const LoginWithExternalProvider = (data: OpenIdAuthInfo) => {
   const { theme } = useTheme();
   const text = useMemo(() => {
@@ -196,6 +208,10 @@ const LoginWithExternalProvider = (data: OpenIdAuthInfo) => {
     }
     return m.login_main_sign_in_with_external_provider();
   }, [data.button_display_name]);
+
+  if (!isSafeExternalAuthUrl(data.url)) {
+    return null;
+  }
 
   return (
     <div id="external-login">

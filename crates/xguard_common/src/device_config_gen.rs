@@ -9,10 +9,15 @@ pub fn create_wireguard_config(
     network: &WireguardNetwork<Id>,
     wireguard_network_device: &WireguardNetworkDevice,
     allowed_ips: &[IpNetwork],
+    mtu: Option<i32>,
 ) -> String {
     let dns = match &network.dns {
-        Some(dns) if !dns.is_empty() => format!("DNS = {dns}"),
+        Some(dns) if !dns.is_empty() => format!("DNS = {dns}\n"),
         _ => String::new(),
+    };
+    let mtu_line = match mtu {
+        Some(mtu) => format!("MTU = {mtu}\n"),
+        None => String::new(),
     };
 
     let allowed_ips_line = if allowed_ips.is_empty() {
@@ -32,8 +37,8 @@ pub fn create_wireguard_config(
         "[Interface]\n\
         PrivateKey = YOUR_PRIVATE_KEY\n\
         Address = {}\n\
-        {dns}\n\
-        \n\
+        {dns}\
+        {mtu_line}\n\
         [Peer]\n\
         PublicKey = {}\n\
         {allowed_ips_line}\

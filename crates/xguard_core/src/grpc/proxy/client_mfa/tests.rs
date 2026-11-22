@@ -2015,7 +2015,10 @@ mod posture {
         let location = create_mfa_location(&pool).await;
         create_and_assign_mfa_flow(&pool, location.id).await;
         let mut user = create_user(&pool).await;
-        user.enable_totp(&pool).await.unwrap();
+        let secret = vec![7u8; 10];
+        user.totp_secret = Some(secret.clone());
+        user.totp_enabled = true;
+        user.save(&pool).await.unwrap();
         let device = create_device(&pool, user.id).await;
         attach_device_to_location(&pool, location.id, device.id).await;
         attach_policy(&pool, location.id, false).await;
@@ -2028,19 +2031,22 @@ mod posture {
             posture,
         };
 
-        // Old clients send nothing: refused, with a clear reason.
+        // Old clients send nothing: refused before emitting events or writing snapshots.
         let Err(MfaStartRejection::Status(status)) =
             server.legacy_mfa_start(start(None), device_info()).await
         else {
             panic!("a device without posture must be refused");
         };
         rejected(&status, "did not report device posture");
-        assert!(matches!(
-            posture_event(event_rx.try_recv().unwrap()),
-            DesktopClientMfaEvent::PostureCheckFailed { facts: None, .. }
-        ));
+        assert!(event_rx.try_recv().is_err());
+        assert!(
+            PostureSnapshot::find(&pool, device.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
 
-        // Non-compliant facts: refused, audited and stored for admins.
+        // Non-compliant facts: refused without unauthenticated snapshot overwrite or event spam.
         let Err(MfaStartRejection::Status(status)) = server
             .legacy_mfa_start(start(Some(facts(false))), device_info())
             .await
@@ -2048,23 +2054,13 @@ mod posture {
             panic!("an unencrypted device must be refused");
         };
         rejected(&status, "disk encryption is required");
-        match posture_event(event_rx.try_recv().unwrap()) {
-            DesktopClientMfaEvent::PostureCheckFailed {
-                facts: Some(facts),
-                failed_checks,
-                ..
-            } => {
-                assert_eq!(facts.disk_encrypted, Some(false));
-                assert_eq!(failed_checks, vec!["disk encryption is required"]);
-            }
-            other => panic!("unexpected event {other:?}"),
-        }
-        let snapshot = PostureSnapshot::find(&pool, device.id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(!snapshot.compliant);
-        assert_eq!(snapshot.location_id, Some(location.id));
+        assert!(event_rx.try_recv().is_err());
+        assert!(
+            PostureSnapshot::find(&pool, device.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
         assert!(
             VpnClientMfaSession::<Id>::find_active_by_token(&pool, "none")
                 .await
@@ -2088,13 +2084,37 @@ mod posture {
             panic!("an unencrypted device must be refused");
         };
         rejected(&status, "disk encryption is required");
-        event_rx.try_recv().unwrap();
+        assert!(event_rx.try_recv().is_err());
 
-        // Compliant facts: MFA starts.
-        server
+        // Compliant facts: MFA starts; snapshot and event are deferred until finish succeeds.
+        let started = server
             .legacy_mfa_start(start(Some(facts(true))), device_info())
             .await
             .unwrap_or_else(|_| panic!("a compliant device starts MFA"));
+        assert!(event_rx.try_recv().is_err());
+        assert!(
+            PostureSnapshot::find(&pool, device.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let code = totp_custom::<Sha1>(TOTP_CODE_VALIDITY_PERIOD, TOTP_CODE_DIGITS, &secret, now);
+        server
+            .legacy_mfa_finish(
+                ClientMfaFinishRequest {
+                    token: started.token,
+                    code: Some(code),
+                    auth_pub_key: None,
+                },
+                device_info(),
+            )
+            .await
+            .unwrap();
         assert!(matches!(
             posture_event(event_rx.try_recv().unwrap()),
             DesktopClientMfaEvent::PostureCheckPassed { .. }
@@ -2105,6 +2125,7 @@ mod posture {
             .unwrap();
         assert!(snapshot.compliant);
         assert!(snapshot.failed_checks.is_empty());
+        assert_eq!(snapshot.location_id, Some(location.id));
     }
 
     #[sqlx::test]
@@ -2182,7 +2203,7 @@ mod posture {
         set_rules(&pool, &posture, false).await;
         let token = start().await;
         sqlx::query(
-            "UPDATE device_posture_snapshot SET reported_at = reported_at - interval '1 hour'",
+            "UPDATE vpn_client_mfa_session SET created_at = created_at - interval '1 hour'",
         )
         .execute(&pool)
         .await

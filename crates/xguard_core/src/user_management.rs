@@ -109,6 +109,11 @@ impl UserManager {
         Ok(())
     }
 
+    /// Append queued gateway commands from an isolated sub-operation.
+    pub fn append(&mut self, other: &mut Self) {
+        self.gateway_commands.append(&mut other.gateway_commands);
+    }
+
     /// Send all commands to Gateway. Use this method *after* database transaction is committed.
     pub fn send(self, gateway_tx: &UnboundedSender<GatewayCommand>) {
         send_multiple_gateway_commands(self.gateway_commands, gateway_tx);

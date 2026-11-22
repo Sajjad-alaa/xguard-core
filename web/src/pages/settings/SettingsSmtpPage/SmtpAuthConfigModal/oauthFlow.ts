@@ -28,9 +28,22 @@ const closePopupQuietly = (popup: Window) => {
   }
 };
 
+const isSafeOAuthUrl = (rawUrl: string): boolean => {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === 'https:') return true;
+    if (parsed.protocol !== 'http:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+};
+
 export const waitForOAuthCallback = (
   popup: Window,
   signal?: AbortSignal,
+  expectedState?: string,
 ): Promise<OAuthCallbackPayload> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -48,8 +61,12 @@ export const waitForOAuthCallback = (
       signal?.removeEventListener('abort', onAbort);
     };
 
-    const handleResult = (data: RawOAuthCallbackMessage) => {
+    const handleResult = (data: RawOAuthCallbackMessage, fromPopup: boolean) => {
       if (data?.type !== SMTP_OAUTH_CALLBACK_TYPE) return;
+      if (expectedState) {
+        if (data.state && data.state !== expectedState) return;
+        if (!data.state && !(data.error && fromPopup)) return;
+      }
       cleanup();
       if (!data.state) {
         reject(new Error(data.error ?? m.settings_smtp_auth_oauth_error()));
@@ -64,7 +81,7 @@ export const waitForOAuthCallback = (
 
     const messageHandler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
-      handleResult(event.data as RawOAuthCallbackMessage);
+      handleResult(event.data as RawOAuthCallbackMessage, event.source === popup);
     };
 
     window.addEventListener('message', messageHandler);
@@ -74,7 +91,7 @@ export const waitForOAuthCallback = (
     try {
       broadcastChannel = new BroadcastChannel('smtp-oauth-relay');
       broadcastChannel.addEventListener('message', (event: MessageEvent) => {
-        handleResult(event.data as RawOAuthCallbackMessage);
+        handleResult(event.data as RawOAuthCallbackMessage, false);
       });
     } catch {
       // BroadcastChannel unavailable; direct postMessage path still works without COOP.
@@ -121,9 +138,20 @@ export const runSmtpOAuthFlow = async (
     throw err;
   }
 
+  if (signal?.aborted) {
+    closePopupQuietly(popup);
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  if (!isSafeOAuthUrl(authorizationUrl)) {
+    closePopupQuietly(popup);
+    throw new Error(m.settings_smtp_auth_oauth_error());
+  }
+
+  const expectedState = new URL(authorizationUrl).searchParams.get('state') ?? undefined;
   popup.location.href = authorizationUrl;
 
-  const callback = await waitForOAuthCallback(popup, signal);
+  const callback = await waitForOAuthCallback(popup, signal, expectedState);
   const callbackResponse = await api.mail.oauthCallback({
     state: callback.state,
     code: callback.code,

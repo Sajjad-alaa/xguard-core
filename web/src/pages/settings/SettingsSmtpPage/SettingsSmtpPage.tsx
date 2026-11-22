@@ -100,7 +100,7 @@ const detectActiveCard = (
   if (authentication === SmtpAuthentication.XOAuth2) {
     if (isGoogleIssuerUrl(issuerUrl)) return 'google';
     if (isMicrosoftIssuerUrl(issuerUrl)) return 'microsoft';
-    return 'custom';
+    return null;
   }
   return null;
 };
@@ -227,21 +227,32 @@ const Content = ({
   });
 
   const openConfigModal = (variant: SmtpAuthCardVariant) => {
+    const cur = form.state.values;
+    const activeCard = smtpEnabled
+      ? detectActiveCard(
+          cur.smtp_authentication,
+          cur.smtp_oauth_issuer_url,
+          cur.smtp_server,
+        )
+      : null;
+    const sameVariant = variant === activeCard;
     modalInitialValuesRef.current = {
-      smtp_server: form.state.values.smtp_server,
-      smtp_port: form.state.values.smtp_port,
-      smtp_sender: form.state.values.smtp_sender,
-      smtp_encryption: form.state.values.smtp_encryption as SmtpEncryptionValue,
-      smtp_tls_verify_cert: form.state.values.smtp_tls_verify_cert,
-      smtp_user: form.state.values.smtp_user,
-      smtp_password: form.state.values.smtp_password,
+      smtp_server: cur.smtp_server,
+      smtp_port: cur.smtp_port,
+      smtp_sender: cur.smtp_sender,
+      smtp_encryption: cur.smtp_encryption as SmtpEncryptionValue,
+      smtp_tls_verify_cert: cur.smtp_tls_verify_cert,
+      smtp_user: cur.smtp_user,
+      smtp_password: cur.smtp_password,
       smtp_password_set: settings.smtp_password_set ?? false,
-      smtp_oauth_issuer_url: form.state.values.smtp_oauth_issuer_url,
-      smtp_oauth_client_id: form.state.values.smtp_oauth_client_id,
-      smtp_oauth_client_secret: form.state.values.smtp_oauth_client_secret,
-      smtp_oauth_client_secret_set: settings.smtp_oauth_client_secret_set ?? false,
-      smtp_oauth_refresh_token: form.state.values.smtp_oauth_refresh_token,
-      smtp_oauth_tenant_id: form.state.values.smtp_oauth_tenant_id,
+      smtp_oauth_issuer_url: sameVariant ? cur.smtp_oauth_issuer_url : null,
+      smtp_oauth_client_id: sameVariant ? cur.smtp_oauth_client_id : null,
+      smtp_oauth_client_secret: sameVariant ? cur.smtp_oauth_client_secret : undefined,
+      smtp_oauth_client_secret_set: sameVariant
+        ? (settings.smtp_oauth_client_secret_set ?? false)
+        : false,
+      smtp_oauth_refresh_token: sameVariant ? cur.smtp_oauth_refresh_token : undefined,
+      smtp_oauth_tenant_id: sameVariant ? cur.smtp_oauth_tenant_id : null,
     };
     setModalVariant(variant);
   };

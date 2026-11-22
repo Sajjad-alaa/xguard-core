@@ -170,6 +170,16 @@ impl OpenIdServer {
             );
             return Err(Status::permission_denied("the account is disabled").into());
         }
+        if user.is_enrolled() && user.mfa_enabled {
+            warn!(
+                "Enrolled MFA user {} tried to start self-service OpenID enrollment",
+                user.username
+            );
+            return Err(Status::permission_denied(
+                "multi-factor authentication is required; sign in to XGuard to add a device",
+            )
+            .into());
+        }
 
         let settings = Settings::get_current_settings();
         let public_url =
@@ -184,7 +194,7 @@ impl OpenIdServer {
             .map_err(Status::from)?;
         let token = Token::new(
             user.id,
-            settings.default_admin_id,
+            None,
             Some(user.email.clone()),
             settings.enrollment_token_timeout().as_secs(),
             Some(ENROLLMENT_TOKEN_TYPE.to_owned()),

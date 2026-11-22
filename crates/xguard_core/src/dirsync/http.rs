@@ -115,6 +115,13 @@ pub(crate) async fn send_json<T: DeserializeOwned>(
         let this = request
             .try_clone()
             .ok_or_else(|| DirSyncError::Http("the request cannot be repeated".into()))?;
+        if let Some(Ok(preview)) = request.try_clone().map(RequestBuilder::build)
+            && !crate::sso::provider::is_trusted_url(preview.url())
+        {
+            return Err(DirSyncError::Http(format!(
+                "{what}: refused untrusted destination URL"
+            )));
+        }
         let response = this
             .send()
             .await
@@ -181,9 +188,9 @@ pub(crate) fn next_link(headers: &HeaderMap, base: &Url) -> Result<Option<Url>, 
     Ok(None)
 }
 
-/// Accepts a paging URL only on the API's own origin.
+/// Accepts a paging URL only on the API's own origin and trusted host.
 pub(crate) fn checked_next(url: Url, base: &Url) -> Result<Url, DirSyncError> {
-    if same_origin(&url, base) {
+    if same_origin(&url, base) && crate::sso::provider::is_trusted_url(&url) {
         Ok(url)
     } else {
         Err(DirSyncError::Http(format!(

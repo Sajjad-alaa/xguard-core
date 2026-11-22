@@ -241,9 +241,6 @@ const GeneralTabContent = ({
                   disabled={isDefault || !canSubmit}
                   loading={isSubmitting}
                   type="submit"
-                  onClick={() => {
-                    form.handleSubmit();
-                  }}
                 />
               </div>
             </Controls>

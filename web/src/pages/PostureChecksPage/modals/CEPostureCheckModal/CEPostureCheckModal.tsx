@@ -108,6 +108,7 @@ const ModalContent = ({
   locations,
   versions,
 }: OpenCEPostureCheckModal & Props) => {
+  const [createdId, setCreatedId] = useState<number | null>(null);
   const defaultValues = useMemo(
     (): FormFields => (posture ? postureToForm(posture) : emptyForm()),
     [posture],
@@ -116,13 +117,21 @@ const ModalContent = ({
   const save = useMutation({
     mutationFn: async (values: FormFields) => {
       const request = formToRequest(values);
-      const saved = posture
-        ? await api.devicePosture.editDevicePosture({ id: posture.id, ...request })
-        : await api.devicePosture.addDevicePosture(request);
-      await api.devicePosture.setLocationsForDevicePosture(
-        saved.data.id,
-        values.locations,
-      );
+      const existingId = posture?.id ?? createdId;
+      const savedId =
+        existingId !== null
+          ? (
+              await api.devicePosture.editDevicePosture({
+                id: existingId,
+                ...request,
+              })
+            ).data.id
+          : await (async () => {
+              const saved = await api.devicePosture.addDevicePosture(request);
+              setCreatedId(saved.data.id);
+              return saved.data.id;
+            })();
+      await api.devicePosture.setLocationsForDevicePosture(savedId, values.locations);
     },
     meta: { invalidate: [['device-posture'], ['network']] },
     onSuccess: () => {

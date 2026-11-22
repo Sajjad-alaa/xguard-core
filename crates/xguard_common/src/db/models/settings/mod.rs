@@ -68,6 +68,39 @@ pub async fn update_current_settings<'e, E: sqlx::PgExecutor<'e>>(
     Ok(())
 }
 
+/// Atomically persists a rotated SMTP OAuth refresh token when the database row still matches
+/// `previous`, and updates only `smtp.oauth_refresh_token` in the global cache.
+pub async fn update_smtp_oauth_refresh_token(
+    pool: &PgPool,
+    previous: &str,
+    rotated: &str,
+) -> sqlx::Result<bool> {
+    let res = query(
+        "UPDATE settings SET smtp_oauth_refresh_token = $1 \
+         WHERE id = 1 AND smtp_oauth_refresh_token = $2",
+    )
+    .bind(rotated)
+    .bind(previous)
+    .execute(pool)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Ok(false);
+    }
+    let mut cache = SETTINGS
+        .write()
+        .expect("Failed to acquire RwLock for write");
+    if let Some(settings) = cache.as_mut()
+        && settings
+            .smtp
+            .oauth_refresh_token
+            .as_ref()
+            .is_some_and(|token| token.expose_secret() == previous)
+    {
+        settings.smtp.oauth_refresh_token = Some(rotated.to_owned().into());
+    }
+    Ok(true)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SmtpDependent {
     LdapRemoteEnrollment,
@@ -742,6 +775,7 @@ impl Settings {
                 self.ldap_username_attr.as_deref(),
                 self.ldap_user_rdn_attr.as_deref(),
                 self.ldap_member_attr.as_deref(),
+                self.ldap_group_member_attr.as_deref(),
             ];
             if !is_valid_ldap_attribute_name(attr)
                 || FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS
@@ -1036,6 +1070,7 @@ impl Settings {
     pub fn ldap_enrollment_token_attribute(&self) -> Option<&str> {
         self.ldap_enrollment_token_attr
             .as_deref()
+            .map(str::trim)
             .filter(|attr| !attr.is_empty())
     }
 

@@ -314,6 +314,30 @@ impl Mail {
                 let Some(sender) = smtp_settings.sender.as_deref().filter(|s| !s.is_empty()) else {
                     return Err(MailError::SmtpNotConfigured);
                 };
+                let host = server.trim().trim_start_matches('[').trim_end_matches(']');
+                let is_loopback = host.eq_ignore_ascii_case("localhost")
+                    || host
+                        .parse::<std::net::IpAddr>()
+                        .is_ok_and(|ip| ip.is_loopback());
+                if !is_loopback {
+                    if smtp_settings.encryption == SmtpEncryption::None {
+                        return Err(MailError::OAuth2(xoauth2::OAuthError::Invalid(
+                            "XOAUTH2 requires TLS encryption".into(),
+                        )));
+                    }
+                    let expected_server = smtp_settings
+                        .oauth_issuer_url
+                        .as_deref()
+                        .and_then(xoauth2::Provider::from_issuer)
+                        .map(xoauth2::Provider::smtp_server);
+                    if !expected_server
+                        .is_some_and(|expected| server.trim().eq_ignore_ascii_case(expected))
+                    {
+                        return Err(MailError::OAuth2(xoauth2::OAuthError::Invalid(
+                            "SMTP server does not match the configured OAuth provider".into(),
+                        )));
+                    }
+                }
                 let token = xoauth2::access_token(&smtp_settings).await?;
                 builder = builder
                     .authentication(vec![Mechanism::Xoauth2])

@@ -236,20 +236,42 @@ fn settings_cannot_set_the_refresh_token() {
         oauth_refresh_token: Some("refresh".to_owned().into()),
         ..Default::default()
     };
-    // Submitted with another refresh token: the stored one stays.
+    // Submitted with another refresh token while grant stays unchanged: the stored one stays.
     let mut after = before.clone();
     after.oauth_refresh_token = Some("attacker".to_owned().into());
-    after.sender = Some("other@example.org".into());
+    after.tls_verify_cert = !before.tls_verify_cert;
     protect_settings(&before, &mut after);
     assert_eq!(
         after.oauth_refresh_token.as_ref().unwrap().expose_secret(),
         "refresh"
     );
-    // Another client: the grant no longer applies.
+    // Changing sender, server, port, or encryption drops the refresh token.
+    let mut after = before.clone();
+    after.sender = Some("other@example.org".into());
+    protect_settings(&before, &mut after);
+    assert!(after.oauth_refresh_token.is_none());
+    let mut after = before.clone();
+    after.server = Some("evil.example.org".into());
+    protect_settings(&before, &mut after);
+    assert!(after.oauth_refresh_token.is_none());
+    // Another client: both the grant and reused secret no longer apply.
     let mut after = before.clone();
     after.oauth_client_id = Some("other".into());
     protect_settings(&before, &mut after);
     assert!(after.oauth_refresh_token.is_none());
+    assert!(after.oauth_client_secret.is_none());
+    // Reusing stored secret in start() across providers is refused.
+    let mut settings = Settings::default();
+    settings.xguard_url = "https://xguard.example.org".into();
+    settings.smtp = before.clone();
+    let mut ms_req = google_request();
+    ms_req.provider = Provider::Microsoft;
+    ms_req.client_id = "client".into();
+    ms_req.client_secret = None;
+    assert!(matches!(
+        start(9004, ms_req, &settings),
+        Err(OAuthError::NotConfigured(_))
+    ));
     // Switching to password authentication drops the OAuth secrets.
     let mut after = before.clone();
     after.authentication = SmtpAuthentication::Login;

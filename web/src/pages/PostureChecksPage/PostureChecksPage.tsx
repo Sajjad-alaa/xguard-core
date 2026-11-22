@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { m } from '../../paraglide/messages';
+import { LocationServiceMode } from '../../shared/api/types';
 import { Page } from '../../shared/components/Page/Page';
 import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
 import {
@@ -24,7 +25,10 @@ export const PostureChecksPage = () => {
   );
   const locationOptions = useMemo(
     () =>
-      [...locations]
+      locations
+        .filter(
+          (location) => location.service_location_mode === LocationServiceMode.Disabled,
+        )
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((location) => ({ id: location.id, label: location.name })),
     [locations],

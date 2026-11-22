@@ -297,6 +297,32 @@ async fn keep_an_admin(conn: &mut PgConnection, user_id: Id) -> Result<(), DirSy
     Ok(())
 }
 
+/// Refuses to remove `(user_id, group_id)` if doing so would leave no active admin anywhere.
+async fn keep_an_admin_without_membership(
+    conn: &mut PgConnection,
+    user_id: Id,
+    group_id: Id,
+) -> Result<(), DirSyncError> {
+    let has_other: bool = sqlx::query_scalar(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM group_user gu
+            JOIN "group" g ON g.id = gu.group_id
+            JOIN "user" u ON u.id = gu.user_id
+            WHERE g.is_admin AND u.is_active AND NOT (u.id = $1 AND g.id = $2)
+        )"#,
+    )
+    .bind(user_id)
+    .bind(group_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    if !has_other {
+        return Err(DirSyncError::Refused(
+            "this is the last active admin".into(),
+        ));
+    }
+    Ok(())
+}
+
 async fn is_active_admin(conn: &mut PgConnection, user: &User<Id>) -> Result<bool, DirSyncError> {
     Ok(user.is_active && user.is_admin(&mut *conn).await?)
 }
@@ -304,17 +330,32 @@ async fn is_active_admin(conn: &mut PgConnection, user: &User<Id>) -> Result<boo
 async fn set_sync_disabled(
     conn: &mut PgConnection,
     provider_id: Id,
-    user_id: Id,
+    user: &User<Id>,
     disabled: bool,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
+    let res = sqlx::query(
         "UPDATE user_directory_identity SET sync_disabled = $3 WHERE provider_id = $1 AND user_id = $2",
     )
     .bind(provider_id)
-    .bind(user_id)
+    .bind(user.id)
     .bind(disabled)
     .execute(&mut *conn)
     .await?;
+    if res.rows_affected() == 0
+        && disabled
+        && let Some(external_id) = user.openid_sub.as_deref()
+    {
+        sqlx::query(
+            "INSERT INTO user_directory_identity (user_id, provider_id, external_id, sync_disabled) \
+             VALUES ($1, $2, $3, true) \
+             ON CONFLICT (user_id, provider_id) DO UPDATE SET sync_disabled = true",
+        )
+        .bind(user.id)
+        .bind(provider_id)
+        .bind(external_id)
+        .execute(&mut *conn)
+        .await?;
+    }
     Ok(())
 }
 
@@ -413,7 +454,7 @@ async fn apply(
             let mut user = find_user(conn, change.user_id).await?;
             user.is_active = true;
             user.save(&mut *conn).await?;
-            set_sync_disabled(conn, provider_id, user.id, false).await?;
+            set_sync_disabled(conn, provider_id, &user, false).await?;
             Ok(user)
         }) {
             touched.insert(user.id);
@@ -424,15 +465,17 @@ async fn apply(
 
     for change in &plan.disable_users {
         let what = format!("disable user {} ({})", change.username, change.reason);
-        if let Some(user) = step!(tx, errors, what, |conn| {
+        if let Some((user, mut step_mgr)) = step!(tx, errors, what, |conn| {
             let mut user = find_user(conn, change.user_id).await?;
             if is_active_admin(conn, &user).await? {
                 keep_an_admin(conn, user.id).await?;
             }
-            usermgr.disable_user(&mut user, conn).await?;
-            set_sync_disabled(conn, provider_id, user.id, true).await?;
-            Ok(user)
+            let mut step_mgr = UserManager::new();
+            step_mgr.disable_user(&mut user, conn).await?;
+            set_sync_disabled(conn, provider_id, &user, true).await?;
+            Ok((user, step_mgr))
         }) {
+            usermgr.append(&mut step_mgr);
             touched.remove(&user.id);
             changed.insert(user.id);
             emitted.push(DirectorySyncEventType::UserDisabled { user });
@@ -455,7 +498,7 @@ async fn apply(
                     user.add_to_group(&mut *conn, &group).await?;
                 } else {
                     if group.is_admin && is_active_admin(conn, &user).await? {
-                        keep_an_admin(conn, user.id).await?;
+                        keep_an_admin_without_membership(conn, user.id, group.id).await?;
                     }
                     user.remove_from_group(&mut *conn, &group).await?;
                 }
@@ -474,16 +517,18 @@ async fn apply(
 
     for change in &plan.delete_users {
         let what = format!("delete user {} ({})", change.username, change.reason);
-        if let Some(user) = step!(tx, errors, what, |conn| {
+        if let Some((user, mut step_mgr)) = step!(tx, errors, what, |conn| {
             let user = find_user(conn, change.user_id).await?;
             if is_active_admin(conn, &user).await? {
                 keep_an_admin(conn, user.id).await?;
             }
-            usermgr
+            let mut step_mgr = UserManager::new();
+            step_mgr
                 .delete_user_and_cleanup_devices(user.clone(), conn)
                 .await?;
-            Ok(user)
+            Ok((user, step_mgr))
         }) {
+            usermgr.append(&mut step_mgr);
             touched.remove(&user.id);
             changed.remove(&user.id);
             deleted.push(user.username.clone());
@@ -494,16 +539,19 @@ async fn apply(
     // Membership and status changes affect which locations a user may reach. Disabling and
     // deleting update gateways themselves.
     for user_id in &touched {
-        step!(
+        if let Some(mut step_mgr) = step!(
             tx,
             errors,
             format!("update access of user {user_id}"),
             |conn| {
                 let user = find_user(conn, *user_id).await?;
-                usermgr.sync_allowed_user_devices(&user, conn).await?;
-                Ok(())
+                let mut step_mgr = UserManager::new();
+                step_mgr.sync_allowed_user_devices(&user, conn).await?;
+                Ok(step_mgr)
             }
-        );
+        ) {
+            usermgr.append(&mut step_mgr);
+        }
     }
 
     tx.commit().await?;

@@ -424,25 +424,27 @@ impl DirectoryApi {
             .into_iter()
             .filter(|group| config.syncs_group(&group.name) || config.user_groups.any(&group.name))
             .collect();
-        let members: Vec<Vec<String>> = stream::iter(wanted.clone())
-            .map(|group| async move { self.members(&group).await })
-            .buffered(MEMBER_CONCURRENCY)
-            .try_collect()
-            .await?;
-        if members.iter().map(Vec::len).sum::<usize>() > MAX_MEMBERSHIPS {
-            return Err(DirSyncError::Http(format!(
-                "the directory has more than {MAX_MEMBERSHIPS} group memberships"
-            )));
-        }
-        let groups = wanted
-            .into_iter()
-            .zip(members)
-            .map(|(group, members)| DirectoryGroup {
-                id: group.id,
-                name: group.name,
-                members,
+        let mut stream = stream::iter(wanted)
+            .map(|group| async move {
+                let members = self.members(&group).await?;
+                Ok::<_, DirSyncError>(DirectoryGroup {
+                    id: group.id,
+                    name: group.name,
+                    members,
+                })
             })
-            .collect();
+            .buffered(MEMBER_CONCURRENCY);
+        let mut groups = Vec::new();
+        let mut total_memberships = 0usize;
+        while let Some(group) = stream.try_next().await? {
+            total_memberships = total_memberships.saturating_add(group.members.len());
+            if total_memberships > MAX_MEMBERSHIPS {
+                return Err(DirSyncError::Http(format!(
+                    "the directory has more than {MAX_MEMBERSHIPS} group memberships"
+                )));
+            }
+            groups.push(group);
+        }
         Ok(DirectorySnapshot {
             users,
             groups,

@@ -341,11 +341,12 @@ async fn test_provider_settings(_: PgPoolOptions, options: PgConnectOptions) {
     let saved = ProviderConfig::save(&mut conn, input("https://accounts.google.com/", Some("s")))
         .await
         .unwrap();
-    assert_eq!(saved.issuer, "https://accounts.google.com");
+    assert_eq!(saved.issuer, "https://accounts.google.com/");
     assert!(saved.client_secret_set);
     assert!(!serde_json::to_string(&saved).unwrap().contains("\"s\""));
 
-    // Saving without a secret keeps it; changing the issuer unlinks accounts.
+    // Saving without a secret keeps it only for the same origin; changing the issuer origin
+    // requires a fresh secret and unlinks accounts.
     let user = User::new("jdoe", None, "Doe", "Jane", "jane@example.org", None)
         .save(&pool)
         .await
@@ -355,7 +356,7 @@ async fn test_provider_settings(_: PgPoolOptions, options: PgConnectOptions) {
         .execute(&pool)
         .await
         .unwrap();
-    ProviderConfig::save(&mut conn, input("https://accounts.google.com", None))
+    ProviderConfig::save(&mut conn, input("https://accounts.google.com/", None))
         .await
         .unwrap();
     let kept = ProviderConfig::current(&pool).await.unwrap().unwrap();
@@ -368,7 +369,29 @@ async fn test_provider_settings(_: PgPoolOptions, options: PgConnectOptions) {
             .openid_sub
             .is_some()
     );
-    ProviderConfig::save(&mut conn, input("https://login.example.org", None))
+    // Changing only the trailing slash changes the issuer string and unlinks accounts.
+    ProviderConfig::save(&mut conn, input("https://accounts.google.com", Some("s")))
+        .await
+        .unwrap();
+    assert!(
+        User::find_by_id(&pool, user.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .openid_sub
+            .is_none()
+    );
+    sqlx::query(r#"UPDATE "user" SET openid_sub = 'g-1' WHERE id = $1"#)
+        .bind(user.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        ProviderConfig::save(&mut conn, input("https://login.example.org", None))
+            .await
+            .is_err()
+    );
+    ProviderConfig::save(&mut conn, input("https://login.example.org", Some("s2")))
         .await
         .unwrap();
     assert!(
@@ -380,8 +403,82 @@ async fn test_provider_settings(_: PgPoolOptions, options: PgConnectOptions) {
             .is_none()
     );
 
-    ProviderConfig::delete(&pool).await.unwrap();
+    // Deleting the provider also unlinks external subject identifiers.
+    sqlx::query(r#"UPDATE "user" SET openid_sub = 'other-sub' WHERE id = $1"#)
+        .bind(user.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    ProviderConfig::delete(&mut conn).await.unwrap();
     assert!(ProviderConfig::current(&pool).await.unwrap().is_none());
+    assert!(
+        User::find_by_id(&pool, user.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .openid_sub
+            .is_none()
+    );
+}
+
+#[test]
+fn trusted_url_blocks_link_local_and_unspecified() {
+    use super::provider::is_trusted_url;
+
+    for blocked in [
+        "https://169.254.169.254/latest/meta-data",
+        "http://169.254.169.254/",
+        "https://0.0.0.0/",
+        "https://[::]/",
+        "https://[fe80::1]/",
+        "http://example.com/",
+        "javascript:alert(1)",
+    ] {
+        let parsed = url::Url::parse(blocked).unwrap();
+        assert!(!is_trusted_url(&parsed), "should block {blocked}");
+    }
+    for allowed in [
+        "https://accounts.google.com/",
+        "http://localhost:8080/auth",
+        "http://127.0.0.1:4321/",
+        "http://[::1]:4321/",
+    ] {
+        let parsed = url::Url::parse(allowed).unwrap();
+        assert!(is_trusted_url(&parsed), "should allow {allowed}");
+    }
+}
+
+#[tokio::test]
+async fn discovery_rejects_untrusted_endpoints() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let issuer = format!("http://{addr}");
+    let doc_issuer = issuer.clone();
+    let app = axum::Router::new().route(
+        "/.well-known/openid-configuration",
+        axum::routing::get(move || {
+            let doc_issuer = doc_issuer.clone();
+            async move {
+                axum::Json(serde_json::json!({
+                    "issuer": doc_issuer,
+                    "authorization_endpoint": "javascript:alert(1)",
+                    "token_endpoint": "https://169.254.169.254/token",
+                    "jwks_uri": "http://example.com/jwks",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"]
+                }))
+            }
+        }),
+    );
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    let cfg = config(&issuer);
+    let err = flow::check(&cfg)
+        .await
+        .expect_err("untrusted discovery endpoints must be rejected");
+    assert!(matches!(err, FlowError::Discovery(_)), "{err:?}");
 }
 
 fn expect_grant(mock: &MockProvider, url: &str) {

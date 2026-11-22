@@ -12,21 +12,28 @@
 
 use std::{
     collections::HashMap,
+    future::Future,
+    pin::Pin,
     sync::{LazyLock, Mutex},
     time::{Duration, Instant},
 };
 
+use chrono::Utc;
 use openidconnect::{
-    AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
+    AsyncHttpClient, AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
+    HttpRequest, HttpResponse, IssuerUrl, Nonce, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl,
+    Scope, TokenResponse,
     core::{CoreClient, CoreIdTokenClaims, CoreProviderMetadata, CoreResponseType},
 };
 use serde::{Deserialize, Serialize};
+use url::Url;
 
-use super::provider::ProviderConfig;
+use super::provider::{ProviderConfig, is_trusted_url};
 
 const METADATA_TTL: Duration = Duration::from_secs(600);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_OIDC_BODY_BYTES: usize = 1024 * 1024;
+const PENDING_LOGIN_TTL_SECS: i64 = 600;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FlowError {
@@ -48,6 +55,12 @@ pub struct PendingLogin {
     pub state: String,
     pub nonce: String,
     pub verifier: String,
+    #[serde(default)]
+    pub expires_at: i64,
+    #[serde(default)]
+    pub issuer: String,
+    #[serde(default)]
+    pub client_id: String,
 }
 
 /// Who the provider says signed in.
@@ -60,6 +73,59 @@ pub struct Identity {
     pub last_name: Option<String>,
     pub preferred_username: Option<String>,
     pub phone: Option<String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum SafeHttpError {
+    #[error("untrusted OpenID URL")]
+    UntrustedUrl,
+    #[error("invalid HTTP request: {0}")]
+    InvalidRequest(String),
+    #[error("OpenID response exceeded {MAX_OIDC_BODY_BYTES} bytes")]
+    ResponseTooLarge,
+    #[error("HTTP request failed: {0}")]
+    Transport(#[from] openidconnect::reqwest::Error),
+    #[error("HTTP response build failed: {0}")]
+    ResponseBuild(#[from] openidconnect::http::Error),
+}
+
+struct SafeHttpClient(openidconnect::reqwest::Client);
+
+impl<'c> AsyncHttpClient<'c> for SafeHttpClient {
+    type Error = SafeHttpError;
+    type Future = Pin<Box<dyn Future<Output = Result<HttpResponse, Self::Error>> + Send + 'c>>;
+
+    fn call(&'c self, request: HttpRequest) -> Self::Future {
+        Box::pin(async move {
+            let uri = request.uri().to_string();
+            let url =
+                Url::parse(&uri).map_err(|err| SafeHttpError::InvalidRequest(err.to_string()))?;
+            if !is_trusted_url(&url) {
+                return Err(SafeHttpError::UntrustedUrl);
+            }
+            let req: openidconnect::reqwest::Request = request.try_into()?;
+            let mut response = self.0.execute(req).await?;
+            let mut builder = openidconnect::http::Response::builder()
+                .status(response.status())
+                .version(response.version());
+            for (name, value) in response.headers() {
+                builder = builder.header(name, value);
+            }
+            if let Some(len) = response.content_length()
+                && len > MAX_OIDC_BODY_BYTES as u64
+            {
+                return Err(SafeHttpError::ResponseTooLarge);
+            }
+            let mut body = Vec::new();
+            while let Some(chunk) = response.chunk().await? {
+                if body.len().saturating_add(chunk.len()) > MAX_OIDC_BODY_BYTES {
+                    return Err(SafeHttpError::ResponseTooLarge);
+                }
+                body.extend_from_slice(&chunk);
+            }
+            builder.body(body).map_err(SafeHttpError::ResponseBuild)
+        })
+    }
 }
 
 pub(crate) fn http_client() -> Result<openidconnect::reqwest::Client, FlowError> {
@@ -83,11 +149,26 @@ async fn metadata(issuer: &str, refresh: bool) -> Result<CoreProviderMetadata, F
     {
         return Ok(metadata);
     }
+    let parsed_issuer = Url::parse(issuer).map_err(|err| FlowError::Config(err.to_string()))?;
+    if !is_trusted_url(&parsed_issuer) {
+        return Err(FlowError::Config("The issuer URL is not trusted".into()));
+    }
     let issuer_url =
         IssuerUrl::new(issuer.to_owned()).map_err(|err| FlowError::Config(err.to_string()))?;
-    let metadata = CoreProviderMetadata::discover_async(issuer_url, &http_client()?)
+    let http = SafeHttpClient(http_client()?);
+    let metadata = CoreProviderMetadata::discover_async(issuer_url, &http)
         .await
         .map_err(|err| FlowError::Discovery(error_chain(&err)))?;
+    let valid_endpoints = is_trusted_url(metadata.authorization_endpoint().url())
+        && metadata
+            .token_endpoint()
+            .is_none_or(|endpoint| is_trusted_url(endpoint.url()))
+        && is_trusted_url(metadata.jwks_uri().url());
+    if !valid_endpoints {
+        return Err(FlowError::Discovery(
+            "the provider metadata contained an untrusted endpoint URL".into(),
+        ));
+    }
     if let Ok(mut cache) = METADATA.lock() {
         cache.insert(issuer.to_owned(), (Instant::now(), metadata.clone()));
     }
@@ -159,6 +240,9 @@ pub async fn start(
             state: state.secret().clone(),
             nonce: nonce.secret().clone(),
             verifier: verifier.secret().clone(),
+            expires_at: Utc::now().timestamp() + PENDING_LOGIN_TTL_SECS,
+            issuer: config.provider.issuer.clone(),
+            client_id: config.provider.client_id.clone(),
         },
     ))
 }
@@ -171,7 +255,11 @@ pub async fn finish(
     code: &str,
     state: &str,
 ) -> Result<Identity, FlowError> {
-    if !super::constant_time_eq(pending.state.as_bytes(), state.as_bytes()) {
+    if Utc::now().timestamp() > pending.expires_at
+        || pending.issuer != config.provider.issuer
+        || pending.client_id != config.provider.client_id
+        || !super::constant_time_eq(pending.state.as_bytes(), state.as_bytes())
+    {
         return Err(FlowError::BadState);
     }
     exchange(config, redirect_url, pending, code).await
@@ -187,7 +275,7 @@ pub(crate) async fn exchange(
     code: &str,
 ) -> Result<Identity, FlowError> {
     let client = client(config, redirect_url, false).await?;
-    let http = http_client()?;
+    let http = SafeHttpClient(http_client()?);
     let response = client
         .exchange_code(AuthorizationCode::new(code.to_owned()))
         .map_err(|err| FlowError::Config(err.to_string()))?

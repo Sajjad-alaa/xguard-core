@@ -34,7 +34,7 @@ use super::{
 };
 use crate::{
     auth::login_throttle::{charge_login_attempt, login_key, refund_login_attempt},
-    enrollment_management::{send_enrollment_invitation, start_user_enrollment},
+    enrollment_management::{send_enrollment_invitation, start_directory_user_enrollment},
     error::WebError,
     events::LdapSyncEventType,
 };
@@ -105,11 +105,14 @@ pub async fn authenticate(
         return Err(EnrollmentError::Rejected);
     }
 
-    let mut conn = pool.acquire().await?;
-    let local = User::find_by_username_or_email(&mut conn, username).await?;
-    known_user.clone_from(&local);
-    let throttle_key = login_key(local.as_ref(), username);
-    charge_login_attempt(&mut *conn, &throttle_key).await?;
+    let (local, throttle_key) = {
+        let mut conn = pool.acquire().await?;
+        let local = User::find_by_username_or_email(&mut conn, username).await?;
+        known_user.clone_from(&local);
+        let throttle_key = login_key(local.as_ref(), username);
+        charge_login_attempt(&mut *conn, &throttle_key).await?;
+        (local, throttle_key)
+    };
 
     let user = match super::login::authenticate(pool, username, password, local.as_ref()).await {
         Ok(LoginOutcome::Authenticated(user)) => *user,
@@ -119,7 +122,6 @@ pub async fn authenticate(
             return Err(err.into());
         }
     };
-    refund_login_attempt(&mut *conn, &throttle_key).await?;
     *known_user = Some(user.clone());
 
     if !user.is_active {
@@ -133,6 +135,7 @@ pub async fn authenticate(
     if user.is_enrolled() {
         return Err(EnrollmentError::AlreadyEnrolled);
     }
+    refund_login_attempt(pool, &throttle_key).await?;
     Ok(Authenticated { user })
 }
 
@@ -250,6 +253,9 @@ pub async fn clear_token(username: &str) -> Result<(), DirectoryError> {
     }
     let config = super::enabled_config()?;
     let attribute = token_attribute(&settings, &config)?;
+    if !config.is_protected() {
+        return Err(DirectoryError::Insecure);
+    }
     let mut client = DirectoryClient::connect(config).await?;
     let result = async {
         if let Some(remote) = client.find_user(username).await? {
@@ -303,24 +309,6 @@ async fn send_invites_inner(
     let url = settings
         .proxy_public_url()
         .map_err(|err| DirectoryError::Invalid(format!("public Edge URL: {err}")))?;
-    // The desktop client shows who invited the user; automatic invitations name the default
-    // admin, or the first active one.
-    let admin = match settings.default_admin_id {
-        Some(id) => User::find_by_id(pool, id)
-            .await?
-            .filter(|admin| admin.is_active),
-        None => None,
-    };
-    let admin = match admin {
-        Some(admin) => admin,
-        None => match User::find_admins(pool).await?.into_iter().next() {
-            Some(admin) => admin,
-            None => {
-                warn!("No active admin found; not sending directory enrollment invitations");
-                return Ok(0);
-            }
-        },
-    };
     let timeout = settings.enrollment_token_timeout().as_secs();
     let mut issued = Vec::with_capacity(users.len());
     let mut tx = pool.begin().await?;
@@ -329,14 +317,12 @@ async fn send_invites_inner(
             continue;
         }
         let email = user.email.clone();
-        match start_user_enrollment(
+        match start_directory_user_enrollment(
             &mut user,
             &mut tx,
-            &admin,
             Some(email.clone()),
             timeout,
             url.clone(),
-            false,
         )
         .await
         {
@@ -348,10 +334,12 @@ async fn send_invites_inner(
         }
     }
     tx.commit().await?;
-    let sent = issued.len();
+    let mut sent = 0usize;
     for (user, email, token) in issued {
-        send_enrollment_invitation(&token, &email, pool, url.clone()).await;
-        let _ = events.send(LdapSyncEventType::EnrollmentInviteSent { user });
+        if send_enrollment_invitation(&token, &email, pool, url.clone()).await {
+            sent += 1;
+            let _ = events.send(LdapSyncEventType::EnrollmentInviteSent { user });
+        }
     }
     if sent > 0 {
         info!("Sent {sent} directory enrollment invitation(s)");

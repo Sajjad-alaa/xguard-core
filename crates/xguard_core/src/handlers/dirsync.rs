@@ -63,10 +63,7 @@ async fn unsaved_config(
         Err(err) => return Ok(Err(err.into())),
     };
     let same_directory = stored.as_ref().is_some_and(|stored| {
-        stored
-            .provider
-            .issuer
-            .eq_ignore_ascii_case(&config.provider.issuer)
+        stored.provider.issuer == config.provider.issuer
             && stored.provider.kind == config.provider.kind
     });
     if !same_directory {

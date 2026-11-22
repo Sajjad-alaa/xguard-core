@@ -19,7 +19,52 @@ pub async fn start_user_enrollment(
     enrollment_service_url: Url,
     send_user_notification: bool,
 ) -> Result<String, TokenError> {
-    info!("User {admin} started a new enrollment process for user {user}.");
+    start_user_enrollment_inner(
+        user,
+        conn,
+        Some(admin),
+        email,
+        token_timeout_seconds,
+        enrollment_service_url,
+        send_user_notification,
+    )
+    .await
+}
+
+/// Start user enrollment without stamping an admin override onto the token.
+pub async fn start_directory_user_enrollment(
+    user: &mut User<Id>,
+    conn: &mut PgConnection,
+    email: Option<String>,
+    token_timeout_seconds: u64,
+    enrollment_service_url: Url,
+) -> Result<String, TokenError> {
+    start_user_enrollment_inner(
+        user,
+        conn,
+        None,
+        email,
+        token_timeout_seconds,
+        enrollment_service_url,
+        false,
+    )
+    .await
+}
+
+async fn start_user_enrollment_inner(
+    user: &mut User<Id>,
+    conn: &mut PgConnection,
+    admin: Option<&User<Id>>,
+    email: Option<String>,
+    token_timeout_seconds: u64,
+    enrollment_service_url: Url,
+    send_user_notification: bool,
+) -> Result<String, TokenError> {
+    if let Some(admin) = admin {
+        info!("User {admin} started a new enrollment process for user {user}.");
+    } else {
+        info!("System started a new enrollment process for user {user}.");
+    }
     debug!("Notify user by mail about the enrollment process: {send_user_notification}");
     debug!("Verify that {user} is an active user.");
     if !user.is_active {
@@ -32,7 +77,7 @@ pub async fn start_user_enrollment(
     debug!("Create a new enrollment token for user {user}.");
     let enrollment = Token::new(
         user.id,
-        Some(admin.id),
+        admin.map(|admin| admin.id),
         email.clone(),
         token_timeout_seconds,
         Some(ENROLLMENT_TOKEN_TYPE.to_owned()),
@@ -161,32 +206,32 @@ pub async fn start_desktop_configuration(
 }
 
 /// Send an enrollment invitation email for a token that has already been committed to the DB.
-/// Errors are logged and swallowed so callers do not need to handle mail failures.
+/// Returns `true` if delivery succeeded; errors are logged without exposing the token ID.
 pub async fn send_enrollment_invitation(
     token_id: &str,
     email: &str,
     pool: &PgPool,
     enrollment_service_url: Url,
-) {
+) -> bool {
     let token = match Token::find_by_id(pool, token_id).await {
         Ok(t) => t,
         Err(err) => {
-            error!("Failed to fetch enrollment token {token_id} for notification: {err}");
-            return;
+            error!("Failed to fetch enrollment token for notification: {err}");
+            return false;
         }
     };
     let mut conn = match pool.acquire().await {
         Ok(c) => c,
         Err(err) => {
             error!("Failed to acquire DB connection for enrollment notification: {err}");
-            return;
+            return false;
         }
     };
     let base_message_context = match token.get_welcome_message_context(&mut conn).await {
         Ok(ctx) => ctx,
         Err(err) => {
-            error!("Failed to build enrollment message context for token {token_id}: {err}");
-            return;
+            error!("Failed to build enrollment message context: {err}");
+            return false;
         }
     };
     match new_account_mail(
@@ -199,8 +244,14 @@ pub async fn send_enrollment_invitation(
     )
     .await
     {
-        Ok(()) => info!("Sent enrollment invitation to {email}"),
-        Err(err) => error!("Failed to send enrollment invitation to {email}: {err}"),
+        Ok(()) => {
+            info!("Sent enrollment invitation to {email}");
+            true
+        }
+        Err(err) => {
+            error!("Failed to send enrollment invitation to {email}: {err}");
+            false
+        }
     }
 }
 

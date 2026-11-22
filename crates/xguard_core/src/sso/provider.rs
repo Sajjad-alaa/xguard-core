@@ -3,7 +3,8 @@
 use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgExecutor, Type};
+use sqlx::{FromRow, PgConnection, PgExecutor, Type};
+use tracing::info;
 use url::Url;
 use xguard_common::db::Id;
 
@@ -107,17 +108,44 @@ fn invalid(message: impl Into<String>) -> ProviderError {
     ProviderError::Invalid(message.into())
 }
 
-/// HTTPS, or HTTP to this machine (for development and tests).
+fn is_blocked_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_link_local() || v4.is_unspecified(),
+        IpAddr::V6(v6) => {
+            if let Some(mapped) = v6.to_ipv4_mapped() {
+                return mapped.is_link_local() || mapped.is_unspecified();
+            }
+            v6.is_unspecified() || (v6.segments()[0] & 0xffc0) == 0xfe80
+        }
+    }
+}
+
+/// HTTPS, or HTTP to this machine (for development and tests). Link-local and unspecified
+/// addresses are rejected even over HTTPS.
 pub(crate) fn is_trusted_url(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let bare_host = host.trim_start_matches('[').trim_end_matches(']');
+    let parsed_ip = bare_host.parse::<IpAddr>().ok();
+    if parsed_ip.is_some_and(is_blocked_ip) {
+        return false;
+    }
     if url.scheme() == "https" {
         return true;
     }
     url.scheme() == "http"
-        && url.host_str().is_some_and(|host| {
-            let host = host.trim_start_matches('[').trim_end_matches(']');
-            host.eq_ignore_ascii_case("localhost")
-                || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
-        })
+        && (bare_host.eq_ignore_ascii_case("localhost")
+            || parsed_ip.is_some_and(|ip| ip.is_loopback()))
+}
+
+pub(crate) fn same_origin(a: &str, b: &str) -> bool {
+    let (Ok(a), Ok(b)) = (Url::parse(a), Url::parse(b)) else {
+        return false;
+    };
+    a.scheme() == b.scheme()
+        && a.host_str().map(str::to_ascii_lowercase) == b.host_str().map(str::to_ascii_lowercase)
+        && a.port_or_known_default() == b.port_or_known_default()
 }
 
 impl ProviderInput {
@@ -135,13 +163,19 @@ impl ProviderInput {
         if issuer.query().is_some() || issuer.fragment().is_some() {
             return Err(invalid("The issuer URL cannot have a query or fragment."));
         }
+        // Store the issuer verbatim (minus surrounding whitespace) so issuers with trailing
+        // slashes (e.g. Auth0) keep matching ID tokens' `iss` claim.
+        let issuer = self.issuer.trim().to_owned();
+        let reusable_stored = stored.filter(|config| {
+            config.provider.kind == self.kind && same_origin(&config.provider.issuer, &issuer)
+        });
         let client_id = self.client_id.trim().to_owned();
         if client_id.is_empty() || client_id.len() > 512 {
             return Err(invalid("The client ID is required."));
         }
         let secret = match self.client_secret.map(|s| s.trim().to_owned()) {
             Some(secret) if !secret.is_empty() => secret,
-            _ => stored
+            _ => reusable_stored
                 .map(|config| config.client_secret.clone())
                 .ok_or_else(|| invalid("The client secret is required."))?,
         };
@@ -156,13 +190,11 @@ impl ProviderInput {
                 "Use a display name of up to 64 letters, digits, spaces and - _ . ( ) : /.",
             ));
         }
-        // Store the issuer exactly as given (minus surrounding spaces): ID tokens must match it.
-        let issuer = self.issuer.trim().trim_end_matches('/').to_owned();
         let no_secrets = DirectorySyncSecrets::default();
         let (directory_sync, directory_secrets) = self.directory_sync.validate(
             self.kind,
             &issuer,
-            stored.map_or(&no_secrets, |config| &config.directory_secrets),
+            reusable_stored.map_or(&no_secrets, |config| &config.directory_secrets),
         )?;
         Ok(ProviderConfig {
             provider: OpenIdProvider {
@@ -349,10 +381,7 @@ impl ProviderConfig {
         let row = query.fetch_one(&mut *conn).await?;
 
         if let Some(current) = &current {
-            let same_issuer = current
-                .provider
-                .issuer
-                .eq_ignore_ascii_case(&provider.issuer);
+            let same_issuer = current.provider.issuer == provider.issuer;
             // A subject identifier is only unique within its issuer. With a new issuer, old links
             // could match the wrong person, so users link again through their verified email.
             if !same_issuer {
@@ -373,21 +402,42 @@ impl ProviderConfig {
                     .execute(&mut *conn)
                     .await?;
             }
+        } else {
+            let unlinked =
+                sqlx::query(r#"UPDATE "user" SET openid_sub = NULL WHERE openid_sub IS NOT NULL"#)
+                    .execute(&mut *conn)
+                    .await?;
+            if unlinked.rows_affected() > 0 {
+                info!(
+                    "Configured a new OpenID provider; cleared {} stale links",
+                    unlinked.rows_affected()
+                );
+            }
         }
         Ok(row.into_config().provider)
     }
 
-    pub async fn delete<'e, E: PgExecutor<'e>>(
-        executor: E,
-    ) -> Result<OpenIdProvider, ProviderError> {
+    pub async fn delete(conn: &mut PgConnection) -> Result<OpenIdProvider, ProviderError> {
         let row: Option<Row> = sqlx::query_as(concat!(
             "DELETE FROM openidprovider RETURNING ",
             provider_columns!()
         ))
-        .fetch_optional(executor)
+        .fetch_optional(&mut *conn)
         .await?;
-        row.map(|row| row.into_config().provider)
-            .ok_or(ProviderError::NotFound)
+        let provider = row
+            .map(|row| row.into_config().provider)
+            .ok_or(ProviderError::NotFound)?;
+        let unlinked =
+            sqlx::query(r#"UPDATE "user" SET openid_sub = NULL WHERE openid_sub IS NOT NULL"#)
+                .execute(&mut *conn)
+                .await?;
+        if unlinked.rows_affected() > 0 {
+            info!(
+                "The OpenID provider was removed; unlinked {} users",
+                unlinked.rows_affected()
+            );
+        }
+        Ok(provider)
     }
 }
 

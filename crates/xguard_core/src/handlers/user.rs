@@ -1927,6 +1927,7 @@ pub(crate) async fn bulk_store_enrollment_token_in_ldap(
     let public_proxy_url = settings.proxy_public_url()?;
 
     let mut tokens = Vec::with_capacity(users.len());
+    let mut rollback = Vec::with_capacity(users.len());
     let mut skipped = 0;
     let mut transaction = appstate.pool.begin().await?;
     for mut user in users {
@@ -1939,6 +1940,7 @@ pub(crate) async fn bulk_store_enrollment_token_in_ldap(
             skipped += 1;
             continue;
         }
+        let was_pending = user.enrollment_pending;
         let token_id = start_user_enrollment(
             &mut user,
             &mut transaction,
@@ -1950,21 +1952,69 @@ pub(crate) async fn bulk_store_enrollment_token_in_ldap(
             false,
         )
         .await?;
+        rollback.push((user.id, was_pending, token_id.clone()));
         tokens.push((user, token_id));
     }
     transaction.commit().await?;
 
+    if tokens.is_empty() {
+        info!(
+            "User {} stored enrollment tokens in LDAP for 0 user(s) ({skipped} skipped, 0 failed)",
+            session.user.username
+        );
+        return Ok(ApiResponse::new(
+            json!({ "stored": 0, "skipped": skipped, "failed": 0 }),
+            StatusCode::OK,
+        ));
+    }
+
+    async fn rollback_tokens(
+        pool: &sqlx::PgPool,
+        entries: &[(Id, bool, String)],
+    ) -> Result<(), WebError> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let mut tx = pool.begin().await?;
+        for (user_id, was_pending, token_id) in entries {
+            sqlx::query("DELETE FROM token WHERE id = $1")
+                .bind(token_id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query(r#"UPDATE "user" SET enrollment_pending = $2 WHERE id = $1"#)
+                .bind(*user_id)
+                .bind(*was_pending)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
     // Written after the commit so a slow directory doesn't hold the transaction open.
-    let report = directory::enrollment::store_tokens(&tokens, &public_proxy_url)
-        .await
-        .map_err(|err| {
+    let report = match directory::enrollment::store_tokens(&tokens, &public_proxy_url).await {
+        Ok(report) => report,
+        Err(err) => {
+            if let Err(rb_err) = rollback_tokens(&appstate.pool, &rollback).await {
+                error!("Failed to roll back unused LDAP enrollment tokens: {rb_err}");
+            }
             error!(
                 "Failed to store enrollment tokens in LDAP for user {}: {err}",
                 session.user.username
             );
-            WebError::BadRequest(format!("Failed to store enrollment tokens in LDAP: {err}"))
-        })?;
+            return Err(WebError::BadRequest(format!(
+                "Failed to store enrollment tokens in LDAP: {err}"
+            )));
+        }
+    };
     let failed_ids: HashSet<Id> = report.failed.iter().map(|(id, _)| *id).collect();
+    let failed_rollback: Vec<_> = rollback
+        .into_iter()
+        .filter(|(user_id, _, _)| failed_ids.contains(user_id))
+        .collect();
+    if let Err(rb_err) = rollback_tokens(&appstate.pool, &failed_rollback).await {
+        error!("Failed to roll back failed per-user LDAP enrollment tokens: {rb_err}");
+    }
     let failed_count = failed_ids.len();
     let stored_count = tokens.len() - failed_count;
 

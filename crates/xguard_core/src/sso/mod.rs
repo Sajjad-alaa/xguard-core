@@ -41,6 +41,8 @@ pub enum LinkError {
     UnverifiedEmail,
     #[error("This XGuard account is already linked to another identity")]
     LinkedElsewhere,
+    #[error("This account is disabled")]
+    Disabled,
     #[error("The provider did not give an email address, which a new account needs")]
     NoEmail,
     #[error("No free username could be derived from this identity")]
@@ -114,14 +116,26 @@ pub async fn resolve_user(pool: &PgPool, identity: &Identity) -> Result<User<Id>
     if let Some(email) = identity.email.as_deref()
         && let Some(mut user) = User::find_by_email(pool, email).await?
     {
+        if !user.is_active {
+            return Err(LinkError::Disabled);
+        }
         if !identity.email_verified {
             return Err(LinkError::UnverifiedEmail);
         }
         if user.openid_sub.is_some() {
             return Err(LinkError::LinkedElsewhere);
         }
+        let updated = sqlx::query(
+            r#"UPDATE "user" SET openid_sub = $1 WHERE id = $2 AND openid_sub IS NULL AND is_active = true"#,
+        )
+        .bind(&identity.subject)
+        .bind(user.id)
+        .execute(pool)
+        .await?;
+        if updated.rows_affected() == 0 {
+            return Err(LinkError::LinkedElsewhere);
+        }
         user.openid_sub = Some(identity.subject.clone());
-        user.save(pool).await?;
         info!("Linked {} to their OpenID identity", user.username);
         return Ok(user);
     }

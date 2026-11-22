@@ -30,6 +30,7 @@ use crate::{
 
 static DEFAULT_NAV_LOGO_URL: &str = "/svg/xguard-nav-logo.svg";
 static DEFAULT_MAIN_LOGO_URL: &str = "/svg/logo-xguard-white.svg";
+static SETTINGS_WRITE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Settings the Edge (proxy) shows on its public pages. Password reset needs email delivery, so
 /// it is offered only when the admin allows it and SMTP is configured.
@@ -159,6 +160,7 @@ pub(crate) async fn update_settings(
     Json(mut data): Json<Settings>,
 ) -> ApiResult {
     debug!("User {} updating settings", session.user.username);
+    let _write_guard = SETTINGS_WRITE.lock().await;
 
     // fetch current settings for event
     let before = Settings::get_current_settings();
@@ -179,6 +181,9 @@ pub(crate) async fn update_settings(
         .ldap_bind_password
         .or(before.ldap_bind_password.clone());
     data.validate()?;
+    if data.smtp.oauth_refresh_token.is_some() {
+        data.smtp.oauth_refresh_token = Settings::get_current_settings().smtp.oauth_refresh_token;
+    }
     // clone for event
     let after = data.clone();
 
@@ -312,6 +317,7 @@ pub async fn patch_settings(
     Json(mut data): Json<SettingsPatch>,
 ) -> ApiResult {
     debug!("Admin {} is patching settings", session.user.username);
+    let _write_guard = SETTINGS_WRITE.lock().await;
     let mut settings = Settings::get_current_settings();
     // Keep the pre-patch settings for validation and event reporting.
     let before = settings.clone();
@@ -323,6 +329,10 @@ pub async fn patch_settings(
     crate::mail::xoauth2::protect_settings(&before.smtp, &mut settings.smtp);
     settings.invalidate_ldap_sync_status(&before);
     settings.validate_against(&before)?;
+    if settings.smtp.oauth_refresh_token.is_some() {
+        settings.smtp.oauth_refresh_token =
+            Settings::get_current_settings().smtp.oauth_refresh_token;
+    }
 
     // clone for event
     let after = settings.clone();
