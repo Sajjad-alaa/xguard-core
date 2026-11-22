@@ -463,6 +463,7 @@ async fn next_public_settings_broadcast(
                     display_password_reset,
                     display_download_step,
                     public_url,
+                    ..
                 }) => {
                     return PublicSettingsBroadcast {
                         display_password_reset,

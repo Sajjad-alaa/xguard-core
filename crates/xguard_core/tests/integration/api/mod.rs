@@ -3,6 +3,7 @@ mod api_tokens;
 mod auth;
 mod client_settings;
 mod common;
+pub(crate) use common::make_test_client;
 mod component_setup;
 mod core_certs;
 mod device_posture;

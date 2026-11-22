@@ -192,6 +192,17 @@ pub struct EnrollmentDeviceAddedMetadata {
 }
 
 #[derive(Serialize)]
+pub struct EnrollmentTokenStoredInDirectoryMetadata {
+    pub user: UserNoSecrets,
+    pub attribute: String,
+}
+
+#[derive(Serialize)]
+pub struct DirectoryEnrollmentFailedMetadata {
+    pub reason: String,
+}
+
+#[derive(Serialize)]
 pub struct EnrollmentTokenMetadata {
     pub user: UserNoSecrets,
 }

@@ -623,6 +623,7 @@ async fn test_broadcast_public_settings_reaches_proxy(_: PgPoolOptions, options:
             display_password_reset: false,
             display_download_step: false,
             public_url: Some("https://edge.example.com".to_owned()),
+            directory_enrollment: false,
         })
         .await
         .expect("failed to send BroadcastPublicSettings control message");

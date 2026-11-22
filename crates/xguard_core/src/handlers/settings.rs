@@ -39,6 +39,7 @@ pub fn edge_public_settings(settings: &Settings, client: &ClientSettings) -> Pub
         display_password_reset: client.display_password_reset && settings.smtp_configured(),
         display_download_step: client.display_download_step,
         public_url: settings.configured_public_proxy_url(),
+        directory_enrollment: settings.directory_enrollment_enabled(),
     }
 }
 
@@ -50,6 +51,7 @@ pub(crate) fn public_settings_message(public_settings: PublicSettings) -> ProxyC
         display_password_reset: public_settings.display_password_reset,
         display_download_step: public_settings.display_download_step,
         public_url: public_settings.public_url,
+        directory_enrollment: public_settings.directory_enrollment,
     }
 }
 

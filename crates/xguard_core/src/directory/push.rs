@@ -37,6 +37,7 @@ enum Command {
     UserChanged(Id),
     UserRenamed { id: Id, old_username: String },
     UserDeleted { username: String },
+    ClearEnrollmentToken { username: String },
     SyncNow,
 }
 
@@ -111,6 +112,19 @@ pub fn on_api_event(event: &ApiEventType) {
             }
         }
         _ => {}
+    }
+}
+
+/// Queues removing the enrollment token stored in `username`'s directory entry, once the user
+/// has finished enrollment (see [`super::enrollment`]).
+pub fn enrollment_completed(username: &str) {
+    if Settings::get_current_settings()
+        .ldap_enrollment_token_attribute()
+        .is_some()
+    {
+        send(Command::ClearEnrollmentToken {
+            username: username.to_owned(),
+        });
     }
 }
 
@@ -295,6 +309,7 @@ async fn worker_loop(
         let mut users = BTreeSet::new();
         let mut renamed: Vec<(Id, String)> = Vec::new();
         let mut deleted = Vec::new();
+        let mut cleared = Vec::new();
         let mut sync = false;
         let mut take = |command| match command {
             Command::UserChanged(id) => {
@@ -302,6 +317,7 @@ async fn worker_loop(
             }
             Command::UserRenamed { id, old_username } => renamed.push((id, old_username)),
             Command::UserDeleted { username } => deleted.push(username),
+            Command::ClearEnrollmentToken { username } => cleared.push(username),
             Command::SyncNow => sync = true,
         };
         if let Some(command) = command {
@@ -322,6 +338,13 @@ async fn worker_loop(
             if let Err(err) = delete_user(&username).await {
                 warn!("Failed to delete {username} from the directory: {err}");
                 failed = true;
+            }
+        }
+        for username in cleared {
+            if let Err(err) = super::enrollment::clear_token(&username).await {
+                warn!(
+                    "Failed to remove the enrollment token of {username} from the directory: {err}"
+                );
             }
         }
         for (id, old_username) in renamed {

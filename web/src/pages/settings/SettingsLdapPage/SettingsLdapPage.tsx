@@ -24,6 +24,7 @@ import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
+import { useApp } from '../../../shared/hooks/useApp';
 import { getSettingsQueryOptions } from '../../../shared/query';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
@@ -88,8 +89,39 @@ export const SettingsLdapPage = () => {
 // Matches the server's minimum (see MIN_SYNC_INTERVAL).
 const ldap_minimum_sync_interval = 60;
 
-// Mirrors FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS on the backend.
-const forbiddenEnrollmentTokenAttrs = ['userpassword', 'cn', 'uid', 'sambantpassword'];
+// Mirrors FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS on the backend (lowercase).
+export const forbiddenEnrollmentTokenAttrs = [
+  'cn',
+  'sambantpassword',
+  'uid',
+  'userpassword',
+  'unicodepwd',
+  'objectclass',
+  'mail',
+  'sn',
+  'givenname',
+  'mobile',
+  'samaccountname',
+  'userprincipalname',
+  'member',
+  'memberof',
+  'uniquemember',
+  'memberuid',
+  'useraccountcontrol',
+  'pwdaccountlockedtime',
+];
+
+/** Whether `attr` may hold enrollment tokens (empty means "not configured"). */
+export const isAllowedEnrollmentTokenAttr = (
+  attr: string | null | undefined,
+  usedAttrs: Array<string | null | undefined> = [],
+): boolean => {
+  const value = attr?.trim().toLowerCase() ?? '';
+  if (value.length === 0) return true;
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(value)) return false;
+  if (forbiddenEnrollmentTokenAttrs.includes(value)) return false;
+  return !usedAttrs.some((used) => used?.trim().toLowerCase() === value);
+};
 
 const formSchema = z
   .object({
@@ -139,8 +171,13 @@ const formSchema = z
       });
     }
     // LDAP attribute names are case-insensitive.
-    const tokenAttr = value.ldap_enrollment_token_attr?.toLowerCase();
-    if (isPresent(tokenAttr) && forbiddenEnrollmentTokenAttrs.includes(tokenAttr)) {
+    if (
+      !isAllowedEnrollmentTokenAttr(value.ldap_enrollment_token_attr, [
+        value.ldap_username_attr,
+        value.ldap_user_rdn_attr,
+        value.ldap_member_attr,
+      ])
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['ldap_enrollment_token_attr'],
@@ -160,6 +197,7 @@ const csvToArray = (value: string | null): string[] =>
     : [];
 
 const PageForm = () => {
+  const smtpEnabled = useApp((s) => s.appInfo.smtp_enabled);
   const { data: settings } = useSuspenseQuery(getSettingsQueryOptions);
 
   const defaultValues = useMemo((): FormFields => {
@@ -649,6 +687,51 @@ const PageForm = () => {
                   </form.AppField>
                 </Fold>
               </>
+            )}
+          </form.Subscribe>
+        </MarkedSection>
+        <Divider spacing={ThemeSpacing.Xl2} />
+        <MarkedSection icon={IconKind.Enrollment}>
+          <MarkedSectionHeader
+            title={m.settings_ldap_section_remote_enrollment_title()}
+            description={m.settings_ldap_section_remote_enrollment_description()}
+            warning={
+              requiredFieldsFilled
+                ? undefined
+                : m.settings_ldap_remote_enrollment_warning_not_configured()
+            }
+          />
+          <form.AppField name="ldap_remote_enrollment_enabled">
+            {(field) => (
+              <field.FormInteractiveBlock
+                variant={'checkbox'}
+                value={true}
+                disabled={!requiredFieldsFilled}
+                title={m.settings_ldap_label_remote_enrollment_enabled()}
+                content={m.settings_ldap_helper_remote_enrollment_enabled()}
+              />
+            )}
+          </form.AppField>
+          <form.Subscribe selector={(s) => s.values.ldap_remote_enrollment_enabled}>
+            {(remoteEnrollmentEnabled) => (
+              <Fold open={remoteEnrollmentEnabled && requiredFieldsFilled}>
+                <SizedBox height={ThemeSpacing.Xl} />
+                <form.AppField name="ldap_remote_enrollment_send_invite">
+                  {(field) => (
+                    <field.FormInteractiveBlock
+                      variant={'checkbox'}
+                      value={true}
+                      disabled={!smtpEnabled}
+                      title={m.settings_ldap_label_remote_enrollment_send_invite()}
+                      content={
+                        smtpEnabled
+                          ? m.settings_ldap_helper_remote_enrollment_send_invite()
+                          : m.settings_ldap_remote_enrollment_warning_no_smtp()
+                      }
+                    />
+                  )}
+                </form.AppField>
+              </Fold>
             )}
           </form.Subscribe>
         </MarkedSection>

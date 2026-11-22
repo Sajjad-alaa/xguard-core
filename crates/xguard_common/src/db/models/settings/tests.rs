@@ -364,6 +364,7 @@ fn test_validate_requires_smtp_for_ldap_remote_enrollment() {
     let mut settings = Settings {
         xguard_url: "https://xguard.example.com".into(),
         ldap_remote_enrollment_enabled: true,
+        ldap_remote_enrollment_send_invite: true,
         ..Default::default()
     };
 
@@ -372,6 +373,55 @@ fn test_validate_requires_smtp_for_ldap_remote_enrollment() {
         Err(SettingsValidationError::CannotEnableSmtpDependents(dependents))
             if dependents == vec![SmtpDependent::LdapRemoteEnrollment]
     ));
+}
+
+/// Remote enrollment without invitations (directory password on Edge, tokens stored in the
+/// directory) needs no SMTP, only LDAP.
+#[test]
+fn test_validate_remote_enrollment_without_invites_needs_no_smtp() {
+    let mut settings = Settings {
+        xguard_url: "https://xguard.example.com".into(),
+        ldap_remote_enrollment_enabled: true,
+        ..Default::default()
+    };
+    assert!(matches!(
+        settings.validate(),
+        Err(SettingsValidationError::LdapRequiredForRemoteEnrollment)
+    ));
+}
+
+#[test]
+fn test_validate_rejects_unsafe_enrollment_token_attributes() {
+    for attr in [
+        "userPassword",
+        "UNICODEPWD",
+        "mail",
+        "memberOf",
+        "x)(y",
+        "1abc",
+        "token attr",
+        "uidNumberX",
+    ] {
+        let mut settings = Settings {
+            xguard_url: "https://xguard.example.com".into(),
+            ldap_enrollment_token_attr: Some(attr.into()),
+            ldap_username_attr: Some("uidNumberX".into()),
+            ..Default::default()
+        };
+        assert!(
+            matches!(
+                settings.validate(),
+                Err(SettingsValidationError::ForbiddenLdapEnrollmentTokenAttr(_))
+            ),
+            "{attr}"
+        );
+    }
+    let mut settings = Settings {
+        xguard_url: "https://xguard.example.com".into(),
+        ldap_enrollment_token_attr: Some("xguardEnrollmentToken".into()),
+        ..Default::default()
+    };
+    assert!(settings.validate().is_ok());
 }
 
 #[test]
@@ -394,6 +444,7 @@ fn test_validate_lists_all_smtp_dependents() {
     let mut settings = Settings {
         xguard_url: "https://xguard.example.com".into(),
         ldap_remote_enrollment_enabled: true,
+        ldap_remote_enrollment_send_invite: true,
         gateway_disconnect_notifications_enabled: true,
         ..Default::default()
     };
@@ -401,7 +452,7 @@ fn test_validate_lists_all_smtp_dependents() {
     let error = settings.validate().unwrap_err();
     assert_eq!(
         error.to_string(),
-        "SMTP is required by: LDAP remote enrollment, gateway disconnect notifications. Configure SMTP before enabling these features."
+        "SMTP is required by: LDAP remote enrollment invitations, gateway disconnect notifications. Configure SMTP before enabling these features."
     );
     assert!(matches!(
         error,
@@ -418,6 +469,7 @@ fn test_validate_prevents_disabling_smtp_with_dependents() {
     let mut previous = Settings {
         xguard_url: "https://xguard.example.com".into(),
         ldap_remote_enrollment_enabled: true,
+        ldap_remote_enrollment_send_invite: true,
         gateway_disconnect_notifications_enabled: true,
         ..Default::default()
     };
@@ -432,7 +484,7 @@ fn test_validate_prevents_disabling_smtp_with_dependents() {
     let error = settings.validate_against(&previous).unwrap_err();
     assert_eq!(
         error.to_string(),
-        "SMTP is required by: LDAP remote enrollment, gateway disconnect notifications. Disable these features to delete SMTP settings."
+        "SMTP is required by: LDAP remote enrollment invitations, gateway disconnect notifications. Disable these features to delete SMTP settings."
     );
     assert!(matches!(
         error,

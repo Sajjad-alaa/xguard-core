@@ -233,6 +233,7 @@ async fn apply_local(
 ) -> Result<Vec<String>, DirectoryError> {
     let mut errors = Vec::new();
     let mut emitted = Vec::new();
+    let mut created = Vec::new();
     let mut touched: HashSet<String> = HashSet::new();
     let mut usermgr = UserManager::new();
     let mut tx = pool.begin().await?;
@@ -268,6 +269,7 @@ async fn apply_local(
             }
             Ok(user.save(&mut *conn).await?)
         }) {
+            created.push(user.clone());
             emitted.push(LdapSyncEventType::UserCreated { user });
         }
     }
@@ -389,6 +391,15 @@ async fn apply_local(
     usermgr.send(gateway_tx);
     for event in emitted {
         let _ = events.send(event);
+    }
+    // Invitations go out in the background, so the sync never waits for the mail server.
+    if !created.is_empty() && super::enrollment::invites_enabled(&Settings::get_current_settings())
+    {
+        let pool = pool.clone();
+        let events = events.clone();
+        tokio::spawn(async move {
+            super::enrollment::send_invites(&pool, created, &events).await;
+        });
     }
     Ok(errors)
 }

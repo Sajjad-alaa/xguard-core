@@ -5,11 +5,14 @@
 //! - [`sync`]: a full reconcile at the configured interval (two-way sync), on demand, or as a
 //!   dry run. The authoritative side wins; see [`plan`] for the rules and the safety limits.
 //! - [`login`]: users can sign in with their directory password.
+//! - [`enrollment`]: secure remote enrollment of directory users (directory password on Edge,
+//!   tokens stored in a directory attribute, invitations).
 //!
 //! The settings are the `ldap_*` fields of [`xguard_common::db::models::Settings`].
 
 pub mod client;
 pub mod config;
+pub mod enrollment;
 pub mod login;
 pub mod model;
 pub mod plan;

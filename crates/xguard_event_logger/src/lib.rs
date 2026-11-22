@@ -685,6 +685,16 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     EventType::EnrollmentTokenAdded,
                     serde_json::to_value(EnrollmentTokenMetadata { user: user.into() }).ok(),
                 ),
+                ApiEventType::EnrollmentTokenStoredInDirectory { user, attribute } => (
+                    EventType::EnrollmentTokenStoredInDirectory,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::EnrollmentTokenStoredInDirectoryMetadata {
+                            user: user.into(),
+                            attribute,
+                        },
+                    )
+                    .ok(),
+                ),
                 ApiEventType::ClientSettingsUpdated { before, after } => (
                     EventType::EnterpriseSettingsUpdated,
                     serde_json::to_value(
@@ -992,6 +1002,9 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 LdapSyncEventType::OutboundGroupMemberRemoved { group, username } => Some(format!(
                     "XGuard removed user {username} from LDAP group {group}"
                 )),
+                LdapSyncEventType::EnrollmentInviteSent { user } => Some(format!(
+                    "Sent an enrollment invitation to {user}, added by the LDAP sync"
+                )),
             };
             let (event_type, metadata) = match event {
                 LdapSyncEventType::UserCreated { user } => (
@@ -1065,6 +1078,10 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 LdapSyncEventType::OutboundGroupMemberRemoved { group, username } => (
                     EventType::LdapSyncOutboundGroupMemberRemoved,
                     Some(serde_json::json!({ "group": group, "username": username })),
+                ),
+                LdapSyncEventType::EnrollmentInviteSent { user } => (
+                    EventType::LdapSyncEnrollmentInviteSent,
+                    serde_json::to_value(UserMetadata { user: user.into() }).ok(),
                 ),
             };
             (module, event_type, description, metadata)
@@ -1236,6 +1253,18 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                 xguard_core::events::EnrollmentEvent::EnrollmentStarted => {
                     (EventType::EnrollmentStarted, None)
                 }
+                xguard_core::events::EnrollmentEvent::DirectoryEnrollmentStarted => {
+                    (EventType::DirectoryEnrollmentStarted, None)
+                }
+                xguard_core::events::EnrollmentEvent::DirectoryEnrollmentFailed { reason } => (
+                    EventType::DirectoryEnrollmentFailed,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::DirectoryEnrollmentFailedMetadata {
+                            reason,
+                        },
+                    )
+                    .ok(),
+                ),
                 xguard_core::events::EnrollmentEvent::EnrollmentCompleted => {
                     (EventType::EnrollmentCompleted, None)
                 }
