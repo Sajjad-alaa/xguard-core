@@ -66,6 +66,9 @@ export const ActivityLogEventType = {
   EnrollmentStarted: 'enrollment_started',
   EnrollmentDeviceAdded: 'enrollment_device_added',
   EnrollmentCompleted: 'enrollment_completed',
+  EnrollmentTokenStoredInDirectory: 'enrollment_token_stored_in_directory',
+  DirectoryEnrollmentStarted: 'directory_enrollment_started',
+  DirectoryEnrollmentFailed: 'directory_enrollment_failed',
 
   PasswordResetRequested: 'password_reset_requested',
   PasswordResetStarted: 'password_reset_started',
@@ -92,6 +95,7 @@ export const ActivityLogEventType = {
   SettingsUpdatedPartial: 'settings_updated_partial',
   SettingsDefaultBrandingRestored: 'settings_default_branding_restored',
   EnterpriseSettingsUpdated: 'enterprise_settings_updated',
+  SmtpOAuthConnected: 'smtp_oauth_connected',
 
   GroupsBulkAssigned: 'groups_bulk_assigned',
   GroupAdded: 'group_added',
@@ -164,6 +168,7 @@ export const ActivityLogEventType = {
   LdapSyncOutboundUserDisabled: 'ldap_sync_outbound_user_disabled',
   LdapSyncOutboundGroupMemberAdded: 'ldap_sync_outbound_group_member_added',
   LdapSyncOutboundGroupMemberRemoved: 'ldap_sync_outbound_group_member_removed',
+  LdapSyncEnrollmentInviteSent: 'ldap_sync_enrollment_invite_sent',
 
   OidcDirectorySyncUserCreated: 'oidc_directory_sync_user_created',
   OidcDirectorySyncUserDeleted: 'oidc_directory_sync_user_deleted',

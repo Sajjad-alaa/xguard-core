@@ -23,6 +23,9 @@ use xguard_core::{
     device_policy::{
         ADMIN_DEVICE_MANAGEMENT_MSG, enrollment_may_create_device, token_issued_by_other_admin,
     },
+    directory::enrollment::{
+        self as directory_enrollment, EnrollmentError as DirectoryEnrollmentError,
+    },
     events::{
         ApiEvent, ApiEventType, BidiRequestContext, BidiStreamEvent, BidiStreamEventType,
         EnrollmentEvent, LdapSyncEventType,
@@ -48,7 +51,7 @@ use xguard_proto::{
         EnrollmentStartRequest, EnrollmentStartResponse, ExistingDevice, InitialUserInfo,
         MfaMethod, NewDevice, RegisterMobileAuthRequest,
     },
-    proxy::{CoreError, CoreErrorCode},
+    proxy::{CoreError, CoreErrorCode, DirectoryEnrollmentRequest, DirectoryEnrollmentResponse},
 };
 
 use super::mfa_setup::RecoveryCodesPolicy;
@@ -333,6 +336,96 @@ impl EnrollmentServer {
         }
     }
 
+    /// Remote enrollment of a directory user with their directory password, from the
+    /// enrollment portal (see [`xguard_core::directory::enrollment`]).
+    ///
+    /// Answers with a fresh enrollment token, which Edge uses to start enrollment as usual.
+    /// Earlier unused enrollment tokens of the user stop working. Refusals say only "invalid
+    /// username or password", so the portal cannot be used to probe for accounts; the reason
+    /// goes to the log and, for known accounts, to the activity log.
+    #[instrument(skip_all)]
+    pub(crate) async fn directory_enrollment(
+        &self,
+        request: DirectoryEnrollmentRequest,
+        info: Option<xguard_proto::proxy::DeviceInfo>,
+    ) -> Result<DirectoryEnrollmentResponse, CoreError> {
+        let (ip, user_agent) = parse_client_ip_agent(&info).map_err(Status::internal)?;
+        let mut known_user = None;
+        let result = directory_enrollment::authenticate(
+            &self.pool,
+            &request.username,
+            &request.password,
+            &mut known_user,
+        )
+        .await;
+        let user = match result {
+            Ok(authenticated) => authenticated.user,
+            Err(err) => {
+                warn!(
+                    "Directory enrollment of {} from {ip} refused: {err}",
+                    request.username.trim()
+                );
+                if let Some(user) = known_user {
+                    let context = BidiRequestContext::new(user.id, user.username, ip, user_agent);
+                    let _ = self.emit_event(
+                        context,
+                        EnrollmentEvent::DirectoryEnrollmentFailed {
+                            reason: err.to_string(),
+                        },
+                    );
+                }
+                return Err(match err {
+                    DirectoryEnrollmentError::Disabled => Status::failed_precondition(
+                        "enrollment with directory credentials is disabled",
+                    )
+                    .into(),
+                    DirectoryEnrollmentError::Throttled => {
+                        Status::resource_exhausted("too many attempts, try again later").into()
+                    }
+                    DirectoryEnrollmentError::Directory(_)
+                    | DirectoryEnrollmentError::Database(_) => {
+                        CoreError::internal("the directory could not be reached")
+                    }
+                    DirectoryEnrollmentError::Rejected
+                    | DirectoryEnrollmentError::UserDisabled
+                    | DirectoryEnrollmentError::AlreadyEnrolled => {
+                        CoreError::unauthenticated("invalid username or password")
+                    }
+                });
+            }
+        };
+
+        let settings = Settings::get_current_settings();
+        let mut transaction = self.pool.begin().await.map_err(|err| {
+            error!("Failed to begin a transaction: {err}");
+            CoreError::internal("unexpected error")
+        })?;
+        Token::delete_unused_user_tokens_of_type(&mut *transaction, user.id, ENROLLMENT_TOKEN_TYPE)
+            .await
+            .map_err(Status::from)?;
+        let token = Token::new(
+            user.id,
+            settings.default_admin_id,
+            Some(user.email.clone()),
+            settings.enrollment_token_timeout().as_secs(),
+            Some(ENROLLMENT_TOKEN_TYPE.to_owned()),
+        );
+        token.save(&mut *transaction).await.map_err(Status::from)?;
+        transaction.commit().await.map_err(|err| {
+            error!("Failed to commit the enrollment token: {err}");
+            CoreError::internal("unexpected error")
+        })?;
+        info!(
+            "Directory user {} started remote enrollment from {ip}",
+            user.username
+        );
+        let context = BidiRequestContext::new(user.id, user.username, ip, user_agent);
+        if let Err(err) = self.emit_event(context, EnrollmentEvent::DirectoryEnrollmentStarted) {
+            error!("Failed to send event. Reason: {err}");
+        }
+        Ok(DirectoryEnrollmentResponse { token: token.id })
+    }
+
     #[instrument(skip_all)]
     pub(crate) async fn register_mobile_auth(
         &self,
@@ -587,6 +680,10 @@ impl EnrollmentServer {
         })?;
 
         info!("User {} activated", user.username);
+        if user.from_ldap {
+            // A token stored in the directory for this user is no longer needed.
+            xguard_core::directory::push::enrollment_completed(&user.username);
+        }
 
         // Prepare event context and push the event
         let (ip, user_agent) = parse_client_ip_agent(&req_device_info).map_err(Status::internal)?;

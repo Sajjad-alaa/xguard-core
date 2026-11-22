@@ -192,6 +192,17 @@ pub struct EnrollmentDeviceAddedMetadata {
 }
 
 #[derive(Serialize)]
+pub struct EnrollmentTokenStoredInDirectoryMetadata {
+    pub user: UserNoSecrets,
+    pub attribute: String,
+}
+
+#[derive(Serialize)]
+pub struct DirectoryEnrollmentFailedMetadata {
+    pub reason: String,
+}
+
+#[derive(Serialize)]
 pub struct EnrollmentTokenMetadata {
     pub user: UserNoSecrets,
 }
@@ -712,4 +723,10 @@ pub struct DevicePostureCheckMetadata {
     pub device: Device<Id>,
     pub facts: Option<crate::posture::PostureFacts>,
     pub failed_checks: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct SmtpOAuthConnectedMetadata {
+    pub provider: String,
+    pub sender: String,
 }

@@ -51,8 +51,7 @@ pub async fn get_app_info(State(appstate): State<AppState>, _session: SessionInf
     let networks = WireguardNetwork::all(&appstate.pool).await?;
 
     let settings = Settings::get_current_settings();
-    // XOAUTH2 SMTP needs the Microsoft OAuth2 integration, which XGuard does not include.
-    let smtp_enabled = settings.smtp_configured() && !settings.smtp.is_xoauth2();
+    let smtp_enabled = settings.smtp_configured();
 
     let res = AppInfo {
         network_present: !networks.is_empty(),

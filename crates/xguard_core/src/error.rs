@@ -179,12 +179,16 @@ impl From<TemplateError> for WebError {
 impl From<MailError> for WebError {
     fn from(err: MailError) -> Self {
         match err {
-            MailError::SmtpNotConfigured => Self::SmtpNotConfigured,
+            MailError::SmtpNotConfigured
+            | MailError::OAuth2(crate::mail::xoauth2::OAuthError::NotConfigured(_)) => {
+                Self::SmtpNotConfigured
+            }
             MailError::Sqlx(err) => Self::DbError(err.to_string()),
             MailError::Lettre(_)
             | MailError::Address(_)
             | MailError::Smtp(_)
-            | MailError::InvalidPort(_) => Self::MailSendFailed,
+            | MailError::InvalidPort(_)
+            | MailError::OAuth2(_) => Self::MailSendFailed,
         }
     }
 }

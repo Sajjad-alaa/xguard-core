@@ -77,7 +77,7 @@ pub enum SmtpDependent {
 impl fmt::Display for SmtpDependent {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::LdapRemoteEnrollment => "LDAP remote enrollment",
+            Self::LdapRemoteEnrollment => "LDAP remote enrollment invitations",
             Self::GatewayDisconnectNotifications => "gateway disconnect notifications",
         })
     }
@@ -113,9 +113,40 @@ pub enum SettingsValidationError {
     ForbiddenLdapEnrollmentTokenAttr(String),
 }
 
-/// Attributes holding a credential or the entry's identifier, which a token must not overwrite.
-pub const FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS: [&str; 4] =
-    ["cn", "sambaNTPassword", "uid", "userPassword"];
+/// Attributes holding a credential, the entry's identity, its account status or attributes the
+/// directory sync manages, which a token must never overwrite. Mirrored in the web UI.
+pub const FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS: [&str; 18] = [
+    "cn",
+    "sambaNTPassword",
+    "uid",
+    "userPassword",
+    "unicodePwd",
+    "objectClass",
+    "mail",
+    "sn",
+    "givenName",
+    "mobile",
+    "sAMAccountName",
+    "userPrincipalName",
+    "member",
+    "memberOf",
+    "uniqueMember",
+    "memberUid",
+    "userAccountControl",
+    "pwdAccountLockedTime",
+];
+
+/// Whether `name` is a valid LDAP attribute name: a letter followed by letters, digits and
+/// hyphens (RFC 4512), at most 64 characters.
+#[must_use]
+pub fn is_valid_ldap_attribute_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    name.len() <= 64
+        && chars
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
 
 #[derive(Error, Debug)]
 pub enum SettingsInitializationError {
@@ -674,7 +705,9 @@ impl Settings {
 
         let mut smtp_dependents = Vec::new();
         if !self.smtp_configured() {
-            if self.ldap_remote_enrollment_enabled {
+            // Remote enrollment itself works without mail (directory password on Edge, tokens
+            // stored in the directory); only the invitations need SMTP.
+            if self.ldap_remote_enrollment_enabled && self.ldap_remote_enrollment_send_invite {
                 smtp_dependents.push(SmtpDependent::LdapRemoteEnrollment);
             }
             if self.gateway_disconnect_notifications_enabled {
@@ -703,15 +736,27 @@ impl Settings {
         }
 
         // LDAP attribute names are case-insensitive.
-        if let Some(attr) = self.ldap_enrollment_token_attribute()
-            && let Some(forbidden) = FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS
-                .iter()
-                .find(|forbidden| forbidden.eq_ignore_ascii_case(attr.trim()))
-        {
-            warn!("Cannot use LDAP attribute {forbidden} to store enrollment tokens.");
-            return Err(SettingsValidationError::ForbiddenLdapEnrollmentTokenAttr(
-                attr.to_owned(),
-            ));
+        if let Some(attr) = self.ldap_enrollment_token_attribute() {
+            let attr = attr.trim();
+            let configured = [
+                self.ldap_username_attr.as_deref(),
+                self.ldap_user_rdn_attr.as_deref(),
+                self.ldap_member_attr.as_deref(),
+            ];
+            if !is_valid_ldap_attribute_name(attr)
+                || FORBIDDEN_LDAP_ENROLLMENT_TOKEN_ATTRS
+                    .iter()
+                    .any(|forbidden| forbidden.eq_ignore_ascii_case(attr))
+                || configured
+                    .into_iter()
+                    .flatten()
+                    .any(|used| used.trim().eq_ignore_ascii_case(attr))
+            {
+                warn!("Cannot use LDAP attribute {attr} to store enrollment tokens.");
+                return Err(SettingsValidationError::ForbiddenLdapEnrollmentTokenAttr(
+                    attr.to_owned(),
+                ));
+            }
         }
 
         Ok(())
@@ -942,16 +987,11 @@ impl Settings {
     }
 
     /// Check if all required SMTP options are configured.
-    /// User & password can be empty for no-auth servers.
     ///
     /// Meant to be used to check if sending emails is enabled in current instance.
     #[must_use]
     pub fn smtp_configured(&self) -> bool {
-        self.smtp.server.is_some()
-            && self.smtp.port.is_some()
-            && self.smtp.sender.is_some()
-            && self.smtp.server != Some(String::new())
-            && self.smtp.sender != Some(String::new())
+        self.smtp.is_configured()
     }
 
     /// Check if all required LDAP options are configured.
@@ -983,6 +1023,12 @@ impl Settings {
         {
             self.ldap_sync_status = LdapSyncStatus::OutOfSync;
         }
+    }
+
+    /// Whether directory users may start enrollment remotely with their directory password.
+    #[must_use]
+    pub fn directory_enrollment_enabled(&self) -> bool {
+        self.ldap_enabled && self.ldap_remote_enrollment_enabled
     }
 
     /// Returns the LDAP attribute used to store enrollment tokens, if one is configured.
@@ -1209,6 +1255,7 @@ impl Settings {
     pub fn edge_public_settings_changed(&self, other: &Self) -> bool {
         self.smtp_configured() != other.smtp_configured()
             || self.public_proxy_url != other.public_proxy_url
+            || self.directory_enrollment_enabled() != other.directory_enrollment_enabled()
     }
 }
 

@@ -1,9 +1,14 @@
 //! In-process mock SMTP server for integration tests.
 //!
-//! [`MockSmtpServer`] speaks just enough of the SMTP dialogue (plaintext, no
-//! authentication) for lettre's `AsyncSmtpTransport` to deliver a message,
-//! captures every delivered message, and can point the current settings at
-//! itself so that `Mail::send()` reaches it.
+//! [`MockSmtpServer`] speaks just enough of the SMTP dialogue (plaintext) for
+//! lettre's `AsyncSmtpTransport` to deliver a message, captures every delivered
+//! message, and can point the current settings at itself so that `Mail::send()`
+//! reaches it.
+//!
+//! Authentication: `AUTH PLAIN` and `AUTH LOGIN` are accepted as they come.
+//! `AUTH XOAUTH2` strings are decoded and recorded ([`MockSmtpServer::xoauth2`]);
+//! once [`MockSmtpServer::accept_xoauth2_token`] was called, only those bearer
+//! tokens are accepted, and others get Gmail's error challenge and `535`.
 //!
 //! Because most mail is sent fire-and-forget (`tokio::spawn`) the delivery
 //! happens after the triggering request returns, so tests should wait for a
@@ -68,6 +73,16 @@ impl CapturedMail {
 pub struct MockSmtpServer {
     addr: SocketAddr,
     received: Arc<Mutex<Vec<CapturedMail>>>,
+    auth: Arc<Mutex<AuthState>>,
+}
+
+/// What the server knows about `AUTH XOAUTH2`.
+#[derive(Debug, Default)]
+struct AuthState {
+    /// Decoded XOAUTH2 initial responses, accepted or not.
+    xoauth2: Vec<String>,
+    /// When `Some`, the only bearer tokens accepted.
+    accepted: Option<Vec<String>>,
 }
 
 impl MockSmtpServer {
@@ -83,18 +98,42 @@ impl MockSmtpServer {
         debug!("Mock SMTP server listening on {addr}");
 
         let received = Arc::new(Mutex::new(Vec::new()));
+        let auth = Arc::new(Mutex::new(AuthState::default()));
         let received_bg = Arc::clone(&received);
+        let auth_bg = Arc::clone(&auth);
         tokio::spawn(async move {
             loop {
                 let Ok((stream, _)) = listener.accept().await else {
                     return;
                 };
                 let received_conn = Arc::clone(&received_bg);
-                tokio::spawn(handle_connection(stream, received_conn));
+                let auth_conn = Arc::clone(&auth_bg);
+                tokio::spawn(handle_connection(stream, received_conn, auth_conn));
             }
         });
 
-        Self { addr, received }
+        Self {
+            addr,
+            received,
+            auth,
+        }
+    }
+
+    /// Accept `token` as an XOAUTH2 bearer token (and refuse tokens not accepted this way).
+    pub fn accept_xoauth2_token(&self, token: &str) {
+        self.auth
+            .lock()
+            .unwrap()
+            .accepted
+            .get_or_insert_with(Vec::new)
+            .push(token.to_owned());
+    }
+
+    /// The decoded `AUTH XOAUTH2` strings received so far
+    /// (`user=<user>\x01auth=Bearer <token>\x01\x01`).
+    #[must_use]
+    pub fn xoauth2(&self) -> Vec<String> {
+        self.auth.lock().unwrap().xoauth2.clone()
     }
 
     /// Address the server is listening on.
@@ -227,7 +266,34 @@ fn extract_address(line: &str) -> String {
 }
 
 /// Handle a single SMTP connection, recording any delivered message.
-async fn handle_connection(stream: TcpStream, received: Arc<Mutex<Vec<CapturedMail>>>) {
+/// Checks an `AUTH XOAUTH2` initial response; `true` when it is accepted.
+fn check_xoauth2(auth: &Mutex<AuthState>, encoded: &str) -> bool {
+    use base64::{Engine, prelude::BASE64_STANDARD};
+
+    let decoded = BASE64_STANDARD
+        .decode(encoded.trim())
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .unwrap_or_default();
+    let token = decoded
+        .split('\x01')
+        .find_map(|part| part.strip_prefix("auth=Bearer "))
+        .unwrap_or_default()
+        .to_owned();
+    let mut auth = auth.lock().unwrap();
+    auth.xoauth2.push(decoded);
+    !token.is_empty()
+        && auth
+            .accepted
+            .as_ref()
+            .is_none_or(|accepted| accepted.contains(&token))
+}
+
+async fn handle_connection(
+    stream: TcpStream,
+    received: Arc<Mutex<Vec<CapturedMail>>>,
+    auth: Arc<Mutex<AuthState>>,
+) {
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
@@ -247,8 +313,54 @@ async fn handle_connection(stream: TcpStream, received: Arc<Mutex<Vec<CapturedMa
         }
         let upper = line.trim_end().to_ascii_uppercase();
 
-        if upper.starts_with("EHLO") || upper.starts_with("HELO") {
+        if upper.starts_with("EHLO") {
+            let _ = writer
+                .write_all(b"250-localhost\r\n250 AUTH PLAIN LOGIN XOAUTH2\r\n")
+                .await;
+        } else if upper.starts_with("HELO") {
             let _ = writer.write_all(b"250 localhost\r\n").await;
+        } else if upper.starts_with("AUTH XOAUTH2") {
+            let initial = line.split_whitespace().nth(2).map(str::to_owned);
+            let encoded = if let Some(initial) = initial {
+                initial
+            } else {
+                let _ = writer.write_all(b"334 \r\n").await;
+                line.clear();
+                if reader.read_line(&mut line).await.unwrap_or(0) == 0 {
+                    return;
+                }
+                line.trim().to_owned()
+            };
+            if check_xoauth2(&auth, &encoded) {
+                let _ = writer.write_all(b"235 2.7.0 Accepted\r\n").await;
+            } else {
+                // Gmail answers a bad token with an error challenge, then 535 after the
+                // client's empty reply.
+                let _ = writer
+                    .write_all(b"334 eyJzdGF0dXMiOiI0MDEiLCJzY2hlbWVzIjoiYmVhcmVyIn0=\r\n")
+                    .await;
+                line.clear();
+                if reader.read_line(&mut line).await.unwrap_or(0) == 0 {
+                    return;
+                }
+                let _ = writer
+                    .write_all(b"535 5.7.8 Username and Password not accepted\r\n")
+                    .await;
+            }
+        } else if upper.starts_with("AUTH LOGIN") {
+            let _ = writer.write_all(b"334 VXNlcm5hbWU6\r\n").await;
+            line.clear();
+            if reader.read_line(&mut line).await.unwrap_or(0) == 0 {
+                return;
+            }
+            let _ = writer.write_all(b"334 UGFzc3dvcmQ6\r\n").await;
+            line.clear();
+            if reader.read_line(&mut line).await.unwrap_or(0) == 0 {
+                return;
+            }
+            let _ = writer.write_all(b"235 2.7.0 Accepted\r\n").await;
+        } else if upper.starts_with("AUTH") {
+            let _ = writer.write_all(b"235 2.7.0 Accepted\r\n").await;
         } else if upper.starts_with("MAIL FROM") {
             from = extract_address(line.trim_end());
             let _ = writer.write_all(b"250 OK\r\n").await;

@@ -432,6 +432,52 @@ impl DirectoryClient {
         }
     }
 
+    /// Writes `value` to `attribute` of the entry `dn`, replacing what is there, or removes the
+    /// attribute when `value` is `None`. Used for enrollment tokens, which are credentials, so
+    /// it is only done over a protected connection.
+    pub async fn write_secret_attribute(
+        &mut self,
+        dn: &str,
+        attribute: &str,
+        value: Option<&str>,
+    ) -> Result<(), DirectoryError> {
+        if !self.config.is_protected() {
+            return Err(DirectoryError::Insecure);
+        }
+        let values = value.map_or_else(HashSet::new, |value| set(&[value]));
+        let mods = vec![Mod::Replace(attribute.as_bytes().to_vec(), values)];
+        match self.ldap.modify(dn, mods).await?.success() {
+            Ok(_) => Ok(()),
+            // Removing an attribute that is not there.
+            Err(err) if value.is_none() && result_code(&err) == Some(NO_SUCH_ATTRIBUTE) => Ok(()),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Reads the values of `attribute` of the entry `dn` (for tests and diagnostics).
+    pub async fn read_attribute(
+        &mut self,
+        dn: &str,
+        attribute: &str,
+    ) -> Result<Vec<String>, DirectoryError> {
+        let (entries, _) = self
+            .ldap
+            .search(dn, Scope::Base, "(objectClass=*)", vec![attribute])
+            .await?
+            .success()?;
+        Ok(entries
+            .into_iter()
+            .map(SearchEntry::construct)
+            .flat_map(|entry| {
+                entry
+                    .attrs
+                    .into_iter()
+                    .filter(|(name, _)| name.eq_ignore_ascii_case(attribute))
+                    .flat_map(|(_, values)| values)
+            })
+            .collect())
+    }
+
     /// The value that names `user` in a group's member list.
     #[must_use]
     pub fn member_value(&self, user: &DirectoryUser) -> String {

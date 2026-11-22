@@ -395,6 +395,7 @@ impl ProxyManager {
                             display_password_reset,
                             display_download_step,
                             public_url,
+                            directory_enrollment,
                         }) => {
                             debug!("Broadcasting PublicSettings to all connected proxies");
                             let msg = CoreResponse {
@@ -404,6 +405,7 @@ impl ProxyManager {
                                         display_password_reset,
                                         display_download_step,
                                         public_url,
+                                        directory_enrollment,
                                     },
                                 )),
                             };

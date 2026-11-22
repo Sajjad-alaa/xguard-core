@@ -955,6 +955,22 @@ impl ProxyHandler {
                     }
                 }
             }
+            // Remote enrollment of a directory user with their directory password.
+            Some(core_request::Payload::DirectoryEnrollment(request)) => {
+                match boxed(
+                    services
+                        .enrollment
+                        .directory_enrollment(request, received.device_info),
+                )
+                .await
+                {
+                    Ok(response) => Some(core_response::Payload::DirectoryEnrollment(response)),
+                    Err(err) => {
+                        debug!("Directory enrollment through Edge refused: {}", err.message);
+                        Some(core_response::Payload::CoreError(err))
+                    }
+                }
+            }
             // rpc AuthCallback (AuthCallbackRequest) returns (AuthCallbackResponse)
             Some(core_request::Payload::AuthCallback(request)) => {
                 match boxed(services.openid.auth_callback(request, received.device_info)).await {

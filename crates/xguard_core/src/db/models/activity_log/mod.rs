@@ -102,6 +102,9 @@ pub enum EventType {
     EnrollmentStarted,
     EnrollmentDeviceAdded,
     EnrollmentCompleted,
+    EnrollmentTokenStoredInDirectory,
+    DirectoryEnrollmentStarted,
+    DirectoryEnrollmentFailed,
     PasswordResetRequested,
     PasswordResetStarted,
     PasswordResetCompleted,
@@ -114,6 +117,7 @@ pub enum EventType {
     SettingsUpdatedPartial,
     SettingsDefaultBrandingRestored,
     EnterpriseSettingsUpdated,
+    SmtpOAuthConnected,
     // Groups management
     GroupsBulkAssigned,
     GroupAdded,
@@ -180,6 +184,7 @@ pub enum EventType {
     LdapSyncOutboundUserDisabled,
     LdapSyncOutboundGroupMemberAdded,
     LdapSyncOutboundGroupMemberRemoved,
+    LdapSyncEnrollmentInviteSent,
     // OIDC directory sync events
     OidcDirectorySyncUserCreated,
     OidcDirectorySyncUserDeleted,

@@ -120,6 +120,10 @@ import type {
   Settings,
   SettingsEssentials,
   SetupAutoAdoptionResponse,
+  SmtpOAuthCallbackRequest,
+  SmtpOAuthCallbackResponse,
+  SmtpOAuthStartRequest,
+  SmtpOAuthStartResponse,
   SnatBinding,
   SnatBindingInput,
   StartEnrollmentRequest,
@@ -543,6 +547,10 @@ const api = {
   },
   mail: {
     sendTestEmail: (data: { to: string }) => client.post('/mail/test', data),
+    oauthStart: (data: SmtpOAuthStartRequest) =>
+      client.post<SmtpOAuthStartResponse>('/mail/oauth/start', data),
+    oauthCallback: (data: SmtpOAuthCallbackRequest) =>
+      client.post<SmtpOAuthCallbackResponse>('/mail/oauth/callback', data),
   },
   edge: {
     getEdges: () => client.get<EdgeInfo[]>('/proxy'),

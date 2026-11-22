@@ -23,11 +23,11 @@ use xguard_core::directory::{
 
 use crate::common::init_config;
 
-fn ldap_url() -> Option<String> {
+pub(crate) fn ldap_url() -> Option<String> {
     std::env::var("XGUARD_TEST_LDAP_URL").ok()
 }
 
-async fn configure(
+pub(crate) async fn configure(
     pool: &PgPool,
     url: &str,
     directory_wins: bool,
@@ -62,7 +62,7 @@ async fn configure(
     DirectoryConfig::from_settings(&settings).expect("valid directory settings")
 }
 
-fn attributes(username: &str) -> UserAttributes {
+pub(crate) fn attributes(username: &str) -> UserAttributes {
     UserAttributes {
         username: username.into(),
         rdn: username.into(),
@@ -73,7 +73,7 @@ fn attributes(username: &str) -> UserAttributes {
     }
 }
 
-async fn cleanup(client: &mut DirectoryClient, users: &[&str], groups: &[&str]) {
+pub(crate) async fn cleanup(client: &mut DirectoryClient, users: &[&str], groups: &[&str]) {
     for username in users {
         if let Ok(Some(user)) = client.find_user(username).await {
             client.delete(&user.dn).await.unwrap();

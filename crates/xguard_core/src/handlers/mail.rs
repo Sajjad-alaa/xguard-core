@@ -5,7 +5,7 @@ use axum::{
 use chrono::Utc;
 use serde_json::json;
 use sqlx::query_scalar;
-use xguard_common::db::models::{gateway::Gateway, proxy::Proxy};
+use xguard_common::db::models::{Settings, gateway::Gateway, proxy::Proxy};
 
 use thiserror::Error;
 
@@ -16,14 +16,162 @@ use crate::{
     PgPool,
     appstate::AppState,
     auth::{AdminRole, SessionInfo},
+    events::{ApiEvent, ApiEventType, ApiRequestContext},
+    handlers::settings::broadcast_public_settings,
     log_file::read_log_tail,
     mail::{
         Attachment,
         templates::{self, SUPPORT_EMAIL_ADDRESS},
+        xoauth2::{self, OAuthError, Provider, StartRequest},
     },
     server_config,
     support::dump_config,
 };
+
+#[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SmtpOAuthStartResponse {
+    pub authorization_url: String,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SmtpOAuthCallbackRequest {
+    pub state: String,
+    #[serde(default)]
+    pub code: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SmtpOAuthCallbackResponse {
+    pub provider: Provider,
+    pub sender: String,
+}
+
+fn oauth_error_response(err: OAuthError) -> ApiResponse {
+    match err {
+        OAuthError::NotConfigured(_)
+        | OAuthError::Invalid(_)
+        | OAuthError::BadState
+        | OAuthError::Denied(_)
+        | OAuthError::NoRefreshToken => {
+            ApiResponse::new(json!({"msg": err.to_string()}), StatusCode::BAD_REQUEST)
+        }
+        OAuthError::Provider(_) | OAuthError::Http(_) => {
+            ApiResponse::new(json!({"msg": err.to_string()}), StatusCode::BAD_GATEWAY)
+        }
+        OAuthError::Database(db_err) => {
+            error!("SMTP OAuth database error: {db_err}");
+            ApiResponse::new(
+                json!({"msg": "Internal server error"}),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        }
+    }
+}
+
+/// Start server-managed OAuth 2.0 authorization (PKCE) for SMTP XOAUTH2
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/mail/oauth/start",
+    tag = "settings",
+    request_body = StartRequest,
+    responses(
+        (status = 200, description = "Authorization URL for the provider popup.", body = SmtpOAuthStartResponse),
+        (status = 400, description = "Invalid OAuth settings or missing client secret.", body = ApiErrorResponse, example = json!({"msg": "Invalid SMTP OAuth settings: sender email address"})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+    ),
+    security(
+        ("cookie" = [])
+    )
+))]
+pub(crate) async fn smtp_oauth_start(
+    _admin: AdminRole,
+    session: SessionInfo,
+    Json(request): Json<StartRequest>,
+) -> ApiResult {
+    debug!(
+        "Admin {} starting SMTP OAuth flow for provider {:?}",
+        session.user.username, request.provider
+    );
+    let settings = Settings::get_current_settings();
+    match xoauth2::start(session.user.id, request, &settings) {
+        Ok(url) => Ok(ApiResponse::json(
+            SmtpOAuthStartResponse {
+                authorization_url: url.into(),
+            },
+            StatusCode::OK,
+        )),
+        Err(err) => Ok(oauth_error_response(err)),
+    }
+}
+
+/// Finish server-managed OAuth 2.0 authorization and save XOAUTH2 SMTP settings
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/mail/oauth/callback",
+    tag = "settings",
+    request_body = SmtpOAuthCallbackRequest,
+    responses(
+        (status = 200, description = "Mailbox connected for SMTP XOAUTH2.", body = SmtpOAuthCallbackResponse),
+        (status = 400, description = "Invalid or expired state, denied authorization, or missing refresh token.", body = ApiErrorResponse, example = json!({"msg": "The authorization expired or was started by someone else; connect the mailbox again"})),
+        (status = 401, description = "Session is missing or invalid.", body = ApiErrorResponse, example = json!({"msg": "Session is required"})),
+        (status = 403, description = "Requires admin privileges.", body = ApiErrorResponse, example = json!({"msg": "requires privileged access"})),
+        (status = 502, description = "OAuth provider token request failed.", body = ApiErrorResponse, example = json!({"msg": "The provider refused the token request"})),
+        (status = 500, description = "Internal server error.", body = ApiErrorResponse, example = json!({"msg": "Internal server error"})),
+    ),
+    security(
+        ("cookie" = [])
+    )
+))]
+pub(crate) async fn smtp_oauth_callback(
+    _admin: AdminRole,
+    session: SessionInfo,
+    context: ApiRequestContext,
+    State(appstate): State<AppState>,
+    Json(request): Json<SmtpOAuthCallbackRequest>,
+) -> ApiResult {
+    debug!(
+        "Admin {} finishing SMTP OAuth callback",
+        session.user.username
+    );
+    let before = Settings::get_current_settings();
+    match xoauth2::finish(
+        &appstate.pool,
+        session.user.id,
+        &request.state,
+        request.code.as_deref(),
+        request.error.as_deref(),
+    )
+    .await
+    {
+        Ok(connected) => {
+            let after = Settings::get_current_settings();
+            if before.edge_public_settings_changed(&after) {
+                broadcast_public_settings(&appstate.pool, &after, &appstate.proxy_control_tx).await;
+            }
+            appstate.emit_event(ApiEvent {
+                context,
+                event: Box::new(ApiEventType::SmtpOAuthConnected {
+                    provider: connected.provider.name().to_owned(),
+                    sender: connected.sender.clone(),
+                }),
+            })?;
+            Ok(ApiResponse::json(
+                SmtpOAuthCallbackResponse {
+                    provider: connected.provider,
+                    sender: connected.sender,
+                },
+                StatusCode::OK,
+            ))
+        }
+        Err(err) => Ok(oauth_error_response(err)),
+    }
+}
 
 #[derive(Clone, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

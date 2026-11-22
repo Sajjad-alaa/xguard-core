@@ -157,6 +157,10 @@ impl SmtpSettings {
                             .oauth_client_secret
                             .as_ref()
                             .is_some_and(secret_not_empty)
+                        && self
+                            .oauth_refresh_token
+                            .as_ref()
+                            .is_some_and(secret_not_empty)
                 }
             }
     }

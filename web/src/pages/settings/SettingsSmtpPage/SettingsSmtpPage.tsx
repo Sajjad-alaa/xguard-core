@@ -1,5 +1,5 @@
 import './style.scss';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import type { AxiosError } from 'axios';
 import { useMemo, useRef, useState } from 'react';
@@ -105,9 +105,7 @@ const detectActiveCard = (
   return null;
 };
 
-// XOAUTH2 (Google / Microsoft) SMTP needs the OAuth2 token integration, which XGuard does not
-// include, so only password-based and unauthenticated SMTP are offered.
-const AUTH_CARDS: SmtpAuthCardVariant[] = ['none', 'basic'];
+const AUTH_CARDS: SmtpAuthCardVariant[] = ['none', 'basic', 'google', 'microsoft'];
 
 const formSchema = z.object({
   smtp_server: z
@@ -203,8 +201,8 @@ const Content = ({
     [settings],
   );
 
+  const queryClient = useQueryClient();
   const { data: mfaFlows = [] } = useQuery(getMfaFlowsQueryOptions);
-  const oauthLocked = true;
 
   const { mutateAsync: editSettings } = useMutation({
     mutationFn: api.settings.patchSettings,
@@ -248,15 +246,36 @@ const Content = ({
     setModalVariant(variant);
   };
 
-  const openConfigModalGated = (variant: SmtpAuthCardVariant) => {
-    // XOAUTH2 variants are not supported by XGuard.
-    if (variant === 'google' || variant === 'microsoft') return;
-    openConfigModal(variant);
+  const handleOAuthConnected = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['settings'] }),
+      queryClient.invalidateQueries({ queryKey: ['info'] }),
+      queryClient.invalidateQueries({ queryKey: mfaAvailabilityInvalidateKey }),
+    ]);
+    const { data: fresh } = await api.settings.getSettings();
+    form.reset({
+      smtp_encryption: fresh.smtp_encryption,
+      smtp_password: undefined,
+      smtp_port: fresh.smtp_port ?? 587,
+      smtp_sender: fresh.smtp_sender ?? '',
+      smtp_server: fresh.smtp_server ?? '',
+      smtp_user: fresh.smtp_user ?? null,
+      smtp_authentication: fresh.smtp_authentication,
+      smtp_oauth_issuer_url: fresh.smtp_oauth_issuer_url ?? null,
+      smtp_oauth_client_id: fresh.smtp_oauth_client_id ?? null,
+      smtp_oauth_client_secret: undefined,
+      smtp_oauth_refresh_token: undefined,
+      smtp_oauth_tenant_id: fresh.smtp_oauth_tenant_id ?? null,
+      smtp_tls_verify_cert: fresh.smtp_tls_verify_cert,
+    });
+    Snackbar.default(m.settings_msg_saved());
+    setModalVariant(null);
   };
 
   const handleDelete = () => {
     const dependents = [
-      settings.ldap_remote_enrollment_enabled
+      settings.ldap_remote_enrollment_enabled &&
+      settings.ldap_remote_enrollment_send_invite
         ? `- [${m.settings_ldap_section_remote_enrollment_title()}](/settings/ldap)`
         : null,
       settings.gateway_disconnect_notifications_enabled
@@ -313,9 +332,8 @@ const Content = ({
               key={variant}
               variant={variant}
               active={activeCard === variant}
-              locked={oauthLocked && (variant === 'google' || variant === 'microsoft')}
-              onConfigure={() => openConfigModalGated(variant)}
-              onEdit={() => openConfigModalGated(variant)}
+              onConfigure={() => openConfigModal(variant)}
+              onEdit={() => openConfigModal(variant)}
               onSendTestEmail={() => openModal(ModalName.SendTestMail)}
               onDelete={handleDelete}
             />
@@ -344,6 +362,7 @@ const Content = ({
         isOpen={modalVariant !== null}
         variant={modalVariant}
         initialValues={modalInitialValuesRef.current}
+        onOAuthConnected={handleOAuthConnected}
         onApply={async (result: SmtpAuthApplyResult) => {
           const cur = form.state.values;
           const merged: FormFields = {

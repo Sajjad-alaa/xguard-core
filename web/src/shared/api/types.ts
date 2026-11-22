@@ -1463,6 +1463,32 @@ export interface SettingsSMTP {
   smtp_tls_verify_cert: boolean;
 }
 
+export type SmtpOAuthProvider = 'google' | 'microsoft';
+
+export interface SmtpOAuthStartRequest {
+  provider: SmtpOAuthProvider;
+  client_id: string;
+  client_secret?: string;
+  tenant_id?: string;
+  sender: string;
+  tls_verify_cert: boolean;
+}
+
+export interface SmtpOAuthStartResponse {
+  authorization_url: string;
+}
+
+export interface SmtpOAuthCallbackRequest {
+  state: string;
+  code?: string;
+  error?: string;
+}
+
+export interface SmtpOAuthCallbackResponse {
+  provider: SmtpOAuthProvider;
+  sender: string;
+}
+
 export interface SettingsEnrollment {
   enrollment_vpn_step_optional: boolean;
   enrollment_welcome_message: string;

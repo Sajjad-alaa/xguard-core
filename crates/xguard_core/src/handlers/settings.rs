@@ -39,6 +39,7 @@ pub fn edge_public_settings(settings: &Settings, client: &ClientSettings) -> Pub
         display_password_reset: client.display_password_reset && settings.smtp_configured(),
         display_download_step: client.display_download_step,
         public_url: settings.configured_public_proxy_url(),
+        directory_enrollment: settings.directory_enrollment_enabled(),
     }
 }
 
@@ -50,6 +51,7 @@ pub(crate) fn public_settings_message(public_settings: PublicSettings) -> ProxyC
         display_password_reset: public_settings.display_password_reset,
         display_download_step: public_settings.display_download_step,
         public_url: public_settings.public_url,
+        directory_enrollment: public_settings.directory_enrollment,
     }
 }
 
@@ -171,10 +173,8 @@ pub(crate) async fn update_settings(
         .smtp
         .oauth_client_secret
         .or(before.smtp.oauth_client_secret.clone());
-    data.smtp.oauth_refresh_token = data
-        .smtp
-        .oauth_refresh_token
-        .or(before.smtp.oauth_refresh_token.clone());
+    data.smtp.oauth_refresh_token = before.smtp.oauth_refresh_token.clone();
+    crate::mail::xoauth2::protect_settings(&before.smtp, &mut data.smtp);
     data.ldap_bind_password = data
         .ldap_bind_password
         .or(before.ldap_bind_password.clone());
@@ -309,13 +309,18 @@ pub async fn patch_settings(
     State(appstate): State<AppState>,
     session: SessionInfo,
     context: ApiRequestContext,
-    Json(data): Json<SettingsPatch>,
+    Json(mut data): Json<SettingsPatch>,
 ) -> ApiResult {
     debug!("Admin {} is patching settings", session.user.username);
     let mut settings = Settings::get_current_settings();
     // Keep the pre-patch settings for validation and event reporting.
     let before = settings.clone();
+    // Refresh tokens only come from the OAuth callback; ignore caller-supplied non-null tokens.
+    if matches!(data.smtp.oauth_refresh_token, Some(Some(_))) {
+        data.smtp.oauth_refresh_token = None;
+    }
     settings.apply(data);
+    crate::mail::xoauth2::protect_settings(&before.smtp, &mut settings.smtp);
     settings.invalidate_ldap_sync_status(&before);
     settings.validate_against(&before)?;
 

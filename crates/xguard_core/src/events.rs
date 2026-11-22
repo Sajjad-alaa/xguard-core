@@ -215,6 +215,10 @@ pub enum ApiEventType {
         after: Settings,
     },
     SettingsDefaultBrandingRestored,
+    SmtpOAuthConnected {
+        provider: String,
+        sender: String,
+    },
     GroupsBulkAssigned {
         users: Vec<User<Id>>,
         groups: Vec<Group<Id>>,
@@ -329,6 +333,11 @@ pub enum ApiEventType {
     },
     EnrollmentTokenAdded {
         user: User<Id>,
+    },
+    /// An admin stored an enrollment token in the user's directory entry.
+    EnrollmentTokenStoredInDirectory {
+        user: User<Id>,
+        attribute: String,
     },
     ClientConfigurationTokenAdded {
         user: User<Id>,
@@ -460,8 +469,17 @@ pub enum BidiStreamEventType {
 
 #[derive(Debug, EnumCount)]
 pub enum EnrollmentEvent {
+    /// A directory user signed in with their directory password on the enrollment portal and
+    /// got an enrollment token.
+    DirectoryEnrollmentStarted,
+    /// A directory password sign-in on the enrollment portal was refused.
+    DirectoryEnrollmentFailed {
+        reason: String,
+    },
     EnrollmentStarted,
-    EnrollmentDeviceAdded { device: Device<Id> },
+    EnrollmentDeviceAdded {
+        device: Device<Id>,
+    },
     EnrollmentCompleted,
 }
 
@@ -553,21 +571,60 @@ pub enum ProxyConnectionEvent {
 #[derive(Debug, PartialEq, EnumCount)]
 #[allow(clippy::large_enum_variant)]
 pub enum LdapSyncEventType {
-    UserCreated { user: User<Id> },
-    UserDeleted { user: User<Id> },
-    UserModified { before: User<Id>, after: User<Id> },
-    UserEnabled { user: User<Id> },
-    UserDisabled { user: User<Id> },
-    GroupCreated { group: Group<Id> },
-    GroupMemberAdded { group: Group<Id>, user: User<Id> },
-    GroupMemberRemoved { group: Group<Id>, user: User<Id> },
-    OutboundUserCreated { user: User<Id> },
-    OutboundUserDeleted { username: String },
-    OutboundUserModified { user: User<Id> },
-    OutboundUserEnabled { user: User<Id> },
-    OutboundUserDisabled { user: User<Id> },
-    OutboundGroupMemberAdded { group: String, username: String },
-    OutboundGroupMemberRemoved { group: String, username: String },
+    UserCreated {
+        user: User<Id>,
+    },
+    UserDeleted {
+        user: User<Id>,
+    },
+    UserModified {
+        before: User<Id>,
+        after: User<Id>,
+    },
+    UserEnabled {
+        user: User<Id>,
+    },
+    UserDisabled {
+        user: User<Id>,
+    },
+    GroupCreated {
+        group: Group<Id>,
+    },
+    GroupMemberAdded {
+        group: Group<Id>,
+        user: User<Id>,
+    },
+    GroupMemberRemoved {
+        group: Group<Id>,
+        user: User<Id>,
+    },
+    OutboundUserCreated {
+        user: User<Id>,
+    },
+    OutboundUserDeleted {
+        username: String,
+    },
+    OutboundUserModified {
+        user: User<Id>,
+    },
+    OutboundUserEnabled {
+        user: User<Id>,
+    },
+    OutboundUserDisabled {
+        user: User<Id>,
+    },
+    OutboundGroupMemberAdded {
+        group: String,
+        username: String,
+    },
+    OutboundGroupMemberRemoved {
+        group: String,
+        username: String,
+    },
+    /// A sync added the user and XGuard mailed them an enrollment invitation.
+    EnrollmentInviteSent {
+        user: User<Id>,
+    },
 }
 
 #[derive(Debug, PartialEq, EnumCount)]

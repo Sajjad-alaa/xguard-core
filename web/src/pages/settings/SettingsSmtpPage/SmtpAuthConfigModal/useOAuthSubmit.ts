@@ -1,5 +1,7 @@
+import type { AxiosError } from 'axios';
 import { useRef, useState } from 'react';
 import { m } from '../../../../paraglide/messages';
+import type { ApiError } from '../../../../shared/api/types';
 
 export function useOAuthSubmit(onClose: () => void) {
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -18,8 +20,9 @@ export function useOAuthSubmit(onClose: () => void) {
 
   const handleOAuthError = (err: unknown) => {
     if (err instanceof DOMException && err.name === 'AbortError') return;
+    const apiMsg = (err as AxiosError<ApiError> | undefined)?.response?.data?.msg;
     setOauthError(
-      err instanceof Error ? err.message : m.settings_smtp_auth_oauth_error(),
+      apiMsg ?? (err instanceof Error ? err.message : m.settings_smtp_auth_oauth_error()),
     );
   };
 

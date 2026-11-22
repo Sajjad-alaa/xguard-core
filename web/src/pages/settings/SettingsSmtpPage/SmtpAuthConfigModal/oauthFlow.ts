@@ -1,74 +1,43 @@
 import { m } from '../../../../paraglide/messages';
+import api from '../../../../shared/api/api';
+import type {
+  SmtpOAuthCallbackResponse,
+  SmtpOAuthStartRequest,
+} from '../../../../shared/api/types';
 
-const SMTP_OAUTH_CALLBACK_TYPE = 'smtp-oauth-callback';
+export const SMTP_OAUTH_CALLBACK_TYPE = 'smtp-oauth-callback';
 
-export const GOOGLE_ISSUER_URL = 'https://accounts.google.com';
-export const MICROSOFT_ISSUER_URL = 'https://login.microsoftonline.com/common';
-export const GOOGLE_AUTH_URL = `${GOOGLE_ISSUER_URL}/o/oauth2/v2/auth`;
-export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-export const MICROSOFT_AUTH_URL = `${MICROSOFT_ISSUER_URL}/oauth2/v2.0/authorize`;
-export const MICROSOFT_TOKEN_URL = `${MICROSOFT_ISSUER_URL}/oauth2/v2.0/token`;
-export const CUSTOM_SCOPE_DEFAULT = 'openid offline_access';
-export const GOOGLE_SMTP_SERVER = 'smtp.gmail.com';
-export const GOOGLE_OAUTH_SCOPE = 'https://mail.google.com/ email';
-export const MICROSOFT_SMTP_SERVER = 'smtp.office365.com';
-export const PROVIDER_SMTP_PORT = 587;
-
-export const discoverOidcEndpoints = async (
-  issuerUrl: string,
-): Promise<{ authorizationEndpoint: string; tokenEndpoint: string }> => {
-  const discoveryUrl = `${issuerUrl.replace(/\/$/, '')}/.well-known/openid-configuration`;
-  const response = await fetch(discoveryUrl);
-  if (!response.ok) {
-    throw new Error(m.settings_smtp_auth_oauth_error());
-  }
-  const data = (await response.json()) as {
-    authorization_endpoint?: string;
-    token_endpoint?: string;
-  };
-  if (!data.authorization_endpoint || !data.token_endpoint) {
-    throw new Error(m.settings_smtp_auth_oauth_error());
-  }
-  return {
-    authorizationEndpoint: data.authorization_endpoint,
-    tokenEndpoint: data.token_endpoint,
-  };
+export type OAuthCallbackPayload = {
+  code?: string;
+  state: string;
+  error?: string;
 };
 
-export const buildAuthUrl = (
-  authorizationEndpoint: string,
-  clientId: string,
-  redirectUri: string,
-  scope: string,
-  extraParams?: Record<string, string>,
-): string => {
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope,
-    prompt: 'consent',
-    ...extraParams,
-  });
-  return `${authorizationEndpoint}?${params.toString()}`;
+type RawOAuthCallbackMessage = {
+  type?: string;
+  code?: string;
+  state?: string;
+  error?: string;
 };
 
-type OAuthResult = { type?: string; code?: string; error?: string };
+const closePopupQuietly = (popup: Window) => {
+  try {
+    popup.close();
+  } catch {
+    // detached after COOP
+  }
+};
 
-export const waitForOAuthCode = (popup: Window, signal?: AbortSignal): Promise<string> =>
+export const waitForOAuthCallback = (
+  popup: Window,
+  signal?: AbortSignal,
+): Promise<OAuthCallbackPayload> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) {
+      closePopupQuietly(popup);
       reject(new DOMException('Aborted', 'AbortError'));
       return;
     }
-
-    const closePopup = () => {
-      try {
-        popup.close();
-      } catch {
-        // detached after COOP
-      }
-    };
 
     let broadcastChannel: BroadcastChannel | null = null;
 
@@ -79,19 +48,23 @@ export const waitForOAuthCode = (popup: Window, signal?: AbortSignal): Promise<s
       signal?.removeEventListener('abort', onAbort);
     };
 
-    const handleResult = (data: OAuthResult) => {
+    const handleResult = (data: RawOAuthCallbackMessage) => {
       if (data?.type !== SMTP_OAUTH_CALLBACK_TYPE) return;
       cleanup();
-      if (data.code) {
-        resolve(data.code);
-      } else {
+      if (!data.state) {
         reject(new Error(data.error ?? m.settings_smtp_auth_oauth_error()));
+        return;
       }
+      resolve({
+        code: data.code,
+        state: data.state,
+        error: data.error,
+      });
     };
 
     const messageHandler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
-      handleResult(event.data as OAuthResult);
+      handleResult(event.data as RawOAuthCallbackMessage);
     };
 
     window.addEventListener('message', messageHandler);
@@ -101,14 +74,14 @@ export const waitForOAuthCode = (popup: Window, signal?: AbortSignal): Promise<s
     try {
       broadcastChannel = new BroadcastChannel('smtp-oauth-relay');
       broadcastChannel.addEventListener('message', (event: MessageEvent) => {
-        handleResult(event.data as OAuthResult);
+        handleResult(event.data as RawOAuthCallbackMessage);
       });
     } catch {
       // BroadcastChannel unavailable; direct postMessage path still works without COOP.
     }
 
     const onAbort = () => {
-      closePopup();
+      closePopupQuietly(popup);
       cleanup();
       reject(new DOMException('Aborted', 'AbortError'));
     };
@@ -117,7 +90,7 @@ export const waitForOAuthCode = (popup: Window, signal?: AbortSignal): Promise<s
     // Timeout is the only "user abandoned" signal — popup.closed is unreliable after COOP.
     const timeoutId = setTimeout(
       () => {
-        closePopup();
+        closePopupQuietly(popup);
         cleanup();
         reject(new Error(m.settings_smtp_auth_oauth_popup_closed()));
       },
@@ -125,34 +98,36 @@ export const waitForOAuthCode = (popup: Window, signal?: AbortSignal): Promise<s
     );
   });
 
-export const exchangeCodeForToken = async (
-  tokenUrl: string,
-  code: string,
-  clientId: string,
-  clientSecret: string,
-  redirectUri: string,
-): Promise<string> => {
-  const body = new URLSearchParams({
-    code,
-    client_id: clientId,
-    client_secret: clientSecret,
-    redirect_uri: redirectUri,
-    grant_type: 'authorization_code',
-  });
-  const response = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
-  if (!response.ok) {
-    const error = (await response.json().catch(() => ({}))) as {
-      error_description?: string;
-    };
-    throw new Error(error.error_description ?? m.settings_smtp_auth_oauth_error());
+export const runSmtpOAuthFlow = async (
+  request: SmtpOAuthStartRequest,
+  signal?: AbortSignal,
+): Promise<SmtpOAuthCallbackResponse> => {
+  // Open the popup synchronously before awaiting /mail/oauth/start so browser popup blockers allow it.
+  const popup = window.open(
+    'about:blank',
+    'smtp-oauth',
+    'width=600,height=700,noopener=no',
+  );
+  if (!popup) {
+    throw new Error(m.settings_smtp_auth_oauth_popup_blocked());
   }
-  const data = (await response.json()) as { refresh_token?: string };
-  if (!data.refresh_token) {
-    throw new Error(m.settings_smtp_auth_oauth_error());
+
+  let authorizationUrl: string;
+  try {
+    const startResponse = await api.mail.oauthStart(request);
+    authorizationUrl = startResponse.data.authorization_url;
+  } catch (err) {
+    closePopupQuietly(popup);
+    throw err;
   }
-  return data.refresh_token;
+
+  popup.location.href = authorizationUrl;
+
+  const callback = await waitForOAuthCallback(popup, signal);
+  const callbackResponse = await api.mail.oauthCallback({
+    state: callback.state,
+    code: callback.code,
+    error: callback.error,
+  });
+  return callbackResponse.data;
 };

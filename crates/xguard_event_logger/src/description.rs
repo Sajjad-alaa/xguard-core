@@ -144,6 +144,9 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::SettingsDefaultBrandingRestored => {
             Some("Restored default branding settings".into())
         }
+        ApiEventType::SmtpOAuthConnected { provider, sender } => Some(format!(
+            "Connected SMTP mailbox {sender} using {provider} (XOAUTH2)"
+        )),
         ApiEventType::GroupsBulkAssigned { users, groups } => Some(format!(
             "Assigned {} users to {} groups",
             users.len(),
@@ -306,6 +309,9 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::EnrollmentTokenAdded { user } => {
             Some(format!("Added enrollment token for user {user}"))
         }
+        ApiEventType::EnrollmentTokenStoredInDirectory { user, attribute } => Some(format!(
+            "Stored an enrollment token for user {user} in the directory attribute {attribute}"
+        )),
         ApiEventType::ClientSettingsUpdated { .. } => {
             Some("Updated client and device settings".into())
         }
@@ -360,6 +366,12 @@ pub fn get_enrollment_event_description(
         xguard_core::events::EnrollmentEvent::EnrollmentStarted => {
             Some("User started enrollment process".into())
         }
+        xguard_core::events::EnrollmentEvent::DirectoryEnrollmentStarted => Some(
+            "User signed in with their directory password and started remote enrollment".into(),
+        ),
+        xguard_core::events::EnrollmentEvent::DirectoryEnrollmentFailed { reason } => Some(
+            format!("Remote enrollment with the directory password failed: {reason}"),
+        ),
         xguard_core::events::EnrollmentEvent::EnrollmentDeviceAdded { device } => {
             Some(format!("Added device {} during enrollment", device.name))
         }

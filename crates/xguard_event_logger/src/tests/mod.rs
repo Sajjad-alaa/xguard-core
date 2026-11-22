@@ -841,6 +841,16 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("Restored"),
         },
         EventTestCase {
+            name: "SmtpOAuthConnected",
+            message: api_message(ApiEventType::SmtpOAuthConnected {
+                provider: "Google".into(),
+                sender: "mailer@example.org".into(),
+            }),
+            event_type: EventType::SmtpOAuthConnected,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("Connected SMTP mailbox"),
+        },
+        EventTestCase {
             name: "GroupsBulkAssigned",
             message: api_message(ApiEventType::GroupsBulkAssigned {
                 users: vec![user.clone()],
@@ -1132,6 +1142,16 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("Added"),
         },
         EventTestCase {
+            name: "EnrollmentTokenStoredInDirectory",
+            message: api_message(ApiEventType::EnrollmentTokenStoredInDirectory {
+                user: user.clone(),
+                attribute: "xguardEnrollmentToken".into(),
+            }),
+            event_type: EventType::EnrollmentTokenStoredInDirectory,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("xguardEnrollmentToken"),
+        },
+        EventTestCase {
             name: "ClientConfigurationTokenAdded",
             message: api_message(ApiEventType::ClientConfigurationTokenAdded {
                 user: user.clone(),
@@ -1376,6 +1396,32 @@ fn bidi_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::EnrollmentCompleted,
             module: ActivityLogModule::Enrollment,
             description_contains: Some("completed"),
+        },
+        EventTestCase {
+            name: "DirectoryEnrollmentStarted",
+            message: bidi_msg(
+                BidiStreamEventType::Enrollment(Box::new(
+                    CoreEnrollmentEvent::DirectoryEnrollmentStarted,
+                )),
+                None,
+            ),
+            event_type: EventType::DirectoryEnrollmentStarted,
+            module: ActivityLogModule::Enrollment,
+            description_contains: Some("directory password"),
+        },
+        EventTestCase {
+            name: "DirectoryEnrollmentFailed",
+            message: bidi_msg(
+                BidiStreamEventType::Enrollment(Box::new(
+                    CoreEnrollmentEvent::DirectoryEnrollmentFailed {
+                        reason: "Invalid username or password".into(),
+                    },
+                )),
+                None,
+            ),
+            event_type: EventType::DirectoryEnrollmentFailed,
+            module: ActivityLogModule::Enrollment,
+            description_contains: Some("Invalid username"),
         },
         EventTestCase {
             name: "EnrollmentDeviceAdded",
@@ -1791,6 +1837,13 @@ fn ldap_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::LdapSyncOutboundGroupMemberAdded,
             module: ActivityLogModule::Ldap,
             description_contains: Some("added user"),
+        },
+        EventTestCase {
+            name: "LdapSyncEnrollmentInviteSent",
+            message: ldap_msg(LdapSyncEventType::EnrollmentInviteSent { user: user.clone() }),
+            event_type: EventType::LdapSyncEnrollmentInviteSent,
+            module: ActivityLogModule::Ldap,
+            description_contains: Some("invitation"),
         },
         EventTestCase {
             name: "LdapSyncOutboundGroupMemberRemoved",

@@ -78,6 +78,7 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         user::bulk_disable_users,
         user::bulk_enable_users,
         user::bulk_start_enrollment,
+        user::bulk_store_enrollment_token_in_ldap,
         user::change_self_password,
         user::delete_user,
         user::get_user,
@@ -259,6 +260,8 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
         // support
         mail::send_support_data,
         mail::test_mail,
+        mail::smtp_oauth_start,
+        mail::smtp_oauth_callback,
         support::configuration,
         support::logs,
     ),
@@ -294,7 +297,10 @@ Errors are returned as a JSON object with a `msg` field and, for some of them, a
             crate::posture::policy::VersionOption, crate::posture::PostureFacts,
             xguard_common::db::models::device_posture::PostureSnapshot,
             xguard_common::db::models::device_posture::OsType,
-            device_posture::AssignLocations, device_posture::DevicePostureView
+            device_posture::AssignLocations, device_posture::DevicePostureView,
+            crate::mail::xoauth2::Provider, crate::mail::xoauth2::StartRequest,
+            mail::SmtpOAuthStartResponse, mail::SmtpOAuthCallbackRequest,
+            mail::SmtpOAuthCallbackResponse
         ),
     ),
     tags(

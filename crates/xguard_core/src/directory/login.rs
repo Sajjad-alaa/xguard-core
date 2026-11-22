@@ -30,7 +30,7 @@ fn in_sync_groups(config: &super::DirectoryConfig, groups: &[String]) -> bool {
 /// Whether `user` is linked to the directory: it came from there, or a sync or push recorded
 /// its entry. A local account that merely shares a username with a directory entry is not, so
 /// an unrelated directory user named like a local admin cannot sign in as them.
-fn is_linked(user: &User<Id>, remote: &DirectoryUser) -> bool {
+pub(super) fn is_linked(user: &User<Id>, remote: &DirectoryUser) -> bool {
     user.from_ldap
         || user
             .ldap_user_path
