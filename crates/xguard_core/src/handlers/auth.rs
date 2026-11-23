@@ -77,8 +77,12 @@ pub async fn create_session(
     // Check that MFA state is correct before proceeding further
     user.verify_mfa_state(pool).await?;
 
+    let radius_web_login = xguard_common::db::models::radius::RadiusSettings::get(pool)
+        .await?
+        .is_web_login_ready();
+
     info!("Authenticated user {}", user.username);
-    if user.mfa_enabled {
+    if user.mfa_enabled || radius_web_login {
         debug!(
             "User {} has MFA enabled, sending MFA info for further authentication.",
             user.username
@@ -1054,6 +1058,199 @@ pub async fn totp_code(
         }
     } else {
         Err(WebError::ObjectNotFound("Invalid user".into()))
+    }
+}
+
+/// Request body for `POST /api/v1/auth/radius`.
+#[derive(serde::Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct RadiusAuthRequest {
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub poll: bool,
+}
+
+/// Response returned with HTTP 202 when the RADIUS server answers with Access-Challenge.
+#[derive(serde::Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct RadiusChallengeResponse {
+    pub status: &'static str,
+    pub message: String,
+    pub push: bool,
+    pub poll_interval_secs: u32,
+}
+
+/// Verify RADIUS MFA during web sign-in (supports OTP, Access-Challenge, and push polling).
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/v1/auth/radius",
+    tag = "auth",
+    request_body = RadiusAuthRequest,
+    responses(
+        (status = 200, description = "RADIUS MFA verified.", body = AuthResponse),
+        (status = 202, description = "RADIUS server issued Access-Challenge.", body = RadiusChallengeResponse),
+        (status = 401, description = "RADIUS verification rejected.", body = ApiErrorResponse),
+        (status = 429, description = "Too many attempts.", body = ApiErrorResponse),
+    ),
+    security(("cookie" = []))
+))]
+pub async fn radius_code(
+    private_cookies: PrivateCookieJar,
+    SessionExtractor(mut session): SessionExtractor,
+    user_agent: TypedHeader<UserAgent>,
+    ClientIpAddr(ip_addr): ClientIpAddr,
+    State(appstate): State<AppState>,
+    Json(data): Json<RadiusAuthRequest>,
+) -> Result<(PrivateCookieJar, ApiResponse), WebError> {
+    let Some(user) = User::find_by_id(&appstate.pool, session.user_id).await? else {
+        return Err(WebError::ObjectNotFound("Invalid user".into()));
+    };
+    let settings = xguard_common::db::models::radius::RadiusSettings::get(&appstate.pool).await?;
+    let Some(client_cfg) = crate::radius::client::RadiusClientConfig::from_settings(&settings)
+        .filter(|_| settings.is_web_login_ready())
+    else {
+        return Err(WebError::Authorization("RADIUS MFA is not enabled".into()));
+    };
+
+    let username = user.username.clone();
+    let should_charge = !data.poll && !data.code.is_empty();
+    if should_charge {
+        charge_login_attempt(&appstate.pool, &username).await?;
+    }
+
+    let pending =
+        xguard_common::db::models::radius::WebRadiusChallenge::find_active(&appstate.pool, &session.id)
+            .await?;
+    if data.poll && (!settings.push_enabled || pending.is_none()) {
+        return Err(WebError::BadRequest(
+            "No active RADIUS push challenge for this session".into(),
+        ));
+    }
+
+    let radius_user = settings.username_format.resolve(&user.username, &user.email);
+    let password = if data.poll { "" } else { data.code.as_str() };
+    let state_bytes = pending.as_ref().map(|c| c.state.as_slice());
+
+    match crate::radius::client::authenticate(&client_cfg, radius_user, password, state_bytes).await {
+        Ok(crate::radius::client::RadiusOutcome::Accept { .. }) => {
+            let _ = xguard_common::db::models::radius::WebRadiusChallenge::delete(
+                &appstate.pool,
+                &session.id,
+            )
+            .await;
+            if should_charge {
+                refund_login_attempt(&appstate.pool, &username).await?;
+            }
+            session
+                .set_state(&appstate.pool, SessionState::MultiFactorVerified)
+                .await?;
+            let oidc_disable_password_management =
+                crate::sso::provider::disables_password_management(&appstate.pool).await?;
+            let user_info =
+                UserInfo::from_user(&appstate.pool, user, oidc_disable_password_management).await?;
+            info!("Verified RADIUS MFA for user {username}");
+            appstate.emit_event(ApiEvent {
+                context: ApiRequestContext::new(
+                    user_info.id,
+                    user_info.username.clone(),
+                    ip_addr,
+                    user_agent.to_string(),
+                ),
+                event: Box::new(ApiEventType::UserMfaLogin {
+                    mfa_method: MFAMethod::Radius,
+                }),
+            })?;
+            if let Some(openid_cookie) = private_cookies.get(SIGN_IN_COOKIE_NAME) {
+                let redirect_url = openid_cookie.value().to_owned();
+                let private_cookies = private_cookies.remove(openid_cookie);
+                Ok((
+                    private_cookies,
+                    ApiResponse::json(
+                        AuthResponse {
+                            user: user_info,
+                            url: Some(redirect_url),
+                        },
+                        StatusCode::OK,
+                    ),
+                ))
+            } else {
+                Ok((
+                    private_cookies,
+                    ApiResponse::json(
+                        AuthResponse {
+                            user: user_info,
+                            url: None,
+                        },
+                        StatusCode::OK,
+                    ),
+                ))
+            }
+        }
+        Ok(crate::radius::client::RadiusOutcome::Challenge {
+            reply_message,
+            state,
+        }) => {
+            xguard_common::db::models::radius::WebRadiusChallenge::upsert(
+                &appstate.pool,
+                &session.id,
+                &state,
+                reply_message.as_deref(),
+                chrono::Duration::minutes(5),
+            )
+            .await?;
+            if should_charge {
+                refund_login_attempt(&appstate.pool, &username).await?;
+            }
+            Ok((
+                private_cookies,
+                ApiResponse::json(
+                    RadiusChallengeResponse {
+                        status: "challenge",
+                        message: reply_message.unwrap_or_default(),
+                        push: settings.push_enabled,
+                        poll_interval_secs: settings.push_poll_interval_secs,
+                    },
+                    StatusCode::ACCEPTED,
+                ),
+            ))
+        }
+        Ok(crate::radius::client::RadiusOutcome::Reject { .. }) => {
+            let _ = xguard_common::db::models::radius::WebRadiusChallenge::delete(
+                &appstate.pool,
+                &session.id,
+            )
+            .await;
+            appstate.emit_event(ApiEvent {
+                context: ApiRequestContext::new(
+                    user.id,
+                    user.username,
+                    ip_addr,
+                    user_agent.to_string(),
+                ),
+                event: Box::new(ApiEventType::UserMfaLoginFailed {
+                    mfa_method: MFAMethod::Radius,
+                    message: "RADIUS MFA verification failed".to_owned(),
+                }),
+            })?;
+            Err(WebError::Authorization("Invalid RADIUS code".into()))
+        }
+        Err(err) => {
+            warn!("RADIUS MFA request failed for {username}: {err}");
+            appstate.emit_event(ApiEvent {
+                context: ApiRequestContext::new(
+                    user.id,
+                    user.username,
+                    ip_addr,
+                    user_agent.to_string(),
+                ),
+                event: Box::new(ApiEventType::UserMfaLoginFailed {
+                    mfa_method: MFAMethod::Radius,
+                    message: "RADIUS server unreachable".to_owned(),
+                }),
+            })?;
+            Err(WebError::Authorization("RADIUS server unreachable".into()))
+        }
     }
 }
 

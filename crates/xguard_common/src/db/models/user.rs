@@ -70,6 +70,7 @@ pub enum MFAMethod {
     Webauthn,
     Email,
     Fido2,
+    Radius,
 }
 
 // Web MFA methods
@@ -81,6 +82,7 @@ impl fmt::Display for MFAMethod {
             Self::Webauthn => "WebAuthn",
             Self::Email => "Email",
             Self::Fido2 => "FIDO2",
+            Self::Radius => "RADIUS",
         })
     }
 }

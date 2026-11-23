@@ -450,7 +450,10 @@ pub async fn list_mfa_flows(
     }
     let smtp_configured = Settings::get_current_settings().smtp_configured();
     let oidc_configured = crate::sso::edge::available(&appstate.pool).await?;
-    let gates = MethodGates::current(smtp_configured, oidc_configured);
+    let radius_configured = xguard_common::db::models::radius::RadiusSettings::get(&appstate.pool)
+        .await?
+        .is_vpn_mfa_ready();
+    let gates = MethodGates::current(smtp_configured, oidc_configured, radius_configured);
     let availability = compute_method_availability(gates);
     let response: Vec<MfaFlowListItemResponse> = items
         .into_iter()
@@ -835,6 +838,8 @@ pub enum MethodAvailabilityReason {
     SmtpNotConfigured,
     /// An OpenID provider must be configured first.
     OidcProviderMissing,
+    /// RADIUS MFA must be configured first.
+    RadiusNotConfigured,
 }
 
 /// Returns the first reason a saved flow cannot run under the active license or configuration.
@@ -874,15 +879,21 @@ struct MethodGates {
     oidc_provider_configured: bool,
     oidc_licensed: bool,
     fido2_licensed: bool,
+    radius_configured: bool,
 }
 
 impl MethodGates {
-    fn current(smtp_configured: bool, oidc_provider_configured: bool) -> Self {
+    fn current(
+        smtp_configured: bool,
+        oidc_provider_configured: bool,
+        radius_configured: bool,
+    ) -> Self {
         Self {
             smtp_configured,
             oidc_provider_configured,
             oidc_licensed: is_mfa_method_supported(VpnClientMfaMethod::Oidc),
             fido2_licensed: is_mfa_method_supported(VpnClientMfaMethod::Fido2),
+            radius_configured,
         }
     }
 }
@@ -897,6 +908,7 @@ fn compute_method_availability(gates: MethodGates) -> Vec<MethodAvailabilityResp
         oidc_provider_configured,
         oidc_licensed,
         fido2_licensed,
+        radius_configured,
     } = gates;
     let methods = [
         (
@@ -943,6 +955,15 @@ fn compute_method_availability(gates: MethodGates) -> Vec<MethodAvailabilityResp
                 MethodAvailabilityReason::NotSupported
             },
         ),
+        (
+            VpnClientMfaMethod::Radius,
+            radius_configured,
+            if radius_configured {
+                MethodAvailabilityReason::Available
+            } else {
+                MethodAvailabilityReason::RadiusNotConfigured
+            },
+        ),
     ];
 
     methods
@@ -981,7 +1002,10 @@ pub async fn get_method_availability(
     );
     let smtp_configured = Settings::get_current_settings().smtp_configured();
     let oidc_configured = crate::sso::edge::available(&appstate.pool).await?;
-    let gates = MethodGates::current(smtp_configured, oidc_configured);
+    let radius_configured = xguard_common::db::models::radius::RadiusSettings::get(&appstate.pool)
+        .await?
+        .is_vpn_mfa_ready();
+    let gates = MethodGates::current(smtp_configured, oidc_configured, radius_configured);
     Ok(ApiResponse::json(
         compute_method_availability(gates),
         StatusCode::OK,
@@ -1007,6 +1031,7 @@ mod tests {
             oidc_provider_configured: oidc_provider,
             oidc_licensed: business,
             fido2_licensed: fido2,
+            radius_configured: false,
         }
     }
 

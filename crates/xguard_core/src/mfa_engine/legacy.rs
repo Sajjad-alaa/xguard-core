@@ -90,10 +90,13 @@ impl MfaEngine {
         selected_method: VpnClientMfaMethod,
         posture_facts: Option<serde_json::Value>,
     ) -> Result<LegacyStartOutcome, StartError> {
-        // The legacy contract carries no assertion or credential list, so a FIDO2 session could be
-        // started but never finished. Reject it here rather than relying on the caller to.
-        if selected_method == VpnClientMfaMethod::Fido2 {
-            error!("FIDO2 is not available through the legacy MFA contract");
+        // The legacy contract carries no assertion, credential list, or RADIUS challenge message,
+        // so FIDO2 and RADIUS sessions could be started but never finished properly.
+        if matches!(
+            selected_method,
+            VpnClientMfaMethod::Fido2 | VpnClientMfaMethod::Radius
+        ) {
+            error!("{selected_method:?} is not available through the legacy MFA contract");
             return Err(StartError::Initiate(InitiateError::UnsupportedMethod));
         }
 
@@ -212,7 +215,8 @@ impl MfaEngine {
             VpnClientMfaMethod::Biometric => code.clone().map(LegacyCredential::BiometricSignature),
             VpnClientMfaMethod::Oidc
             | VpnClientMfaMethod::MobileApprove
-            | VpnClientMfaMethod::Fido2 => None,
+            | VpnClientMfaMethod::Fido2
+            | VpnClientMfaMethod::Radius => None,
         };
 
         // Legacy MobileApprove requires a signature; an empty proof is not a polling request.
@@ -340,6 +344,10 @@ impl MfaEngine {
             FinishOutcome::AwaitingExternal => LegacyFinishOutcome::AwaitingExternal,
             FinishOutcome::Advanced { next_step } => {
                 error!("Legacy MFA finish advanced unexpectedly to step {next_step}");
+                return Err(FinishError::Internal);
+            }
+            FinishOutcome::RadiusChallenge { .. } => {
+                error!("Legacy MFA finish returned unexpected RADIUS challenge");
                 return Err(FinishError::Internal);
             }
         };

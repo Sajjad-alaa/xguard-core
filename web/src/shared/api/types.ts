@@ -288,6 +288,7 @@ export const UserMfaMethod = {
   OneTimePassword: 'OneTimePassword',
   Email: 'Email',
   Webauthn: 'Webauthn',
+  Radius: 'Radius',
 } as const;
 
 export type UserMfaMethodValue = (typeof UserMfaMethod)[keyof typeof UserMfaMethod];
@@ -331,6 +332,76 @@ export interface LoginMfaResponse {
   totp_available: boolean;
   webauthn_available: boolean;
   email_available: boolean;
+  radius_available?: boolean;
+}
+
+export interface RadiusChallengeResponse {
+  status: 'challenge';
+  message: string;
+  push: boolean;
+  poll_interval_secs: number;
+}
+
+export type RadiusUsernameFormat = 'username' | 'email';
+
+export interface RadiusSettings {
+  enabled: boolean;
+  web_login_enabled: boolean;
+  vpn_mfa_enabled: boolean;
+  primary_host: string;
+  primary_port: number;
+  primary_secret_set: boolean;
+  secondary_host: string | null;
+  secondary_port: number;
+  secondary_secret_set: boolean;
+  timeout_secs: number;
+  retries: number;
+  nas_identifier: string;
+  nas_ip_address: string | null;
+  username_format: RadiusUsernameFormat;
+  push_enabled: boolean;
+  push_poll_interval_secs: number;
+}
+
+export interface UpdateRadiusSettingsPayload {
+  enabled: boolean;
+  web_login_enabled: boolean;
+  vpn_mfa_enabled: boolean;
+  primary_host: string;
+  primary_port: number;
+  primary_secret?: string;
+  secondary_host?: string | null;
+  secondary_port: number;
+  secondary_secret?: string;
+  clear_secondary_secret?: boolean;
+  timeout_secs: number;
+  retries: number;
+  nas_identifier: string;
+  nas_ip_address?: string | null;
+  username_format: RadiusUsernameFormat;
+  push_enabled: boolean;
+  push_poll_interval_secs: number;
+}
+
+export interface TestRadiusPayload {
+  username: string;
+  password: string;
+  primary_host?: string;
+  primary_port?: number;
+  primary_secret?: string;
+  secondary_host?: string;
+  secondary_port?: number;
+  secondary_secret?: string;
+  timeout_secs?: number;
+  retries?: number;
+  nas_identifier?: string;
+  nas_ip_address?: string;
+}
+
+export interface TestRadiusResponse {
+  decision: 'accept' | 'reject' | 'challenge';
+  reply_message: string | null;
+  challenge: boolean;
 }
 
 export interface LoginResponseBasic {
@@ -1752,6 +1823,7 @@ export const MfaFlowMethod = {
   Biometric: 'biometric',
   MobileApprove: 'mobileapprove',
   Fido2: 'fido2',
+  Radius: 'radius',
 } as const;
 
 export type MfaFlowMethodValue = (typeof MfaFlowMethod)[keyof typeof MfaFlowMethod];
@@ -1761,6 +1833,7 @@ export const MfaMethodAvailabilityReason = {
   NotSupported: 'not_supported',
   SmtpNotConfigured: 'smtp_not_configured',
   OidcProviderMissing: 'oidc_provider_missing',
+  RadiusNotConfigured: 'radius_not_configured',
 } as const;
 
 export type MfaMethodAvailabilityReasonValue =

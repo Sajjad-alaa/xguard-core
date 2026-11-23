@@ -35,7 +35,8 @@ use xguard_proto::{
         MfaFido2Challenge, MfaFlowApproveRequest, MfaFlowRemoteRejected, MfaFlowRemoteRequest,
         MfaFlowRemoteResponse, MfaFlowStartAccepted, MfaFlowStartRejected, MfaFlowStartRequest,
         MfaFlowStartResponse, MfaFlowStepFinishRequest, MfaFlowStepFinishResponse,
-        MfaFlowStepStartRequest, MfaFlowStepStartResponse, MfaMethod, MfaRemoteRejectionReason,
+        MfaFlowStepStartRequest, MfaFlowStepStartResponse, MfaMethod, MfaRadiusChallenge,
+        MfaRemoteRejectionReason,
         MfaSignatureChallenge, MfaStartRejectionReason, MfaStepRejection, MfaStepResult,
         MfaStepStarted, PostureConnectRequest, PostureConnectResponse, mfa_flow_remote_response,
         mfa_flow_start_response, mfa_flow_step_finish_request, mfa_step_result, mfa_step_started,
@@ -270,6 +271,15 @@ impl From<FinishOutcome> for MfaStepResult {
             FinishOutcome::AwaitingExternal => {
                 mfa_step_result::Outcome::AwaitingExternal(MfaAwaitingExternal {})
             }
+            FinishOutcome::RadiusChallenge {
+                message,
+                push,
+                poll_interval_secs,
+            } => mfa_step_result::Outcome::RadiusChallenge(MfaRadiusChallenge {
+                message,
+                push,
+                poll_interval_secs,
+            }),
         };
         Self {
             outcome: Some(outcome),
@@ -312,7 +322,10 @@ fn encode_step_started(
                 MfaSignatureChallenge { challenge },
             ))
         }
-        VpnClientMfaMethod::Totp | VpnClientMfaMethod::Email | VpnClientMfaMethod::Oidc => None,
+        VpnClientMfaMethod::Totp
+        | VpnClientMfaMethod::Email
+        | VpnClientMfaMethod::Oidc
+        | VpnClientMfaMethod::Radius => None,
     };
 
     Ok(MfaStepStarted {

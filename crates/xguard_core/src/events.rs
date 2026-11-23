@@ -396,6 +396,12 @@ pub enum ApiEventType {
         before: xguard_common::db::models::device_limit::DeviceLimitOverride,
         after: xguard_common::db::models::device_limit::DeviceLimitOverride,
     },
+    RadiusSettingsUpdated {
+        enabled: bool,
+        web_login_enabled: bool,
+        vpn_mfa_enabled: bool,
+        primary_host: String,
+    },
     LocationGroupMtusChanged {
         location_id: Id,
         location_name: String,

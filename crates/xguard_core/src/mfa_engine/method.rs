@@ -157,7 +157,9 @@ pub async fn initiate(
         return Err(InitiateError::TooManyRequests);
     }
     match method {
-        VpnClientMfaMethod::Totp | VpnClientMfaMethod::Oidc => Ok(Initiated::default()),
+        VpnClientMfaMethod::Totp | VpnClientMfaMethod::Oidc | VpnClientMfaMethod::Radius => {
+            Ok(Initiated::default())
+        }
         VpnClientMfaMethod::Email => {
             let code = ctx.user.generate_email_mfa_code()?;
             let mut transaction = pool.begin().await?;
@@ -296,11 +298,14 @@ pub(super) async fn verify(
         (VpnClientMfaMethod::Biometric, Some(_)) => Err(credential_method_mismatch().into()),
         (VpnClientMfaMethod::Oidc, None) => Ok(verify_oidc(ephemeral)),
         (VpnClientMfaMethod::Oidc, Some(_)) => Err(credential_method_mismatch().into()),
-        // Mobile approval and FIDO2 have their own verifiers: both change the attempt (approval
-        // mark, single-use challenge), and this verifier is read-only.
-        (VpnClientMfaMethod::MobileApprove | VpnClientMfaMethod::Fido2, _) => {
-            Err(VerifyError::UnsupportedMethod)
-        }
+        // Mobile approval, FIDO2, and RADIUS have their own verifiers: they mutate challenge
+        // state, and this verifier is read-only.
+        (
+            VpnClientMfaMethod::MobileApprove
+            | VpnClientMfaMethod::Fido2
+            | VpnClientMfaMethod::Radius,
+            _,
+        ) => Err(VerifyError::UnsupportedMethod),
     }
 }
 
@@ -328,12 +333,15 @@ pub(super) fn verify_legacy(
         (VpnClientMfaMethod::Biometric, Some(_)) => Err(credential_method_mismatch()),
         (VpnClientMfaMethod::Oidc, None) => Ok(verify_oidc(ephemeral)),
         (VpnClientMfaMethod::Oidc, Some(_)) => Err(credential_method_mismatch()),
-        (VpnClientMfaMethod::MobileApprove | VpnClientMfaMethod::Fido2, _) => {
-            Err(CommonVerifyError::MalformedProof {
-                message: "MFA method requires a contract-specific verifier",
-                event: None,
-            })
-        }
+        (
+            VpnClientMfaMethod::MobileApprove
+            | VpnClientMfaMethod::Fido2
+            | VpnClientMfaMethod::Radius,
+            _,
+        ) => Err(CommonVerifyError::MalformedProof {
+            message: "MFA method requires a contract-specific verifier",
+            event: None,
+        }),
     }
 }
 

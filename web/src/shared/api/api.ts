@@ -105,6 +105,8 @@ import type {
   OpenIdClient,
   ProvisioningFile,
   PublicKeyCredentialJSON,
+  RadiusChallengeResponse,
+  RadiusSettings,
   RenameApiTokenRequest,
   RenameAuthKeyRequest,
   ResourceDisplay,
@@ -131,9 +133,12 @@ import type {
   SnatBindingInput,
   StartEnrollmentRequest,
   StartEnrollmentResponse,
+  TestRadiusPayload,
+  TestRadiusResponse,
   TotpInitResponse,
   UpdateInfo,
   UpdateMfaFlowRequest,
+  UpdateRadiusSettingsPayload,
   UploadCARequest,
   User,
   UserChangePasswordRequest,
@@ -369,6 +374,13 @@ const api = {
         verify: (code: string) =>
           client.post<MfaCompleteResponse>('/auth/email/verify', { code }),
       },
+      radius: {
+        verify: (data: { code: string; poll?: boolean }) =>
+          client.post<MfaCompleteResponse | RadiusChallengeResponse>(
+            '/auth/radius',
+            data,
+          ),
+      },
       webauthn: {
         deleteKey: (data: { username: string; keyId: number | string }) =>
           client.delete(`/user/${data.username}/security_key/${data.keyId}`),
@@ -387,6 +399,13 @@ const api = {
         },
       },
     },
+  },
+  radius: {
+    getSettings: () => client.get<RadiusSettings>('/settings/radius'),
+    updateSettings: (data: UpdateRadiusSettingsPayload) =>
+      client.put<RadiusSettings>('/settings/radius', data),
+    test: (data: TestRadiusPayload) =>
+      client.post<TestRadiusResponse>('/settings/radius/test', data),
   },
   network_device: {
     deleteDevice: (id: number) => client.delete(`/device/network/${id}`),

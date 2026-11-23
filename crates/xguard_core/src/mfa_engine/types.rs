@@ -65,4 +65,11 @@ pub enum FinishOutcome {
     Completed { preshared_key: SecretStringWrapper },
     /// Still waiting for external confirmation (OIDC or mobile auth) to be completed.
     AwaitingExternal,
+    /// RADIUS Access-Challenge: server wants another response (SMS/email code, multi-challenge,
+    /// or out-of-band push approval).
+    RadiusChallenge {
+        message: String,
+        push: bool,
+        poll_interval_secs: u32,
+    },
 }

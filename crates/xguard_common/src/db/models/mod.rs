@@ -20,6 +20,7 @@ pub mod oauth2client;
 pub mod oauth2token;
 pub mod polling_token;
 pub mod proxy;
+pub mod radius;
 pub mod session;
 pub mod settings;
 pub mod setup_auto_adoption;

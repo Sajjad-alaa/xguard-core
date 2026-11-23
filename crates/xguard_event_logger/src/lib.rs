@@ -753,6 +753,22 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     )
                     .ok(),
                 ),
+                ApiEventType::RadiusSettingsUpdated {
+                    enabled,
+                    web_login_enabled,
+                    vpn_mfa_enabled,
+                    primary_host,
+                } => (
+                    EventType::EnterpriseSettingsUpdated,
+                    Some(serde_json::json!({
+                        "radius": {
+                            "enabled": enabled,
+                            "web_login_enabled": web_login_enabled,
+                            "vpn_mfa_enabled": vpn_mfa_enabled,
+                            "primary_host": primary_host,
+                        }
+                    })),
+                ),
                 ApiEventType::LocationGroupMtusChanged {
                     location_id,
                     location_name,
