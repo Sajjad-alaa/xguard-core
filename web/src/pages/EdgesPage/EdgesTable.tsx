@@ -10,13 +10,12 @@ import dayjs from 'dayjs';
 import { useMemo, useState } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
-import { type EdgeInfo, LicenseFeature } from '../../shared/api/types';
+import type { EdgeInfo } from '../../shared/api/types';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
-import { getEdgesQueryOptions, getLicenseInfoQueryOptions } from '../../shared/query';
+import { getEdgesQueryOptions } from '../../shared/query';
 import { tableSortingFns } from '../../shared/utils/dateSortingFn';
 import { displayDate } from '../../shared/utils/displayDate';
-import { canUseEnterpriseFeature, licenseActionCheck } from '../../shared/utils/license';
 import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
@@ -72,7 +71,6 @@ const getStatusBadge = (edge: EdgeInfo) => {
 
 export const EdgesTable = () => {
   const { data: edges } = useSuspenseQuery(getEdgesQueryOptions);
-  const { data: licenseInfo } = useSuspenseQuery(getLicenseInfoQueryOptions);
 
   const navigate = useNavigate();
 
@@ -90,19 +88,10 @@ export const EdgesTable = () => {
       iconLeft: 'globe',
       testId: 'add-edge',
       onClick: () => {
-        if (edges.length >= 1) {
-          licenseActionCheck(
-            canUseEnterpriseFeature(licenseInfo, LicenseFeature.ComponentHa),
-            () => {
-              navigate({ to: '/setup-edge' });
-            },
-          );
-        } else {
-          navigate({ to: '/setup-edge' });
-        }
+        navigate({ to: '/setup-edge' });
       },
     }),
-    [navigate, edges.length, licenseInfo],
+    [navigate],
   );
 
   const [search, setSearch] = useState('');

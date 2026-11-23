@@ -3,15 +3,11 @@ import z from 'zod';
 import { useShallow } from 'zustand/react/shallow';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
-import { LicenseFeature } from '../../../shared/api/types';
 import { Controls } from '../../../shared/components/Controls/Controls';
 import { DescriptionBlock } from '../../../shared/components/DescriptionBlock/DescriptionBlock';
 import { WizardCard } from '../../../shared/components/wizard/WizardCard/WizardCard';
-import { externalLink } from '../../../shared/constants';
 import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
-import { getLicenseInfoQueryOptions } from '../../../shared/query';
-import { canUseEnterpriseFeature } from '../../../shared/utils/license';
 import { smallestNetworkCapacity } from '../../../shared/utils/network';
 import { Validate } from '../../../shared/validate';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
@@ -19,7 +15,6 @@ import { Helper } from '../../../shared/xguard-ui/components/Helper/Helper';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
-import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { AddLocationPageStep } from '../types';
 import { useAddLocationStore } from '../useAddLocationStore';
 import './style.scss';
@@ -69,12 +64,6 @@ const formSchema = z.object({
 });
 
 export const AddLocationInternalVpnStep = () => {
-  const { data: licenseInfo } = useQuery(getLicenseInfoQueryOptions);
-  const canUseEnterprise = canUseEnterpriseFeature(
-    licenseInfo ?? null,
-    LicenseFeature.AclAllowedIps,
-  ).result;
-
   const { data: devices } = useQuery({
     queryKey: ['device', 'all'],
     queryFn: api.device.getDevices,
@@ -162,24 +151,10 @@ export const AddLocationInternalVpnStep = () => {
             )}
           </form.AppField>
           <SizedBox height={ThemeSpacing.Xl} />
-          {isPresent(canUseEnterprise) && !canUseEnterprise && (
-            <>
-              <p className="acl-upsell-text">
-                <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
-                  {m.add_location_internal_vpn_allowed_ips_from_firewall_rules_upsell_link()}
-                </a>
-                <span>
-                  {m.add_location_internal_vpn_allowed_ips_from_firewall_rules_upsell()}
-                </span>
-              </p>
-              <SizedBox height={ThemeSpacing.Md} />
-            </>
-          )}
           <form.AppField name="allowed_ips_from_acl">
             {(field) => (
               <field.FormCheckbox
                 text={m.add_location_internal_vpn_allowed_ips_from_firewall_rules()}
-                disabled={isPresent(canUseEnterprise) && !canUseEnterprise}
                 helperBlock={
                   <Helper>
                     <p>

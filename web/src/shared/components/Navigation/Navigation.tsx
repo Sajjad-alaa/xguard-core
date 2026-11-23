@@ -1,31 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { m } from '../../../paraglide/messages';
 import { useApp } from '../../hooks/useApp';
 import { useAuth } from '../../hooks/useAuth';
 import { CounterLabel } from '../../xguard-ui/components/CounterLabel/CounterLabel';
-import { Icon, IconKind } from '../../xguard-ui/components/Icon';
+import { Icon } from '../../xguard-ui/components/Icon';
 import type { IconKindValue } from '../../xguard-ui/components/Icon/icon-types';
 import { IconButton } from '../../xguard-ui/components/IconButton/IconButton';
 import { NavLogo } from './assets/NavLogo';
 import './style.scss';
-import { useQuery } from '@tanstack/react-query';
 import { Link, type LinkProps } from '@tanstack/react-router';
-import type { LicenseFeatureValue, LicenseInfo, LicenseTierValue } from '../../api/types';
-import { getLicenseInfoQueryOptions } from '../../query';
-import { isNavItemLocked } from '../../utils/license';
 import { NavTutorialsButton } from '../../video-tutorials/components/widget/NavTutorialsButton/NavTutorialsButton';
 import { useVideoTutorialsSections } from '../../video-tutorials/resolved';
 import { Fold } from '../../xguard-ui/components/Fold/Fold';
-import { TooltipContent } from '../../xguard-ui/providers/tooltip/TooltipContent';
-import { TooltipProvider } from '../../xguard-ui/providers/tooltip/TooltipContext';
-import { TooltipTrigger } from '../../xguard-ui/providers/tooltip/TooltipTrigger';
 import { isPresent } from '../../xguard-ui/utils/isPresent';
 
 interface NavGroupProps {
   id: string;
   label: string;
   items: NavItemProps[];
-  licenseInfo?: LicenseInfo | null;
 }
 
 interface NavItemProps {
@@ -33,11 +25,6 @@ interface NavItemProps {
   label: string;
   icon: IconKindValue;
   link: LinkProps['to'];
-  licenseTier?: LicenseTierValue;
-  // Enterprise feature backing this item; when granted via an additive license flag the item
-  // unlocks even on a lower tier than `licenseTier`.
-  licenseFeature?: LicenseFeatureValue;
-  license?: LicenseInfo | null;
   testId?: string;
   pendingCount?: number;
 }
@@ -164,11 +151,6 @@ export const Navigation = () => {
   const isAdmin = useAuth((s) => s.isAdmin);
   const isOpen = useApp((s) => s.navigationOpen);
 
-  const { data: licenseInfo } = useQuery({
-    ...getLicenseInfoQueryOptions,
-    enabled: isAdmin,
-  });
-
   const videoTutorialSections = useVideoTutorialsSections();
   const hasTutorialSections = videoTutorialSections.some(
     (section) => section.videos.length > 0,
@@ -198,7 +180,7 @@ export const Navigation = () => {
       </div>
       <div className="groups">
         {navigationGroups.map((group) => (
-          <NavGroup key={group.id} {...group} licenseInfo={licenseInfo} />
+          <NavGroup key={group.id} {...group} />
         ))}
       </div>
       <div className="bottom">
@@ -212,7 +194,7 @@ export const Navigation = () => {
   );
 };
 
-const NavGroup = ({ items, label, licenseInfo }: NavGroupProps) => {
+const NavGroup = ({ items, label }: NavGroupProps) => {
   const [isOpen, setIsOpen] = useState(true);
   return (
     <div className="nav-group">
@@ -228,7 +210,7 @@ const NavGroup = ({ items, label, licenseInfo }: NavGroupProps) => {
       <Fold open={isOpen}>
         <div className="items">
           {items.map((item) => (
-            <NavItem key={item.id} {...item} license={licenseInfo} />
+            <NavItem key={item.id} {...item} />
           ))}
         </div>
       </Fold>
@@ -236,41 +218,16 @@ const NavGroup = ({ items, label, licenseInfo }: NavGroupProps) => {
   );
 };
 
-const NavItem = ({
-  icon,
-  link,
-  label,
-  testId,
-  license,
-  licenseTier,
-  licenseFeature,
-  pendingCount,
-}: NavItemProps) => {
-  const showLock = useMemo(
-    () => isNavItemLocked(license as LicenseInfo | null, licenseTier, licenseFeature),
-    [license, licenseTier, licenseFeature],
-  );
-
-  const showPending = !showLock && isPresent(pendingCount) && pendingCount > 0;
-  const showRight = showPending || (showLock && isPresent(licenseTier));
+const NavItem = ({ icon, link, label, testId, pendingCount }: NavItemProps) => {
+  const showPending = isPresent(pendingCount) && pendingCount > 0;
 
   return (
     <Link to={link} className="nav-item" data-testid={testId}>
       <Icon icon={icon} />
       <span>{label}</span>
-      {showRight && (
+      {showPending && (
         <div className="right">
-          {showPending && <CounterLabel value={pendingCount} variant="warning" />}
-          {showLock && isPresent(licenseTier) && (
-            <TooltipProvider>
-              <TooltipTrigger>
-                <Icon icon={IconKind.LockClosed} size={16} />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{`This is ${licenseTier ?? 'Unknown tier'} feature`}</p>
-              </TooltipContent>
-            </TooltipProvider>
-          )}
+          <CounterLabel value={pendingCount} variant="warning" />
         </div>
       )}
     </Link>

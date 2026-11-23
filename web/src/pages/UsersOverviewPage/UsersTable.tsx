@@ -3,7 +3,6 @@ import {
   useInfiniteQuery,
   useMutation,
   useQuery,
-  useSuspenseQuery,
 } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -21,15 +20,14 @@ import { orderBy } from 'lodash-es';
 import { useCallback, useMemo, useState } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
-import {
-  type BulkStartEnrollmentResponse,
-  type BulkStoreEnrollmentTokenLdapResponse,
-  type Device,
-  type ProvisioningFile,
-  type StartEnrollmentResponse,
-  type User,
-  type UserSortKey,
-  WebErrorCode,
+import type {
+  BulkStartEnrollmentResponse,
+  BulkStoreEnrollmentTokenLdapResponse,
+  Device,
+  ProvisioningFile,
+  StartEnrollmentResponse,
+  User,
+  UserSortKey,
 } from '../../shared/api/types';
 import { useSelectionModal } from '../../shared/components/modals/SelectionModal/useSelectionModal';
 import type { SelectionOption } from '../../shared/components/SelectionSection/type';
@@ -41,7 +39,6 @@ import { useAuth } from '../../shared/hooks/useAuth';
 import {
   getClientSettingsQueryOptions,
   getGroupsInfoQueryOptions,
-  getLicenseInfoQueryOptions,
   getSettingsQueryOptions,
 } from '../../shared/query';
 import { displayDate } from '../../shared/utils/displayDate';
@@ -73,17 +70,6 @@ import { useAddUserModal } from './modals/AddUserModal/useAddUserModal';
 type RowData = User;
 
 const columnHelper = createColumnHelper<RowData>();
-
-const getEnableErrorMessage = (
-  code: WebErrorCode | undefined,
-  genericMessage: string,
-  licenseLimitMessage: string,
-): string => {
-  if (code === WebErrorCode.LicenseLimitReached) {
-    return licenseLimitMessage;
-  }
-  return genericMessage;
-};
 
 export const UsersTable = () => {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -141,7 +127,6 @@ export const UsersTable = () => {
     () => usersData?.pages.flatMap((page) => page.data) ?? [],
     [usersData?.pages],
   );
-  const { data: license } = useSuspenseQuery(getLicenseInfoQueryOptions);
   const { data: enterpriseSettings } = useQuery(getClientSettingsQueryOptions);
   const appInfo = useApp((s) => s.appInfo);
   const isAdmin = useAuth((s) => s.isAdmin);
@@ -161,17 +146,10 @@ export const UsersTable = () => {
       iconLeft: 'add-user',
       testId: 'add-user',
       onClick: () => {
-        if (
-          license?.limits &&
-          license.limits.users.current >= license.limits.users.limit
-        ) {
-          openModal(ModalName.LimitReached);
-        } else {
-          useAddUserModal.getState().open();
-        }
+        useAddUserModal.getState().open();
       },
     }),
-    [license],
+    [],
   );
 
   const tableFilterMessages = useMemo(
@@ -208,13 +186,7 @@ export const UsersTable = () => {
     onSuccess: () => Snackbar.default(m.users_edit_success()),
     onError: () => Snackbar.error(m.users_edit_error()),
     meta: {
-      invalidate: [
-        ['user'],
-        ['group'],
-        ['group-info'],
-        ['activity-log'],
-        ['enterprise_info'],
-      ],
+      invalidate: [['user'], ['group'], ['group-info'], ['activity-log']],
     },
   });
 
@@ -365,7 +337,7 @@ export const UsersTable = () => {
                           active: false,
                           username: rowData.username,
                         }),
-                      invalidateKeys: [['user'], ['enterprise_info']],
+                      invalidateKeys: [['user']],
                       submitProps: {
                         text: m.users_row_menu_disable(),
                         variant: 'critical',
@@ -384,19 +356,12 @@ export const UsersTable = () => {
                           active: true,
                           username: rowData.username,
                         }),
-                      invalidateKeys: [['user'], ['enterprise_info']],
+                      invalidateKeys: [['user']],
                       submitProps: {
                         text: m.users_row_menu_enable(),
                       },
                       onSuccess: () => Snackbar.default(m.users_enable_success()),
-                      onError: (_msg, code) =>
-                        Snackbar.error(
-                          getEnableErrorMessage(
-                            code,
-                            m.users_enable_error(),
-                            m.users_enable_error_license_limit(),
-                          ),
-                        ),
+                      onError: () => Snackbar.error(m.users_enable_error()),
                     });
                   }
                 },
@@ -506,7 +471,7 @@ export const UsersTable = () => {
                         name: rowData.name,
                       }),
                       actionPromise: () => api.user.deleteUser(rowData.username),
-                      invalidateKeys: [['user'], ['enterprise_info']],
+                      invalidateKeys: [['user']],
                       submitProps: {
                         text: m.users_row_menu_delete(),
                         variant: 'critical',
@@ -977,14 +942,7 @@ export const UsersTable = () => {
       onSuccess: () => {
         Snackbar.default(m.users_bulk_enable_success());
       },
-      onError: (_msg, code) =>
-        Snackbar.error(
-          getEnableErrorMessage(
-            code,
-            m.users_bulk_enable_error(),
-            m.users_bulk_enable_error_license_limit(),
-          ),
-        ),
+      onError: () => Snackbar.error(m.users_bulk_enable_error()),
     });
   }, [table]);
 

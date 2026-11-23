@@ -3,14 +3,7 @@ import { OpenIdProviderKind, type OpenIdProviderKindValue } from './api/types';
 export const externalLink = {
   xguard: {
     docs: 'https://docs.xguard.local',
-    pricing: 'https://xguard.local/pricing',
     download: 'https://xguard.local/download',
-    sales: 'https://xguard.local/contact/',
-    scheduleCall:
-      'https://docs.google.com/forms/d/e/1FAIpQLSdKr1NXH1DlQuAF5oQWvT7Zri5yPQ3txvwz3qgtb1n9FtKTgw/viewform',
-    openTicket: 'https://support.xguard.local/support/auth/login/customer/?customer_id=',
-    supportPortal: 'https://support.xguard.local',
-    supportPortalGuide: 'https://docs.xguard.local/support-1/using-the-support-portal',
   },
   github: {
     bugReport:

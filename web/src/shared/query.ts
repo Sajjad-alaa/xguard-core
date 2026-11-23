@@ -280,11 +280,6 @@ export const getActivityLogEventQueryOptions = (id: number) =>
     staleTime: Infinity,
   });
 
-export const getLicenseInfoQueryOptions = queryOptions({
-  queryFn: api.getLicenseInfo,
-  queryKey: ['enterprise_info'],
-});
-
 export const getSessionInfoQueryOptions = queryOptions({
   queryFn: api.getSessionInfo,
   queryKey: ['session-info'],

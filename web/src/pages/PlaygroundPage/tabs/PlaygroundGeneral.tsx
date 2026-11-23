@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { range } from 'radashi';
 import { useCallback, useMemo, useState } from 'react';
@@ -23,7 +22,6 @@ import { useAppForm } from '../../../shared/form';
 import { formChangeLogic } from '../../../shared/formLogic';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
-import { getLicenseInfoQueryOptions } from '../../../shared/query';
 import { ActionableSection } from '../../../shared/xguard-ui/components/ActionableSection/ActionableSection';
 import { ActionableSectionVariant } from '../../../shared/xguard-ui/components/ActionableSection/types';
 import { Badge } from '../../../shared/xguard-ui/components/Badge/Badge';
@@ -133,7 +131,6 @@ export const PlaygroundGeneralTab = () => {
         />
       </Card>
       <Divider spacing={ThemeSpacing.Sm} />
-      <TestPlanUpgrade />
       <Divider spacing={ThemeSpacing.Sm} />
       <Card>
         <CodeCard title="Code section title" value={m.test_placeholder_extreme()} />
@@ -270,62 +267,6 @@ export const PlaygroundGeneralTab = () => {
       <Divider spacing={ThemeSpacing.Sm} />
       <TestFileUpload />
     </div>
-  );
-};
-
-const TestPlanUpgrade = () => {
-  const { data: license, isLoading } = useQuery(getLicenseInfoQueryOptions);
-  return (
-    <Card>
-      <h3>{`Licensing modals`}</h3>
-      <SizedBox height={ThemeSpacing.Xl4} />
-      <div
-        style={{
-          display: 'flex',
-          flexFlow: 'row wrap',
-          gap: ThemeSpacing.Lg,
-        }}
-      >
-        <Button
-          text="Limits reached"
-          onClick={() => {
-            openModal(ModalName.LimitReached);
-          }}
-        />
-        <Button
-          text="Upgrade business"
-          onClick={() => {
-            openModal(ModalName.UpgradeBusiness);
-          }}
-        />
-        <Button
-          text="Upgrade Enterprise"
-          onClick={() => {
-            openModal(ModalName.UpgradeEnterprise);
-          }}
-        />
-        <Button
-          text="License Expired"
-          disabled={!isPresent(license)}
-          loading={isLoading}
-          onClick={() => {
-            if (license) {
-              openModal(ModalName.LicenseExpired, {
-                licenseTier: license.tier,
-              });
-            }
-          }}
-        />
-        <Button
-          text="License Conflict"
-          onClick={() => {
-            openModal(ModalName.LicenseLimitConflict, {
-              conflicts: [],
-            });
-          }}
-        />
-      </div>
-    </Card>
   );
 };
 

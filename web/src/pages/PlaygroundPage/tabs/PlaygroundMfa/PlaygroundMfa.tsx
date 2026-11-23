@@ -155,7 +155,6 @@ export const PlaygroundMfa = () => {
             assignments={locationAssignments}
             flows={locationFlows}
             groupOptions={groupOptions}
-            canUseEnterprise
             onChange={setLocationAssignments}
           />
         </div>

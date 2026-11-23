@@ -5,7 +5,7 @@ import z from 'zod';
 import api from '../shared/api/api';
 import { ActiveWizard, type User, UserMfaMethod } from '../shared/api/types';
 import { useAuth } from '../shared/hooks/useAuth';
-import { getLicenseInfoQueryOptions, getSessionInfoQueryOptions } from '../shared/query';
+import { getSessionInfoQueryOptions } from '../shared/query';
 import { isPresent } from '../shared/xguard-ui/utils/isPresent';
 
 const basicSchema = z.object({
@@ -74,7 +74,6 @@ function RouteComponent() {
       const basicResult = basicSchema.safeParse(state);
       const basicResponse = basicResult.data;
       if (isPresent(basicResponse) && basicResult.success) {
-        queryClient.removeQueries({ queryKey: getLicenseInfoQueryOptions.queryKey });
         useAuth.getState().setUser(basicResponse.user);
         await Promise.all([
           queryClient.invalidateQueries({

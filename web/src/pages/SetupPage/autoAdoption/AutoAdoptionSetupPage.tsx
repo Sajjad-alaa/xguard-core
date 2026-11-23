@@ -107,16 +107,6 @@ const AutoAdoptionFailedWelcomeContent = ({
       <SizedBox height={ThemeSpacing.Lg} />
       <div className="support-links">
         <div className="support-row">
-          <Icon icon="support" />
-          <p>
-            {m.initial_setup_auto_adoption_failed_support_business_prefix()}{' '}
-            <a href="mailto:support@xguard.local">
-              {m.initial_setup_auto_adoption_failed_support_business_link()}
-            </a>{' '}
-            {m.initial_setup_auto_adoption_failed_support_business_suffix()}
-          </p>
-        </div>
-        <div className="support-row">
           <Icon icon="config" />
           <p>
             {m.initial_setup_auto_adoption_failed_support_community_prefix()}{' '}

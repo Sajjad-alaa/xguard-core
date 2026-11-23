@@ -2,7 +2,6 @@ import z from 'zod';
 import type { ActivityLogStream, AddDeviceResponse, User } from '../../api/types';
 import type {
   OpenAddApiTokenModal,
-  OpenAddLocationModal,
   OpenAddNetworkDeviceModal,
   OpenAppUpdateModal,
   OpenAssignUserDeviceIPModal,
@@ -24,22 +23,12 @@ import type {
   OpenEditNetworkDeviceModal,
   OpenEditUserModal,
   OpenEnrollmentTokenModal,
-  OpenLicenseExpiredModal,
-  OpenLicenseLimitConflictModal,
   OpenNetworkDeviceConfigModal,
   OpenNetworkDeviceTokenModal,
   OpenRenameApiTokenModal,
-  OpenSettingsLicenseModal,
 } from './types';
 
 export const ModalName = {
-  LicenseExpired: 'licenseExpired',
-  LicenseReactivated: 'licenseReactivated',
-  LicenseLimitConflict: 'licenseLimitConflict',
-  UpgradeBusiness: 'upgradeBusiness',
-  UpgradeEnterprise: 'upgradeEnterprise',
-  LimitReached: 'limitReached',
-  SettingsLicense: 'settingsLicense',
   SendTestMail: 'sendTestMail',
   GatewaySetup: 'gatewaySetup',
   DisplayList: 'displayList',
@@ -194,7 +183,6 @@ const modalOpenArgsSchema = z.discriminatedUnion('name', [
   }),
   z.object({
     name: z.literal(ModalName.AddLocation),
-    data: z.custom<OpenAddLocationModal>(),
   }),
   z.object({
     name: z.literal(ModalName.AddLogStreaming),
@@ -205,30 +193,6 @@ const modalOpenArgsSchema = z.discriminatedUnion('name', [
   }),
   z.object({
     name: z.literal(ModalName.SendTestMail),
-  }),
-  z.object({
-    name: z.literal(ModalName.SettingsLicense),
-    data: z.custom<OpenSettingsLicenseModal>(),
-  }),
-  z.object({
-    name: z.literal(ModalName.LimitReached),
-  }),
-  z.object({
-    name: z.literal(ModalName.LicenseLimitConflict),
-    data: z.custom<OpenLicenseLimitConflictModal>(),
-  }),
-  z.object({
-    name: z.literal(ModalName.UpgradeBusiness),
-  }),
-  z.object({
-    name: z.literal(ModalName.UpgradeEnterprise),
-  }),
-  z.object({
-    name: z.literal(ModalName.LicenseExpired),
-    data: z.custom<OpenLicenseExpiredModal>(),
-  }),
-  z.object({
-    name: z.literal(ModalName.LicenseReactivated),
   }),
   z.object({
     name: z.literal(ModalName.AddNewDevice),
