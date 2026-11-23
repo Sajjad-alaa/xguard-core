@@ -396,7 +396,7 @@ async fn test_method_availability_basic(_: PgPoolOptions, options: PgConnectOpti
     assert_eq!(response.status(), StatusCode::OK);
     let items = response.json::<Value>().await;
     let items = items.as_array().unwrap();
-    assert_eq!(items.len(), 6);
+    assert_eq!(items.len(), 7);
 
     let find = |method: &str| -> &Value {
         items
@@ -422,6 +422,12 @@ async fn test_method_availability_basic(_: PgPoolOptions, options: PgConnectOpti
     // FIDO2 security keys need no deployment-level setup.
     assert_eq!(find("fido2")["available"].as_bool(), Some(true));
     assert_eq!(find("fido2")["reason"].as_str(), Some("available"));
+    // RADIUS MFA needs a configured, enabled RADIUS server.
+    assert_eq!(find("radius")["available"].as_bool(), Some(false));
+    assert_eq!(
+        find("radius")["reason"].as_str(),
+        Some("radius_not_configured")
+    );
 
     // With an enabled provider, OpenID can be used in MFA flows.
     let response = client
