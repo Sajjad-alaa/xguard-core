@@ -108,6 +108,7 @@
   "activity_event_mfa_flow_deleted": "MFA flow deleted",
   "activity_event_location_mfa_flows_assigned": "Assigned MFA flows",
   "activity_event_location_group_mtus_changed": "Group MTU overrides changed",
+  "activity_event_location_acl_allowed_ips_changed": "Allowed IPs from firewall rules changed",
   "activity_event_device_posture_check_passed": "Posture check passed",
   "activity_event_device_posture_check_failed": "Posture check failed",
   "activity_event_ldap_sync_user_created": "LDAP sync created user",

@@ -128,7 +128,7 @@ const AddUserModalForm = () => {
   const { mutateAsync: addUserMutation } = useMutation({
     mutationFn: api.user.addUser,
     meta: {
-      invalidate: [['user'], ['enterprise_info']],
+      invalidate: [['user']],
     },
   });
 

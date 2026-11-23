@@ -6,8 +6,7 @@ import { DeletionBlockedModal } from '../../shared/components/modals/DeletionBlo
 import { Page } from '../../shared/components/Page/Page';
 import { TableSkeleton } from '../../shared/components/skeleton/TableSkeleton/TableSkeleton';
 import { TablePageLayout } from '../../shared/layout/TablePageLayout/TablePageLayout';
-import { getLicenseInfoQueryOptions, getMfaFlowsQueryOptions } from '../../shared/query';
-import { canUseBusinessFeature, licenseActionCheck } from '../../shared/utils/license';
+import { getMfaFlowsQueryOptions } from '../../shared/query';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
 import { SizedBox } from '../../shared/xguard-ui/components/SizedBox/SizedBox';
@@ -17,20 +16,12 @@ import { MfaFlowsTable } from './MfaFlowsTable';
 const MfaPageContent = () => {
   const navigate = useNavigate();
   const { data: flows } = useSuspenseQuery(getMfaFlowsQueryOptions);
-  const { data: licenseInfo } = useSuspenseQuery(getLicenseInfoQueryOptions);
   const addMfaFlowButtonProps: ButtonProps = {
     text: m.mfa_flows_button_add(),
     iconLeft: 'plus',
     testId: 'add-mfa-flow',
     onClick: () => {
-      if (flows.length === 0) {
-        void navigate({ to: '/mfa/add-flow' });
-        return;
-      }
-
-      licenseActionCheck(canUseBusinessFeature(licenseInfo), () => {
-        void navigate({ to: '/mfa/add-flow' });
-      });
+      void navigate({ to: '/mfa/add-flow' });
     },
   };
 

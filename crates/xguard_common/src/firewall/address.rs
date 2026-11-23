@@ -51,6 +51,37 @@ impl AddressRange {
         }
     }
 
+    /// Whether `address` lies in this range.
+    #[must_use]
+    pub fn contains(&self, address: IpAddr) -> bool {
+        match (*self, address) {
+            (Self::V4(s, e), IpAddr::V4(a)) => s <= a && a <= e,
+            (Self::V6(s, e), IpAddr::V6(a)) => s <= a && a <= e,
+            _ => false,
+        }
+    }
+
+    /// The smallest list of CIDR networks that covers exactly this range, in address order.
+    /// At most 2 x (address bits) networks.
+    #[must_use]
+    pub fn to_networks(&self) -> Vec<IpNetwork> {
+        match *self {
+            Self::V4(s, e) => cidr_blocks(u128::from(u32::from(s)), u128::from(u32::from(e)), 32)
+                .into_iter()
+                .filter_map(|(start, prefix)| {
+                    let start = u32::try_from(start).ok()?;
+                    IpNetwork::new(Ipv4Addr::from(start).into(), prefix).ok()
+                })
+                .collect(),
+            Self::V6(s, e) => cidr_blocks(u128::from(s), u128::from(e), 128)
+                .into_iter()
+                .filter_map(|(start, prefix)| {
+                    IpNetwork::new(Ipv6Addr::from(start).into(), prefix).ok()
+                })
+                .collect(),
+        }
+    }
+
     #[must_use]
     pub fn start(&self) -> IpAddr {
         match *self {
@@ -65,6 +96,35 @@ impl AddressRange {
             Self::V4(_, e) => e.into(),
             Self::V6(_, e) => e.into(),
         }
+    }
+}
+
+/// Splits `start..=end` (addresses of a `bits`-bit family) into aligned blocks, largest first
+/// at each step: `(block start, prefix length)`.
+fn cidr_blocks(start: u128, end: u128, bits: u32) -> Vec<(u128, u8)> {
+    let mut blocks = Vec::new();
+    let mut current = start;
+    loop {
+        // The largest block that starts at `current` (alignment) and does not pass `end` (size).
+        let alignment = current.trailing_zeros().min(bits);
+        let remaining = end - current;
+        let size = if remaining == u128::MAX {
+            128
+        } else {
+            127 - (remaining + 1).leading_zeros()
+        };
+        let host_bits = alignment.min(size);
+        let prefix = u8::try_from(bits - host_bits).expect("prefix fits in u8");
+        blocks.push((current, prefix));
+        let last = if host_bits >= 128 {
+            u128::MAX
+        } else {
+            current | ((1u128 << host_bits) - 1)
+        };
+        if last >= end {
+            return blocks;
+        }
+        current = last + 1;
     }
 }
 
@@ -196,6 +256,48 @@ mod tests {
             parse_destination("10.0.0.9-10.0.0.1"),
             Err(AddressError::Reversed(_))
         ));
+    }
+
+    fn networks(range: &str) -> Vec<String> {
+        parse_destination(range)
+            .unwrap()
+            .1
+            .to_networks()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn ranges_become_minimal_cidrs() {
+        assert_eq!(networks("10.0.0.0/24"), ["10.0.0.0/24"]);
+        assert_eq!(networks("10.0.0.5"), ["10.0.0.5/32"]);
+        assert_eq!(
+            networks("10.0.0.1-10.0.0.6"),
+            ["10.0.0.1/32", "10.0.0.2/31", "10.0.0.4/31", "10.0.0.6/32"]
+        );
+        assert_eq!(
+            networks("10.0.0.0-10.0.1.255"),
+            ["10.0.0.0/23"],
+            "a range on block boundaries is one network"
+        );
+        assert_eq!(networks("0.0.0.0/0"), ["0.0.0.0/0"]);
+        assert_eq!(networks("0.0.0.0-255.255.255.254").len(), 32);
+        assert_eq!(networks("::/0"), ["::/0"]);
+        assert_eq!(networks("fd00::1-fd00::2"), ["fd00::1/128", "fd00::2/128"]);
+        assert_eq!(
+            networks("::1-ffff:ffff:ffff:ffff:ffff:ffff:ffff:fffe").len(),
+            254,
+            "worst case is bounded by twice the address bits"
+        );
+    }
+
+    #[test]
+    fn range_contains() {
+        let range = parse_destination("10.0.0.0/24").unwrap().1;
+        assert!(range.contains("10.0.0.53".parse().unwrap()));
+        assert!(!range.contains("10.0.1.1".parse().unwrap()));
+        assert!(!range.contains("fd00::1".parse().unwrap()));
     }
 
     #[test]

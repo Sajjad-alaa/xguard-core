@@ -8,6 +8,7 @@ use sqlx::{
 
 use super::{
     address::AddressRange,
+    allowed_ips::effective_allowed_ips,
     compile::{PolicyAction, compile, normalize},
     rule::{FirewallRule, FirewallRuleAction, FirewallRuleError, FirewallRuleInput},
 };
@@ -139,6 +140,9 @@ struct Fixture {
     bob: Id,
     group: Id,
     printer: Id,
+    alice_laptop: Id,
+    bob_laptop: Id,
+    carol_laptop: Id,
 }
 
 async fn location(pool: &PgPool, name: &str, acl: bool) -> WireguardNetwork<Id> {
@@ -196,9 +200,9 @@ async fn fixture(pool: &PgPool) -> Fixture {
     alice.add_to_group(pool, &group).await.unwrap();
     carol.add_to_group(pool, &group).await.unwrap();
 
-    device(pool, alice.id, DeviceType::User, location_main.id, 2).await;
-    device(pool, bob.id, DeviceType::User, location_main.id, 3).await;
-    device(pool, carol.id, DeviceType::User, location_main.id, 4).await;
+    let alice_laptop = device(pool, alice.id, DeviceType::User, location_main.id, 2).await;
+    let bob_laptop = device(pool, bob.id, DeviceType::User, location_main.id, 3).await;
+    let carol_laptop = device(pool, carol.id, DeviceType::User, location_main.id, 4).await;
     let printer = device(pool, bob.id, DeviceType::Network, location_main.id, 10).await;
     Fixture {
         location: location_main,
@@ -207,6 +211,9 @@ async fn fixture(pool: &PgPool) -> Fixture {
         bob: bob.id,
         group: group.id,
         printer,
+        alice_laptop,
+        bob_laptop,
+        carol_laptop,
     }
 }
 
@@ -445,4 +452,273 @@ async fn test_compile_off_and_snat(_: PgPoolOptions, options: PgConnectOptions) 
     assert_eq!(policy.snat.len(), 1);
     assert_eq!(policy.snat[0].to, IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7)));
     assert_eq!(policy.sets[policy.snat[0].source as usize], [host(2)]);
+}
+
+// --- AllowedIPs from firewall rules ---
+
+async fn routes(pool: &PgPool, location: &WireguardNetwork<Id>, device: Id) -> Vec<String> {
+    let mut conn = pool.acquire().await.unwrap();
+    effective_allowed_ips(&mut conn, location, device)
+        .await
+        .unwrap()
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
+
+#[sqlx::test]
+async fn test_allowed_ips_follow_the_rules_for_each_device(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    let pool = setup_pool(options).await;
+    let f = fixture(&pool).await;
+    let mut office = f
+        .location
+        .clone()
+        .set_address(vec!["10.6.0.1/24".parse().unwrap()])
+        .unwrap();
+    office.allowed_ips = vec!["10.0.0.0/8".parse().unwrap()];
+    office.allowed_ips_from_acl = true;
+
+    // Group rule (Alice; Carol is disabled), overlapping user rule for Alice.
+    create(
+        &pool,
+        FirewallRuleInput {
+            any_source: false,
+            groups: vec![f.group],
+            any_destination: false,
+            destinations: vec!["192.168.1.0/25".into()],
+            protocols: vec![6],
+            ports: vec!["443".into()],
+            ..input("engineering web")
+        },
+    )
+    .await;
+    create(
+        &pool,
+        FirewallRuleInput {
+            any_source: false,
+            users: vec![f.alice],
+            any_destination: false,
+            destinations: vec!["192.168.1.128/25".into(), "192.168.1.200".into()],
+            ..input("alice")
+        },
+    )
+    .await;
+    // A deny that selects everyone routes nothing and removes nothing.
+    create(
+        &pool,
+        FirewallRuleInput {
+            priority: 1,
+            any_source: false,
+            all_users: true,
+            all_network_devices: true,
+            action: FirewallRuleAction::Deny,
+            any_destination: false,
+            destinations: vec!["192.168.0.0/16".into()],
+            ..input("deny lan")
+        },
+    )
+    .await;
+    // A device-specific rule and an all-network-devices rule for the printer.
+    create(
+        &pool,
+        FirewallRuleInput {
+            any_source: false,
+            devices: vec![f.printer],
+            any_destination: false,
+            destinations: vec!["172.16.0.10-172.16.0.11".into()],
+            ..input("printer server")
+        },
+    )
+    .await;
+    create(
+        &pool,
+        FirewallRuleInput {
+            any_source: false,
+            all_network_devices: true,
+            any_destination: false,
+            destinations: vec!["172.16.9.0/24".into()],
+            ..input("network devices")
+        },
+    )
+    .await;
+    // An "any source" rule applies to every device.
+    create(
+        &pool,
+        FirewallRuleInput {
+            any_destination: false,
+            destinations: vec!["fd00:10::/64".into()],
+            ..input("everyone v6")
+        },
+    )
+    .await;
+    // Rules that must not count at the office.
+    for rule in [
+        FirewallRuleInput {
+            enabled: false,
+            any_destination: false,
+            destinations: vec!["8.8.8.8".into()],
+            ..input("disabled")
+        },
+        FirewallRuleInput {
+            expires_at: Some((Utc::now() - Duration::hours(1)).naive_utc()),
+            any_destination: false,
+            destinations: vec!["8.8.4.4".into()],
+            ..input("expired")
+        },
+        FirewallRuleInput {
+            all_locations: false,
+            locations: vec![f.other_location.id],
+            any_destination: false,
+            destinations: vec!["9.9.9.9".into()],
+            ..input("lab only")
+        },
+    ] {
+        create(&pool, rule).await;
+    }
+
+    assert_eq!(
+        routes(&pool, &office, f.alice_laptop).await,
+        ["10.6.0.0/24", "192.168.1.0/24", "fd00:10::/64"],
+        "group and user rules are merged"
+    );
+    assert_eq!(
+        routes(&pool, &office, f.bob_laptop).await,
+        ["10.6.0.0/24", "fd00:10::/64"]
+    );
+    assert_eq!(
+        routes(&pool, &office, f.carol_laptop).await,
+        ["10.6.0.0/24", "fd00:10::/64"],
+        "a disabled user's group membership counts for nothing"
+    );
+    assert_eq!(
+        routes(&pool, &office, f.printer).await,
+        [
+            "10.6.0.0/24",
+            "172.16.0.10/31",
+            "172.16.9.0/24",
+            "fd00:10::/64"
+        ],
+        "network devices get device and all-network-devices rules, not their owner's"
+    );
+
+    // A rule for "any destination" routes the location's static list.
+    create(
+        &pool,
+        FirewallRuleInput {
+            any_source: false,
+            users: vec![f.bob],
+            ..input("bob anywhere")
+        },
+    )
+    .await;
+    assert_eq!(
+        routes(&pool, &office, f.bob_laptop).await,
+        ["10.0.0.0/8", "fd00:10::/64"]
+    );
+
+    // Group membership changes are picked up on the next build.
+    let group = Group::find_by_id(&pool, f.group).await.unwrap().unwrap();
+    User::find_by_id(&pool, f.bob)
+        .await
+        .unwrap()
+        .unwrap()
+        .add_to_group(&pool, &group)
+        .await
+        .unwrap();
+    assert_eq!(
+        routes(&pool, &office, f.bob_laptop).await,
+        ["10.0.0.0/8", "192.168.1.0/25", "fd00:10::/64"]
+    );
+
+    // Option off, or firewall off: the static list, exactly as before.
+    let mut off = office.clone();
+    off.allowed_ips_from_acl = false;
+    assert_eq!(routes(&pool, &off, f.alice_laptop).await, ["10.0.0.0/8"]);
+    let mut no_firewall = office.clone();
+    no_firewall.acl_enabled = false;
+    assert_eq!(
+        routes(&pool, &no_firewall, f.alice_laptop).await,
+        ["10.0.0.0/8"]
+    );
+}
+
+#[sqlx::test]
+async fn test_allowed_ips_match_the_compiled_policy(_: PgPoolOptions, options: PgConnectOptions) {
+    // The routes a device gets are exactly the destinations of the compiled allow rules whose
+    // source set holds the device's address: one source of truth for both.
+    let pool = setup_pool(options).await;
+    let f = fixture(&pool).await;
+    let mut office = f.location.clone();
+    office.allowed_ips_from_acl = true;
+    let rules = [
+        FirewallRuleInput {
+            any_source: false,
+            groups: vec![f.group],
+            ..input("group")
+        },
+        FirewallRuleInput {
+            any_source: false,
+            users: vec![f.bob],
+            ..input("bob")
+        },
+        FirewallRuleInput {
+            any_source: false,
+            all_users: true,
+            ..input("users")
+        },
+        FirewallRuleInput {
+            any_source: false,
+            devices: vec![f.printer, f.carol_laptop],
+            ..input("devices")
+        },
+    ];
+    for (n, rule) in rules.into_iter().enumerate() {
+        create(
+            &pool,
+            FirewallRuleInput {
+                any_destination: false,
+                destinations: vec![format!("192.168.{n}.0/24")],
+                ..rule
+            },
+        )
+        .await;
+    }
+
+    let mut conn = pool.acquire().await.unwrap();
+    let policy = compile(&mut conn, &office).await.unwrap().unwrap();
+    for (device, address) in [
+        (f.alice_laptop, 2),
+        (f.bob_laptop, 3),
+        (f.carol_laptop, 4),
+        (f.printer, 10),
+    ] {
+        let mut expected: Vec<AddressRange> = policy
+            .rules
+            .iter()
+            .filter(|rule| {
+                rule.source.is_some_and(|set| {
+                    policy.sets[set as usize]
+                        .iter()
+                        .any(|range| range.contains(ip(address)))
+                })
+            })
+            .flat_map(|rule| policy.sets[rule.destination.unwrap() as usize].clone())
+            .collect();
+        expected = normalize(expected);
+        let derived: Vec<AddressRange> =
+            super::allowed_ips::applicable_rules(&mut conn, &office, device)
+                .await
+                .unwrap()
+                .iter()
+                .flat_map(|rule| {
+                    rule.destinations
+                        .iter()
+                        .map(|d| super::address::parse_destination(d).unwrap().1)
+                })
+                .collect();
+        assert_eq!(normalize(derived), expected, "device at 10.6.0.{address}");
+    }
 }

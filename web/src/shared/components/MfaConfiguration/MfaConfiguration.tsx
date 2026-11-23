@@ -8,15 +8,10 @@ import {
   MfaMethodAvailabilityReason,
   type MfaMethodAvailabilityReasonValue,
 } from '../../api/types';
-import {
-  getLicenseInfoQueryOptions,
-  getMfaMethodAvailabilityQueryOptions,
-} from '../../query';
-import { canUseBusinessFeature } from '../../utils/license';
+import { getMfaMethodAvailabilityQueryOptions } from '../../query';
 import { mfaFlowMethodHints, mfaFlowMethodLabels } from '../../utils/mfaFlowSteps';
 import type { ButtonProps } from '../../xguard-ui/components/Button/types';
 import { FieldError } from '../../xguard-ui/components/FieldError/FieldError';
-import { InfoBanner } from '../../xguard-ui/components/InfoBanner/InfoBanner';
 import { MfaConfigurationStep } from './components/MfaConfigurationStep';
 import { MfaMethodsMenu } from './components/MfaMethodsMenu';
 import type {
@@ -44,13 +39,8 @@ export const MfaConfiguration = ({ onChange, steps, error }: MfaConfigurationPro
   const stepsTrackRef = useRef<HTMLUListElement>(null);
   const [isReordering, setReordering] = useState(false);
   const { data: methodData } = useQuery(getMfaMethodAvailabilityQueryOptions);
-  const { data: licenseInfo } = useQuery(getLicenseInfoQueryOptions);
   const methodAvailability = methodData?.methodAvailability;
   const methods = methodData?.methods ?? [];
-  const businessLicenseCheck =
-    licenseInfo === undefined ? undefined : canUseBusinessFeature(licenseInfo);
-  const additionalStepRequiresBusiness =
-    steps.length > 0 && businessLicenseCheck?.result === false;
 
   const buildOption = useCallback(
     (method: MfaFlowMethodValue, onClick: () => void) => {
@@ -72,31 +62,10 @@ export const MfaConfiguration = ({ onChange, steps, error }: MfaConfigurationPro
     },
     [methodAvailability],
   );
+  // Every method is offered; unavailable ones are disabled with the reason as their helper.
   const buildMethodGroups = (
     methods: MfaFlowMethodValue[],
-  ): MfaConfigurationMethodGroup[] => {
-    const licensedMethods = methods.filter((method) => {
-      const reason = methodAvailability?.find((item) => item.method === method)?.reason;
-      return reason === MfaMethodAvailabilityReason.NotSupported;
-    });
-    if (licensedMethods.length === 0) return [{ items: methods }];
-
-    const planMethods = methods.filter((method) => !licensedMethods.includes(method));
-    return [
-      ...(planMethods.length > 0
-        ? [
-            {
-              header: { text: m.mfa_flow_methods_available_in_plan() },
-              items: planMethods,
-            },
-          ]
-        : []),
-      {
-        header: { text: m.mfa_flow_methods_available_in_higher_plans() },
-        items: licensedMethods,
-      },
-    ];
-  };
+  ): MfaConfigurationMethodGroup[] => [{ items: methods }];
 
   const addStepMenuOptions = buildMethodGroups(methods).map((group) => ({
     ...group,
@@ -114,9 +83,7 @@ export const MfaConfiguration = ({ onChange, steps, error }: MfaConfigurationPro
     iconRight: 'arrow-small',
     iconRightRotation: 'down',
     text: m.mfa_flow_step_add(),
-    disabled:
-      methodAvailability === undefined ||
-      (steps.length > 0 && businessLicenseCheck === undefined),
+    disabled: methodAvailability === undefined,
   };
 
   const deleteStep = useCallback(
@@ -182,19 +149,11 @@ export const MfaConfiguration = ({ onChange, steps, error }: MfaConfigurationPro
         ))}
       </Reorder.Group>
       <div className="actions">
-        {additionalStepRequiresBusiness ? (
-          <InfoBanner
-            icon="check-circle"
-            variant="action"
-            text={m.mfa_flow_additional_steps_business_required()}
-          />
-        ) : (
-          <MfaMethodsMenu
-            {...addStepButtonProps}
-            kind="button"
-            options={addStepMenuOptions}
-          />
-        )}
+        <MfaMethodsMenu
+          {...addStepButtonProps}
+          kind="button"
+          options={addStepMenuOptions}
+        />
       </div>
       <FieldError error={steps.length === 0 ? error : undefined} />
     </div>

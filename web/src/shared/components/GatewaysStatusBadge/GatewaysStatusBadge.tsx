@@ -10,18 +10,15 @@ import {
   useFloating,
   useInteractions,
 } from '@floating-ui/react';
-import { useSuspenseQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import clsx from 'clsx';
 import { type HTMLProps, useMemo, useState } from 'react';
 import { useGatewayWizardStore } from '../../../pages/GatewaySetupPage/useGatewayWizardStore';
 import { m } from '../../../paraglide/messages';
 import api from '../../api/api';
-import { type GatewayInfo, LicenseFeature } from '../../api/types';
+import type { GatewayInfo } from '../../api/types';
 import { openModal } from '../../hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../hooks/modalControls/modalTypes';
-import { getLicenseInfoQueryOptions } from '../../query';
-import { canUseEnterpriseFeature, licenseActionCheck } from '../../utils/license';
 import { Badge } from '../../xguard-ui/components/Badge/Badge';
 import type { BadgeVariantValue } from '../../xguard-ui/components/Badge/types';
 import { Button } from '../../xguard-ui/components/Button/Button';
@@ -157,7 +154,6 @@ const FloatingMenu = ({
   const connected = useMemo(() => status.filter((gw) => gw.connected), [status]);
   const disconnected = useMemo(() => status.filter((gw) => !gw.connected), [status]);
   const navigate = useNavigate();
-  const { data: license } = useSuspenseQuery(getLicenseInfoQueryOptions);
 
   return (
     <div className={clsx('gateways-status-floating', className)} {...rest}>
@@ -237,13 +233,8 @@ const FloatingMenu = ({
         text={m.gateway_add_more()}
         onClick={() => {
           onClose();
-          licenseActionCheck(
-            canUseEnterpriseFeature(license, LicenseFeature.ComponentHa),
-            () => {
-              useGatewayWizardStore.getState().start({ network_id: locationId });
-              navigate({ to: '/setup-gateway', replace: true });
-            },
-          );
+          useGatewayWizardStore.getState().start({ network_id: locationId });
+          navigate({ to: '/setup-gateway', replace: true });
         }}
       />
     </div>

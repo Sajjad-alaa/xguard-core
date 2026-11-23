@@ -527,109 +527,6 @@ export interface ApiError {
   code?: WebErrorCode;
 }
 
-export const ApiResponseCode = {
-  LicenseReactivated: 'license_reactivated',
-} as const;
-
-export type ApiResponseCode = (typeof ApiResponseCode)[keyof typeof ApiResponseCode];
-
-export interface AppInfoExceededLimits {
-  user: boolean;
-  wireguard_network: boolean;
-}
-
-export interface LicenseAppInfo {
-  enterprise: boolean;
-  limits_exceeded: AppInfoExceededLimits;
-  any_limit_exceeded: boolean;
-  tier?: string | null;
-}
-
-export interface LimitInfo {
-  current: number;
-  limit: number;
-}
-
-export interface LicenseLimitsInfo {
-  locations: LimitInfo;
-  users: LimitInfo;
-  devices?: LimitInfo | null;
-  user_devices?: LimitInfo | null;
-  network_devices?: LimitInfo | null;
-}
-
-export interface LicenseCheckCounts {
-  user: number;
-  user_device: number;
-  network_device: number;
-  location: number;
-}
-
-export interface LicenseCheckLimits {
-  users: number;
-  devices: number;
-  locations: number;
-  network_devices?: number | null;
-}
-
-export interface LicenseCheckResponse {
-  limits: LicenseCheckLimits | null;
-  counts: LicenseCheckCounts;
-}
-
-export const LicenseTier = {
-  Business: 'Business',
-  Enterprise: 'Enterprise',
-} as const;
-
-export const SupportType = {
-  Free: 'Free',
-  Basic: 'Basic',
-  Direct: 'Direct',
-  BasicEnterprise: 'BasicEnterprise',
-  DirectEnterprise: 'DirectEnterprise',
-} as const;
-
-// Additive, per-license feature grants mirrored from the backend `LicenseFeature` enum.
-// Each value enables a single enterprise capability regardless of the license tier.
-export const LicenseFeature = {
-  ServiceLocations: 'ServiceLocations',
-  DevicePosture: 'DevicePosture',
-  AclAllowedIps: 'AclAllowedIps',
-  ComponentHa: 'ComponentHa',
-  GroupMTUOverride: 'GroupMTUOverride',
-  MfaFlow: 'MfaFlow',
-  Fido2: 'Fido2',
-} as const;
-
-export type LicenseFeatureValue = (typeof LicenseFeature)[keyof typeof LicenseFeature];
-
-export type LicenseTierValue = (typeof LicenseTier)[keyof typeof LicenseTier];
-export type SupportTypeValue = (typeof SupportType)[keyof typeof SupportType];
-
-export type SupportTypeNarrowValue = 'Free' | 'Basic' | 'Direct';
-
-export interface LicenseInfo extends LicenseInfoApi {
-  support_type_narrow: SupportTypeNarrowValue;
-}
-
-export interface LicenseInfoApi {
-  subscription: boolean;
-  valid_until: string | null;
-  expired: boolean;
-  limits_exceeded: boolean;
-  tier: LicenseTierValue;
-  support_type: SupportTypeValue;
-  limits: LicenseLimitsInfo | null;
-  // Effective set of enabled enterprise features (tier-granted plus additive flags).
-  features: LicenseFeatureValue[];
-  customer_id: string;
-}
-
-export interface LicenseInfoResponse {
-  license_info: LicenseInfoApi | null;
-}
-
 export interface LdapInfo {
   enabled: boolean;
   ad: boolean;
@@ -1125,8 +1022,6 @@ export interface NetworkLocation {
   acl_default_allow: boolean;
   allowed_ips_from_acl: boolean;
   mfa_enabled: boolean;
-  /** Minimum license tier required by saved MFA assignments. `null` means disabled MFA or the Free tier. */
-  mfa_required_tier: LicenseTierValue | null;
   service_location_mode: LocationServiceModeValue;
   has_devices: boolean;
   posture_checks?: number[];
@@ -1150,7 +1045,6 @@ export interface EditNetworkLocation
     | 'address'
     | 'has_devices'
     | 'posture_checks'
-    | 'mfa_required_tier'
   > {
   allowed_ips: string;
   address: string;

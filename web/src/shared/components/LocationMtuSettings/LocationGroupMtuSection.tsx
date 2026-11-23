@@ -3,9 +3,8 @@ import './style.scss';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { m } from '../../../paraglide/messages';
-import { type GroupClientMtu, LicenseFeature } from '../../api/types';
-import { getGroupsInfoQueryOptions, getLicenseInfoQueryOptions } from '../../query';
-import { canUseEnterpriseFeature } from '../../utils/license';
+import type { GroupClientMtu } from '../../api/types';
+import { getGroupsInfoQueryOptions } from '../../query';
 import { AppText } from '../../xguard-ui/components/AppText/AppText';
 import { Button } from '../../xguard-ui/components/Button/Button';
 import { SizedBox } from '../../xguard-ui/components/SizedBox/SizedBox';
@@ -25,11 +24,6 @@ type Editing = number | 'new';
 export const LocationGroupMtuSection = ({ overrides, onChange }: Props) => {
   const [editing, setEditing] = useState<Editing>();
   const [modalOpen, setModalOpen] = useState(false);
-  const { data: licenseInfo } = useQuery(getLicenseInfoQueryOptions);
-  const locked = !canUseEnterpriseFeature(
-    licenseInfo ?? null,
-    LicenseFeature.GroupMTUOverride,
-  ).result;
 
   const { data: groupOptions = [], isPending: groupsPending } = useQuery({
     ...getGroupsInfoQueryOptions,
@@ -87,7 +81,6 @@ export const LocationGroupMtuSection = ({ overrides, onChange }: Props) => {
       <Button
         variant="outlined"
         text={m.location_network_group_mtu_add()}
-        disabled={locked}
         loading={groupsPending}
         onClick={() => openEditor('new')}
       />
@@ -100,7 +93,6 @@ export const LocationGroupMtuSection = ({ overrides, onChange }: Props) => {
               chips={override.group_ids.map((id) => groupNameById.get(id) ?? String(id))}
               onEdit={() => openEditor(index)}
               onRemove={() => onChange(overrides.filter((_, other) => other !== index))}
-              disabled={locked}
             />
           ))}
         </div>

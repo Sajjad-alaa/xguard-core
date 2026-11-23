@@ -9,33 +9,18 @@ import {
 import { useMemo, useState } from 'react';
 import { m } from '../../../paraglide/messages';
 import api from '../../../shared/api/api';
-import {
-  LicenseFeature,
-  LocationServiceMode,
-  type NetworkLocation,
-} from '../../../shared/api/types';
+import type { NetworkLocation } from '../../../shared/api/types';
 import { GatewaysStatusBadge } from '../../../shared/components/GatewaysStatusBadge/GatewaysStatusBadge';
 import { TableBadgesCell } from '../../../shared/components/TableBadgesCell/TableBadgesCell';
 import { TableValuesListCell } from '../../../shared/components/TableValuesListCell/TableValuesListCell';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
-import {
-  getLicenseInfoQueryOptions,
-  getLocationsQueryOptions,
-} from '../../../shared/query';
+import { getLocationsQueryOptions } from '../../../shared/query';
 import { tableSortingFns } from '../../../shared/utils/dateSortingFn';
-import {
-  canUseBusinessFeature,
-  canUseEnterpriseFeature,
-  type LicenseCheckResult,
-  licenseActionCheck,
-  tierLicenseCheck,
-} from '../../../shared/utils/license';
 import { Badge } from '../../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../../shared/xguard-ui/components/Button/types';
 import { EmptyStateFlexible } from '../../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
-import { Helper } from '../../../shared/xguard-ui/components/Helper/Helper';
 import { Icon } from '../../../shared/xguard-ui/components/Icon';
 import { Search } from '../../../shared/xguard-ui/components/Search/Search';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
@@ -46,7 +31,6 @@ import { TableEditCell } from '../../../shared/xguard-ui/components/table/TableE
 import { TableTop } from '../../../shared/xguard-ui/components/table/TableTop/TableTop';
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing, ThemeVariable } from '../../../shared/xguard-ui/types';
-import { isPresent } from '../../../shared/xguard-ui/utils/isPresent';
 import { useGatewayWizardStore } from '../../GatewaySetupPage/useGatewayWizardStore';
 
 type RowData = NetworkLocation;
@@ -55,7 +39,6 @@ const columnHelper = createColumnHelper<RowData>();
 
 export const LocationsTable = () => {
   const { data: locations } = useSuspenseQuery(getLocationsQueryOptions);
-  const { data: license } = useSuspenseQuery(getLicenseInfoQueryOptions);
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
@@ -76,46 +59,13 @@ export const LocationsTable = () => {
       iconLeft: 'add-location',
       testId: 'add-location',
       onClick: () => {
-        if (
-          license?.limits &&
-          license.limits.locations.current >= license.limits.locations.limit
-        ) {
-          openModal(ModalName.LimitReached);
-        } else {
-          openModal(ModalName.AddLocation, {
-            license,
-          });
-        }
+        openModal(ModalName.AddLocation);
       },
     }),
-    [license],
+    [],
   );
 
   const columns = useMemo(() => {
-    // Apply the same license gate as the server before opening the editor.
-    const editLock = (
-      location: NetworkLocation,
-    ): { check: LicenseCheckResult; message: string } | undefined => {
-      const serviceCheck = canUseEnterpriseFeature(
-        license,
-        LicenseFeature.ServiceLocations,
-      );
-      if (
-        location.service_location_mode !== LocationServiceMode.Disabled &&
-        !serviceCheck.result
-      ) {
-        return {
-          check: serviceCheck,
-          message: m.location_service_location_missing_license(),
-        };
-      }
-      const mfaCheck = tierLicenseCheck(license, location.mfa_required_tier);
-      if (isPresent(mfaCheck) && !mfaCheck.result) {
-        return { check: mfaCheck, message: m.location_mfa_missing_license() };
-      }
-      return undefined;
-    };
-
     const navigateToEdit = (location: NetworkLocation) => {
       navigate({
         to: '/locations/$locationId/edit',
@@ -134,19 +84,11 @@ export const LocationsTable = () => {
         meta: {
           flex: true,
         },
-        cell: (info) => {
-          const lock = editLock(info.row.original);
-          return (
-            <TableCell>
-              {isPresent(lock) && (
-                <Helper icon="lock-closed" color={null}>
-                  <p>{lock.message}</p>
-                </Helper>
-              )}
-              <span>{info.getValue()}</span>
-            </TableCell>
-          );
-        },
+        cell: (info) => (
+          <TableCell>
+            <span>{info.getValue()}</span>
+          </TableCell>
+        ),
       }),
       columnHelper.accessor('gateways', {
         header: m.location_col_gateway_status(),
@@ -175,7 +117,7 @@ export const LocationsTable = () => {
         minSize: 100,
         cell: (info) => (
           <TableCell className="cell-with-check-icons">
-            {info.getValue() && canUseBusinessFeature(license).result ? (
+            {info.getValue() ? (
               <Icon icon="check-filled" staticColor={ThemeVariable.FgSuccess} />
             ) : (
               <Icon icon="disabled" />
@@ -293,42 +235,16 @@ export const LocationsTable = () => {
                     {
                       icon: 'edit',
                       text: m.controls_edit(),
-                      onClick: () => {
-                        const lock = editLock(row);
-                        if (lock === undefined) {
-                          navigateToEdit(row);
-                          return;
-                        }
-
-                        if (license?.expired) {
-                          openModal(ModalName.LicenseExpired, {
-                            licenseTier: license.tier,
-                          });
-                          return;
-                        }
-
-                        licenseActionCheck(lock.check, () => navigateToEdit(row));
-                      },
+                      onClick: () => navigateToEdit(row),
                     },
                     {
                       icon: 'network-settings',
                       text: m.location_action_gateway_setup(),
-                      onClick: async () => {
-                        // allow 1 gateway per location if below business tier
-                        const action = () => {
-                          useGatewayWizardStore.getState().start({ network_id: row.id });
-                          navigate({
-                            to: '/setup-gateway',
-                          });
-                        };
-                        if (row.gateways.length >= 1) {
-                          licenseActionCheck(
-                            canUseEnterpriseFeature(license, LicenseFeature.ComponentHa),
-                            action,
-                          );
-                        } else {
-                          action();
-                        }
+                      onClick: () => {
+                        useGatewayWizardStore.getState().start({ network_id: row.id });
+                        navigate({
+                          to: '/setup-gateway',
+                        });
                       },
                     },
                   ],
@@ -344,12 +260,7 @@ export const LocationsTable = () => {
                           title: m.modal_delete_location_title(),
                           contentMd: m.modal_delete_location_body({ name: row.name }),
                           actionPromise: () => api.location.deleteLocation(row.id),
-                          invalidateKeys: [
-                            ['network'],
-                            ['gateway'],
-                            ['enterprise_info'],
-                            ['mfa-flow'],
-                          ],
+                          invalidateKeys: [['network'], ['gateway'], ['mfa-flow']],
                           submitProps: { text: m.controls_delete(), variant: 'critical' },
                           onSuccess: () => Snackbar.default(m.location_delete_success()),
                           onError: () => Snackbar.error(m.location_delete_failed()),
@@ -364,7 +275,7 @@ export const LocationsTable = () => {
         },
       }),
     ];
-  }, [navigate, license]);
+  }, [navigate]);
 
   const table = useReactTable({
     data: transformedData,

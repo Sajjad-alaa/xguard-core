@@ -10,7 +10,6 @@ import api from '../../shared/api/api';
 import {
   type EditNetworkLocation,
   type GroupClientMtu,
-  LicenseFeature,
   type LocationMfaFlowResponse,
   LocationServiceMode,
   type MfaFlowAssignment,
@@ -32,22 +31,17 @@ import type {
   SelectionSectionCustomRender,
 } from '../../shared/components/SelectionSection/type';
 import { SelectMultiple } from '../../shared/components/SelectMultiple/SelectMultiple';
-import { externalLink, MAX_MTU, MIN_MTU } from '../../shared/constants';
+import { MAX_MTU, MIN_MTU } from '../../shared/constants';
 import { useAppForm } from '../../shared/form';
 import { formChangeLogic } from '../../shared/formLogic';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import {
   getGroupsInfoQueryOptions,
-  getLicenseInfoQueryOptions,
   getLocationMfaFlowsQueryOptions,
   getLocationQueryOptions,
   getMfaFlowsQueryOptions,
 } from '../../shared/query';
-import {
-  canUseBusinessFeature,
-  canUseEnterpriseFeature,
-} from '../../shared/utils/license';
 import { smallestNetworkCapacity } from '../../shared/utils/network';
 import { confirmLocationPostureChange } from '../../shared/utils/postureWarning';
 import { Validate } from '../../shared/validate';
@@ -375,24 +369,11 @@ const EditLocationForm = ({
 }) => {
   const navigate = useNavigate();
 
-  const { data: licenseInfo } = useSuspenseQuery(getLicenseInfoQueryOptions);
-  const canUseServiceLocations = canUseEnterpriseFeature(
-    licenseInfo,
-    LicenseFeature.ServiceLocations,
-  ).result;
-  const canUseAllowedIpsFromAcl = canUseEnterpriseFeature(
-    licenseInfo,
-    LicenseFeature.AclAllowedIps,
-  ).result;
-  const canUseBusiness = canUseBusinessFeature(licenseInfo).result;
-  // Group-scoped MFA assignments require an Enterprise license.
-  const canUseMfaGroupOverrides = canUseEnterpriseFeature(licenseInfo).result;
   const { data: postureChecks = [] } = useQuery({
     queryKey: ['device-posture'],
     queryFn: api.devicePosture.getDevicePostures,
     select: (resp) => resp.data,
   });
-  const serviceLocationLocked = !canUseServiceLocations;
   const [pendingPostureChecks, setPendingPostureChecks] = useState(
     location.posture_checks ?? [],
   );
@@ -400,12 +381,10 @@ const EditLocationForm = ({
     () =>
       getPostureChecksSectionState({
         assignedPostureChecksCount: pendingPostureChecks.length,
-        canUseEnterprise: true,
         postureChecksCount: postureChecks.length,
       }),
     [pendingPostureChecks.length, postureChecks.length],
   );
-  const firewallLocked = !canUseBusiness;
   const hasPendingPostureCheckChanges =
     pendingPostureChecks.length !== (location.posture_checks?.length ?? 0) ||
     pendingPostureChecks.some((id) => !location.posture_checks?.includes(id));
@@ -434,30 +413,6 @@ const EditLocationForm = ({
       ),
     [postureChecks],
   );
-
-  const serviceLocationLabelContent = useMemo(() => {
-    if (!serviceLocationLocked) return undefined;
-    return (
-      <>
-        <p>{m.license_enterprise_required()}</p>
-        <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
-          {m.license_upgrade_to_unlock()}
-        </a>
-      </>
-    );
-  }, [serviceLocationLocked]);
-
-  const firewallLabelContent = useMemo(() => {
-    if (!firewallLocked) return undefined;
-    return (
-      <>
-        <p>{m.license_business_required()}</p>
-        <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
-          {m.license_upgrade_to_unlock()}
-        </a>
-      </>
-    );
-  }, [firewallLocked]);
 
   const { data: devices } = useQuery({
     queryKey: ['device', 'all'],
@@ -734,24 +689,10 @@ const EditLocationForm = ({
             )}
           </form.AppField>
           <SizedBox height={ThemeSpacing.Xl2} />
-          {!canUseAllowedIpsFromAcl && (
-            <>
-              <p className="acl-upsell-text">
-                <a href={externalLink.xguard.pricing} target="_blank" rel="noreferrer">
-                  {m.add_location_internal_vpn_allowed_ips_from_firewall_rules_upsell_link()}
-                </a>
-                <span>
-                  {m.add_location_internal_vpn_allowed_ips_from_firewall_rules_upsell()}
-                </span>
-              </p>
-              <SizedBox height={ThemeSpacing.Md} />
-            </>
-          )}
           <form.AppField name="allowed_ips_from_acl">
             {(field) => (
               <field.FormCheckbox
                 text={m.add_location_internal_vpn_allowed_ips_from_firewall_rules()}
-                disabled={!canUseAllowedIpsFromAcl}
                 helperBlock={
                   <Helper>
                     <p>
@@ -846,16 +787,12 @@ const EditLocationForm = ({
             </EditPageFormSection>
           )}
         </form.Subscribe>
-        <EditPageFormSection
-          label={m.add_location_step_firewall_label()}
-          labelContent={firewallLabelContent}
-        >
+        <EditPageFormSection label={m.add_location_step_firewall_label()}>
           <form.AppField name="firewall">
             {(field) => (
               <field.FormRadio
                 value={LocationFirewall.Disabled}
                 text={m.location_firewall_option_disabled()}
-                disabled={firewallLocked}
               />
             )}
           </form.AppField>
@@ -865,7 +802,6 @@ const EditLocationForm = ({
               <field.FormRadio
                 value={LocationFirewall.Allow}
                 text={m.location_firewall_option_default_allow()}
-                disabled={firewallLocked}
               />
             )}
           </form.AppField>
@@ -875,7 +811,6 @@ const EditLocationForm = ({
               <field.FormRadio
                 value={LocationFirewall.Deny}
                 text={m.location_firewall_option_default_deny()}
-                disabled={firewallLocked}
               />
             )}
           </form.AppField>
@@ -904,26 +839,23 @@ const EditLocationForm = ({
                         text={m.location_service_mode_mfa_warning()}
                       />
                     )}
-                    <EditPageFormSection
-                      label={m.location_edit_section_location_type()}
-                      labelContent={serviceLocationLabelContent}
-                    >
+                    <EditPageFormSection label={m.location_edit_section_location_type()}>
                       <field.FormRadio
                         value={LocationServiceMode.Disabled}
                         text={m.location_service_mode_regular()}
-                        disabled={mfaEnabled || serviceLocationLocked}
+                        disabled={mfaEnabled}
                       />
                       <SizedBox height={ThemeSpacing.Md} />
                       <field.FormRadio
                         value={LocationServiceMode.Prelogon}
                         text={m.location_service_mode_prelogon()}
-                        disabled={mfaEnabled || serviceLocationLocked}
+                        disabled={mfaEnabled}
                       />
                       <SizedBox height={ThemeSpacing.Md} />
                       <field.FormRadio
                         value={LocationServiceMode.Alwayson}
                         text={m.location_service_mode_always_on()}
-                        disabled={mfaEnabled || serviceLocationLocked}
+                        disabled={mfaEnabled}
                       />
                     </EditPageFormSection>
                   </>
@@ -989,7 +921,6 @@ const EditLocationForm = ({
                           assignments={editedMfaFlows}
                           flows={mfaFlowCatalog}
                           groupOptions={mfaGroupOptions}
-                          canUseEnterprise={canUseMfaGroupOverrides}
                           onChange={(assignments) => {
                             setPendingMfaFlows(assignments);
                             setMfaFlowError(undefined);
@@ -1093,12 +1024,7 @@ const EditLocationForm = ({
                     title: m.modal_delete_location_title(),
                     contentMd: m.modal_delete_location_body({ name: location.name }),
                     actionPromise: () => api.location.deleteLocation(location.id),
-                    invalidateKeys: [
-                      ['network'],
-                      ['gateway'],
-                      ['enterprise_info'],
-                      ['mfa-flow'],
-                    ],
+                    invalidateKeys: [['network'], ['gateway'], ['mfa-flow']],
                     submitProps: { text: m.controls_delete(), variant: 'critical' },
                     onSuccess: () => {
                       Snackbar.default(m.location_delete_success());

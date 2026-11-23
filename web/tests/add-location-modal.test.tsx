@@ -12,13 +12,13 @@ describe('AddLocationModalContent service-location option', () => {
   const getServiceOption = () => screen.getByTestId('add-service-location');
 
   it('is available: XGuard clients run service locations', () => {
-    render(<AddLocationModalContent modalData={{ license: null }} />);
+    render(<AddLocationModalContent />);
 
     expect(getServiceOption()).not.toHaveClass('disabled');
   });
 
   it('does not advertise a paid tier', () => {
-    render(<AddLocationModalContent modalData={{ license: null }} />);
+    render(<AddLocationModalContent />);
 
     expect(getServiceOption()).not.toHaveTextContent('Enterprise');
     expect(getServiceOption()).not.toHaveTextContent('Business');

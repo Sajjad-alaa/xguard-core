@@ -35,7 +35,6 @@ type Props = {
   assignments: MfaFlowAssignment[];
   flows: MfaFlowListItemResponse[];
   groupOptions: SelectionOption<number>[];
-  canUseEnterprise: boolean;
   onChange: (assignments: MfaFlowAssignment[]) => void;
   /** Opens the default flow picker on mount when the location has no default. */
   openDefaultPicker?: boolean;
@@ -50,7 +49,6 @@ export const LocationMfaSection = ({
   assignments,
   flows,
   groupOptions,
-  canUseEnterprise,
   onChange,
   openDefaultPicker,
   onDefaultPickerDismissed,
@@ -98,7 +96,6 @@ export const LocationMfaSection = ({
     }
   }, [hasFlows]);
 
-  const overridesLocked = !canUseEnterprise;
   const hasUnavailableFlow = assignments.some((assignment) =>
     isPresent(flowsById.get(assignment.flow_id)?.unavailable_reason),
   );
@@ -237,7 +234,7 @@ export const LocationMfaSection = ({
             variant="outlined"
             text={m.location_mfa_overrides_add()}
             testId="location-mfa-add-override"
-            disabled={overridesLocked || allFlowsAssigned}
+            disabled={allFlowsAssigned}
             onClick={() => openEditor({ kind: 'override' })}
           />
         </>

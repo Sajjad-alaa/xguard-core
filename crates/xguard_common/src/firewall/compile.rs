@@ -115,19 +115,60 @@ fn action(action: FirewallRuleAction) -> PolicyAction {
     }
 }
 
+/// Where a rule's traffic may go.
+pub(crate) enum Destination {
+    Any,
+    /// Never empty.
+    Ranges(Vec<AddressRange>),
+}
+
+/// The destinations of a stored rule, or `None` when it cannot match anything.
+pub(crate) fn rule_destination(rule: &FirewallRule) -> Option<Destination> {
+    if rule.any_destination {
+        return Some(Destination::Any);
+    }
+    // Stored destinations were validated on write; skip anything that no longer parses rather
+    // than widening the rule.
+    let ranges: Vec<_> = rule
+        .destinations
+        .iter()
+        .filter_map(|d| parse_destination(d).ok().map(|(_, r)| r))
+        .collect();
+    (!ranges.is_empty()).then_some(Destination::Ranges(ranges))
+}
+
+/// The ports of a stored rule (empty means any), or `None` when one no longer parses: such a
+/// rule is left out rather than widened to all ports.
+pub(crate) fn rule_ports(rule: &FirewallRule) -> Option<Vec<RangeInclusive<u16>>> {
+    let ports: Vec<_> = rule
+        .ports
+        .iter()
+        .filter_map(|p| parse_ports(p).ok().map(|(_, r)| r))
+        .collect();
+    (ports.len() == rule.ports.len()).then_some(ports)
+}
+
 fn host_ranges(addresses: &[IpNetwork]) -> impl Iterator<Item = AddressRange> + '_ {
     // Device VPN addresses are host addresses; ignore any mask stored with them.
     addresses.iter().map(|net| AddressRange::single(net.ip()))
 }
 
-/// VPN addresses at `location_id` of the devices each rule selects.
-async fn rule_sources(
+/// The devices at `location_id` that each rule in `rule_ids` selects as a source, with their VPN
+/// addresses there: `(rule_id, device_id, addresses)`. With `device` set, only that device is
+/// considered.
+///
+/// This is the one definition of "who a rule applies to": the gateway policy and the
+/// AllowedIPs derived for clients (`super::allowed_ips`) both use it. Rules with `any_source`
+/// are not resolved here; they apply to every device.
+pub(crate) async fn rule_source_devices(
     conn: &mut PgConnection,
     location_id: Id,
     rule_ids: &[Id],
-) -> Result<HashMap<Id, Vec<AddressRange>>, sqlx::Error> {
-    // One query for all rules. Disabled users' devices never count as a source.
-    let rows: Vec<(Id, Vec<IpNetwork>)> = sqlx::query_as(
+    device: Option<Id>,
+) -> Result<Vec<(Id, Id, Vec<IpNetwork>)>, sqlx::Error> {
+    // One query for all rules. Disabled users' devices never count as a source; user and group
+    // selections match user devices only, network devices are matched as devices.
+    sqlx::query_as(
         "WITH rules AS ( \
             SELECT id, all_users, all_network_devices FROM firewall_rule WHERE id = ANY($2) \
         ), rule_users AS ( \
@@ -140,24 +181,33 @@ async fn rule_sources(
             SELECT d.id device_id, d.user_id, d.device_type, wnd.wireguard_ips, u.is_active \
             FROM wireguard_network_device wnd JOIN device d ON d.id = wnd.device_id \
             JOIN \"user\" u ON u.id = d.user_id WHERE wnd.wireguard_network_id = $1 \
+            AND ($3::bigint IS NULL OR wnd.device_id = $3) \
         ) \
-        SELECT ru.rule_id, ld.wireguard_ips FROM rule_users ru \
+        SELECT ru.rule_id, ld.device_id, ld.wireguard_ips FROM rule_users ru \
             JOIN location_devices ld ON ld.user_id = ru.user_id \
             WHERE ld.device_type = 'user' AND ld.is_active \
-        UNION ALL SELECT r.id, ld.wireguard_ips FROM rules r \
+        UNION ALL SELECT r.id, ld.device_id, ld.wireguard_ips FROM rules r \
             JOIN location_devices ld ON r.all_network_devices AND ld.device_type = 'network' \
-        UNION ALL SELECT rd.rule_id, ld.wireguard_ips FROM firewall_rule_device rd \
+        UNION ALL SELECT rd.rule_id, ld.device_id, ld.wireguard_ips FROM firewall_rule_device rd \
             JOIN rules r ON r.id = rd.rule_id \
             JOIN location_devices ld ON ld.device_id = rd.device_id \
             WHERE ld.device_type = 'network' OR ld.is_active",
     )
     .bind(location_id)
     .bind(rule_ids)
+    .bind(device)
     .fetch_all(&mut *conn)
-    .await?;
+    .await
+}
 
+/// VPN addresses at `location_id` of the devices each rule selects.
+async fn rule_sources(
+    conn: &mut PgConnection,
+    location_id: Id,
+    rule_ids: &[Id],
+) -> Result<HashMap<Id, Vec<AddressRange>>, sqlx::Error> {
     let mut sources: HashMap<Id, Vec<AddressRange>> = HashMap::new();
-    for (rule_id, addresses) in rows {
+    for (rule_id, _, addresses) in rule_source_devices(conn, location_id, rule_ids, None).await? {
         sources
             .entry(rule_id)
             .or_default()
@@ -230,29 +280,14 @@ pub async fn compile(
                     _ => continue,
                 }
             };
-            let destination = if rule.any_destination {
-                None
-            } else {
-                // Stored destinations were validated on write; skip anything that no longer
-                // parses rather than widening the rule.
-                let ranges: Vec<_> = rule
-                    .destinations
-                    .iter()
-                    .filter_map(|d| parse_destination(d).ok().map(|(_, r)| r))
-                    .collect();
-                if ranges.is_empty() {
-                    continue;
-                }
-                Some(sets.intern(ranges))
-            };
-            let ports: Vec<_> = rule
-                .ports
-                .iter()
-                .filter_map(|p| parse_ports(p).ok().map(|(_, r)| r))
-                .collect();
-            if ports.len() != rule.ports.len() {
+            let (Some(destination), Some(ports)) = (rule_destination(&rule), rule_ports(&rule))
+            else {
                 continue;
-            }
+            };
+            let destination = match destination {
+                Destination::Any => None,
+                Destination::Ranges(ranges) => Some(sets.intern(ranges)),
+            };
             rules.push(CompiledRule {
                 id: rule.id,
                 action: action(rule.action),

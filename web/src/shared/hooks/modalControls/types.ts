@@ -7,8 +7,6 @@ import type {
   DeviceLocationIpsResponse,
   FirewallRule,
   GroupInfo,
-  LicenseInfo,
-  LicenseTierValue,
   LocationDevicesResponse,
   NetworkDevice,
   NetworkLocation,
@@ -153,26 +151,6 @@ export interface OpenDeleteAliasDestinationBlockedModal {
   title: string;
   description: string;
   rules: string[];
-}
-
-export interface OpenSettingsLicenseModal {
-  license?: string | null;
-}
-
-export interface OpenLicenseLimitConflictModal {
-  conflicts: Array<{
-    label: string;
-    current: number;
-    limit: number;
-  }>;
-}
-
-export interface OpenLicenseExpiredModal {
-  licenseTier: LicenseTierValue;
-}
-
-export interface OpenAddLocationModal {
-  license: LicenseInfo | null;
 }
 
 export interface OpenAssignUserIPModal {

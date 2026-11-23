@@ -706,6 +706,16 @@ pub(crate) async fn modify_network(
             }),
         })?;
     }
+    if before.allowed_ips_from_acl != network.allowed_ips_from_acl {
+        appstate.emit_event(ApiEvent {
+            context: context.clone(),
+            event: Box::new(ApiEventType::LocationAclAllowedIpsChanged {
+                location_id: network.id,
+                location_name: network.name.clone(),
+                enabled: network.allowed_ips_from_acl,
+            }),
+        })?;
+    }
     if group_mtus_before != group_mtus_after {
         appstate.emit_event(ApiEvent {
             context: context.clone(),

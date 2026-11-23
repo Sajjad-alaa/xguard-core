@@ -7,25 +7,20 @@ import {
   subscribeOpenModal,
 } from '../../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
-import type { OpenAddLocationModal } from '../../../../shared/hooks/modalControls/types';
-import { canUseServiceLocations } from '../../../../shared/utils/license';
 import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
 import { SectionSelect } from '../../../../shared/xguard-ui/components/SectionSelect/SectionSelect';
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
-import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 import { useAddLocationStore } from '../../../AddLocationPage/useAddLocationStore';
 
 const modalNameValue = ModalName.AddLocation;
 
 export const AddLocationModal = () => {
-  const [modalData, setModalData] = useState<OpenAddLocationModal | null>(null);
   const [isOpen, setOpen] = useState(false);
 
   useEffect(() => {
-    const openSub = subscribeOpenModal(modalNameValue, (data) => {
+    const openSub = subscribeOpenModal(modalNameValue, () => {
       setOpen(true);
-      setModalData(data);
     });
     const closeSub = subscribeCloseModal(modalNameValue, () => setOpen(false));
     return () => {
@@ -41,22 +36,14 @@ export const AddLocationModal = () => {
       onClose={() => {
         setOpen(false);
       }}
-      afterClose={() => {
-        setModalData(null);
-      }}
     >
-      {isPresent(modalData) && <AddLocationModalContent modalData={modalData} />}
+      <AddLocationModalContent />
     </Modal>
   );
 };
 
-export const AddLocationModalContent = ({
-  modalData,
-}: {
-  modalData: OpenAddLocationModal;
-}) => {
+export const AddLocationModalContent = () => {
   const navigate = useNavigate();
-  const serviceLocationsEnabled = canUseServiceLocations(modalData.license ?? null);
 
   return (
     <>
@@ -78,9 +65,7 @@ export const AddLocationModalContent = ({
         content={m.modal_add_location_service_content()}
         title={m.modal_add_location_service_title()}
         data-testid="add-service-location"
-        disabled={!serviceLocationsEnabled}
         onClick={() => {
-          if (!serviceLocationsEnabled) return;
           useAddLocationStore.getState().start({
             locationType: 'service',
             service_location_mode: LocationServiceMode.Prelogon,

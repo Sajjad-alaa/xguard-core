@@ -1,5 +1,6 @@
 pub(crate) mod support;
 
+mod acl_allowed_ips;
 mod acme;
 mod bidi;
 mod client_settings;

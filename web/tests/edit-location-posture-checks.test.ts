@@ -53,34 +53,16 @@ const { renderPostureCheckSelectionItem } = await import(
 );
 
 describe('edit location posture-checks section state', () => {
-  it('shows the empty state when enterprise access is available but no posture checks exist', () => {
+  it('shows the empty state when no posture checks exist', () => {
     expect(
       getPostureChecksSectionState({
         assignedPostureChecksCount: 0,
-        canUseEnterprise: true,
         postureChecksCount: 0,
       }),
     ).toEqual({
       hasAnyPostureChecks: false,
       hasAssignedPostureChecks: false,
-      locked: false,
       showAssignButton: false,
-      showLockedButton: false,
-      showAssignedPostureChecks: false,
-      showEmptyState: true,
-    });
-    expect(
-      getPostureChecksSectionState({
-        assignedPostureChecksCount: 0,
-        canUseEnterprise: undefined,
-        postureChecksCount: 0,
-      }),
-    ).toEqual({
-      hasAnyPostureChecks: false,
-      hasAssignedPostureChecks: false,
-      locked: false,
-      showAssignButton: false,
-      showLockedButton: false,
       showAssignedPostureChecks: false,
       showEmptyState: true,
     });
@@ -90,15 +72,12 @@ describe('edit location posture-checks section state', () => {
     expect(
       getPostureChecksSectionState({
         assignedPostureChecksCount: 0,
-        canUseEnterprise: true,
         postureChecksCount: 2,
       }),
     ).toEqual({
       hasAnyPostureChecks: true,
       hasAssignedPostureChecks: false,
-      locked: false,
       showAssignButton: true,
-      showLockedButton: false,
       showAssignedPostureChecks: false,
       showEmptyState: false,
     });
@@ -108,34 +87,13 @@ describe('edit location posture-checks section state', () => {
     expect(
       getPostureChecksSectionState({
         assignedPostureChecksCount: 2,
-        canUseEnterprise: true,
         postureChecksCount: 3,
       }),
     ).toEqual({
       hasAnyPostureChecks: true,
       hasAssignedPostureChecks: true,
-      locked: false,
       showAssignButton: false,
-      showLockedButton: false,
       showAssignedPostureChecks: true,
-      showEmptyState: false,
-    });
-  });
-
-  it('locks the add posture-check CTA when enterprise access is unavailable', () => {
-    expect(
-      getPostureChecksSectionState({
-        assignedPostureChecksCount: 0,
-        canUseEnterprise: false,
-        postureChecksCount: 2,
-      }),
-    ).toEqual({
-      hasAnyPostureChecks: true,
-      hasAssignedPostureChecks: false,
-      locked: true,
-      showAssignButton: false,
-      showLockedButton: true,
-      showAssignedPostureChecks: false,
       showEmptyState: false,
     });
   });

@@ -1,6 +1,5 @@
 import './styles.scss';
-import { useSuspenseQuery } from '@tanstack/react-query';
-import { Suspense, useMemo } from 'react';
+import { Suspense } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import {
@@ -13,7 +12,6 @@ import { SettingsHeader } from '../../shared/components/SettingsHeader/SettingsH
 import { SettingsLayout } from '../../shared/components/SettingsLayout/SettingsLayout';
 import { SettingsCardSkeleton } from '../../shared/components/skeleton/SettingsCardSkeleton/SettingsCardSkeleton';
 import { externalLink } from '../../shared/constants';
-import { getLicenseInfoQueryOptions } from '../../shared/query';
 import { downloadFile } from '../../shared/utils/download';
 import { AppText } from '../../shared/xguard-ui/components/AppText/AppText';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
@@ -47,13 +45,6 @@ export const SupportPage = () => {
 };
 
 const PageContent = () => {
-  const { data: licenseInfo } = useSuspenseQuery(getLicenseInfoQueryOptions);
-
-  const supportType = useMemo(
-    () => licenseInfo?.support_type_narrow ?? 'Free',
-    [licenseInfo],
-  );
-
   return (
     <SettingsCard>
       <MarkedSection icon="help">
@@ -147,79 +138,6 @@ const PageContent = () => {
           />
         </ButtonsGroup>
       </MarkedSection>
-      {(supportType === 'Basic' || supportType === 'Direct') && (
-        <>
-          <Divider spacing={ThemeSpacing.Xl2} />
-          <MarkedSection icon="light-bulb">
-            <AppText font={TextStyle.TBodyPrimary600} color={ThemeVariable.FgDefault}>
-              {m.support_page_portal_title()}
-            </AppText>
-            <SizedBox height={ThemeSpacing.Xl} />
-            <AppText font={TextStyle.TBodySm400} color={ThemeVariable.FgMuted}>
-              {m.support_page_portal_desc_before()}
-              <a
-                href={externalLink.xguard.supportPortalGuide}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {m.support_page_portal_desc_link()}
-              </a>
-              {m.support_page_portal_desc_after()}
-            </AppText>
-            <SizedBox height={ThemeSpacing.Xl} />
-            <ButtonsGroup>
-              <Button
-                variant="outlined"
-                text={m.support_page_portal_btn()}
-                iconRight="open-in-new-window"
-                onClick={() =>
-                  window.open(
-                    externalLink.xguard.supportPortal,
-                    '_blank',
-                    'noopener,noreferrer',
-                  )
-                }
-              />
-            </ButtonsGroup>
-          </MarkedSection>
-          <Divider spacing={ThemeSpacing.Xl2} />
-          <MarkedSection icon="mail">
-            <AppText font={TextStyle.TBodyPrimary600} color={ThemeVariable.FgDefault}>
-              {m.support_page_email_title()}
-            </AppText>
-            <SizedBox height={ThemeSpacing.Xl} />
-            <AppText font={TextStyle.TBodySm400} color={ThemeVariable.FgDefault}>
-              {m.support_page_email_desc()}{' '}
-              <a href="mailto:support@xguard.local">support@xguard.local</a>
-            </AppText>
-          </MarkedSection>
-        </>
-      )}
-      {supportType === 'Direct' && (
-        <>
-          <Divider spacing={ThemeSpacing.Xl2} />
-          <MarkedSection icon="chat">
-            <MarkedSectionHeader
-              title={m.support_page_assistance_title()}
-              description={m.support_page_assistance_desc()}
-            />
-            <ButtonsGroup>
-              <Button
-                variant="outlined"
-                text={m.support_page_assistance_btn_call()}
-                iconRight="calendar"
-                onClick={() =>
-                  window.open(
-                    externalLink.xguard.scheduleCall,
-                    '_blank',
-                    'noopener,noreferrer',
-                  )
-                }
-              />
-            </ButtonsGroup>
-          </MarkedSection>
-        </>
-      )}
     </SettingsCard>
   );
 };

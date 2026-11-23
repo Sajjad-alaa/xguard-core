@@ -80,7 +80,6 @@ import type {
   LdapMigrationRepairResponse,
   LdapSyncReport,
   LdapSyncRequest,
-  LicenseInfo,
   LocationConnectedNetworkDevice,
   LocationConnectedNetworkDevicesRequest,
   LocationConnectedUser,
@@ -684,8 +683,6 @@ const api = {
     fetchPage<ActivityLogEvent>(`/activity_log`, data),
   getActivityLogEvent: (id: number) =>
     client.get<ActivityLogEventDetails>(`/activity_log/${id}`),
-  // XGuard has no license; kept so existing queries resolve without a request.
-  getLicenseInfo: (): Promise<LicenseInfo | null> => Promise.resolve(null),
   support: {
     getSupportData: () => client.get<object>('/support/configuration'),
     getLogs: () => client.get<string>('/support/logs'),
