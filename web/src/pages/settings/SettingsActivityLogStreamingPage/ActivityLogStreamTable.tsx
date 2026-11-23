@@ -49,15 +49,24 @@ export const ActivityLogStreamTable = ({ data: rowData }: Props) => {
         header: m.settings_activity_log_streaming_table_stream_type_name(),
         size: 200,
         minSize: 100,
-        cell: (info) => (
-          <TableCell>
-            <span>
-              {info.getValue() === 'vector_http'
-                ? m.modal_vector_destination_title()
-                : m.modal_logstash_destination_title()}
-            </span>
-          </TableCell>
-        ),
+        cell: (info) => {
+          const type = info.getValue();
+          const label =
+            type === 'vector_http'
+              ? m.modal_vector_destination_title()
+              : type === 'logstash_http'
+                ? m.modal_logstash_destination_title()
+                : type === 'syslog'
+                  ? m.modal_syslog_destination_title()
+                  : type === 'http'
+                    ? m.modal_http_destination_title()
+                    : m.modal_splunk_destination_title();
+          return (
+            <TableCell>
+              <span>{label}</span>
+            </TableCell>
+          );
+        },
       }),
       columnHelper.accessor('url', {
         header: m.settings_activity_log_streaming_table_header_url(),

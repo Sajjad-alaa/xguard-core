@@ -1,9 +1,13 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from 'react';
 import z from 'zod';
 import { m } from '../../../../paraglide/messages';
 import api from '../../../../shared/api/api';
-import type { CreateGroupRequest, User } from '../../../../shared/api/types';
+import type {
+  CreateGroupRequest,
+  DeviceLimitOverride,
+  User,
+} from '../../../../shared/api/types';
 import { DescriptionBlock } from '../../../../shared/components/DescriptionBlock/DescriptionBlock';
 import { SelectionSection } from '../../../../shared/components/SelectionSection/SelectionSection';
 import type { SelectionOption } from '../../../../shared/components/SelectionSection/type';
@@ -18,6 +22,7 @@ import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import type { OpenCEGroupModal } from '../../../../shared/hooks/modalControls/types';
 import { Checkbox } from '../../../../shared/xguard-ui/components/Checkbox/Checkbox';
 import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { Input } from '../../../../shared/xguard-ui/components/Input/Input';
 import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
 import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
 import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/SizedBox';
@@ -27,6 +32,7 @@ import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
 interface ModalState extends OpenCEGroupModal {
   step: 'start' | 'users';
   startForm?: Pick<CreateGroupRequest, 'is_admin' | 'name'>;
+  limitOverride?: DeviceLimitOverride;
 }
 
 const modalNameKey = ModalName.CreateEditGroup;
@@ -90,14 +96,18 @@ const userToOption = (user: User): SelectionOption<string> => ({
   label: `${user.first_name} ${user.last_name}`,
 });
 
-const UsersStep = ({ users, startForm, groupInfo, isEdit, setModalState }: StepProps) => {
-  const { mutate: editGroup, isPending: editPending } = useMutation({
+const UsersStep = ({
+  users,
+  startForm,
+  limitOverride,
+  groupInfo,
+  isEdit,
+  setModalState,
+}: StepProps) => {
+  const { mutateAsync: editGroup, isPending: editPending } = useMutation({
     mutationFn: api.group.editGroup,
     meta: {
-      invalidate: [['group'], ['group-info'], ['user']],
-    },
-    onSuccess: () => {
-      closeModal(modalNameKey);
+      invalidate: [['group'], ['group-info'], ['user'], ['device-limits']],
     },
   });
 
@@ -116,7 +126,7 @@ const UsersStep = ({ users, startForm, groupInfo, isEdit, setModalState }: StepP
 
   const options = useMemo(() => users.map((user) => userToOption(user)), [users]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (startForm && !addPending && !editPending) {
       const members = Array.from(selected);
       const requestData = {
@@ -124,7 +134,11 @@ const UsersStep = ({ users, startForm, groupInfo, isEdit, setModalState }: StepP
         members: members,
       };
       if (groupInfo) {
-        editGroup({ ...requestData, id: groupInfo.id });
+        await editGroup({ ...requestData, id: groupInfo.id });
+        if (limitOverride) {
+          await api.deviceLimits.setGroupLimit(groupInfo.id, limitOverride);
+        }
+        closeModal(modalNameKey);
       } else {
         addGroup(requestData);
       }
@@ -160,8 +174,51 @@ const UsersStep = ({ users, startForm, groupInfo, isEdit, setModalState }: StepP
   );
 };
 
-const StartStep = ({ reservedNames, setModalState, groupInfo, startForm }: StepProps) => {
+const StartStep = ({
+  reservedNames,
+  setModalState,
+  groupInfo,
+  startForm,
+  limitOverride,
+}: StepProps) => {
   const [isAdmin, setIsAdmin] = useState(startForm?.is_admin ?? false);
+  const groupId = groupInfo?.id;
+  const { data: storedGroupLimit } = useQuery({
+    queryKey: ['device-limits', 'group', groupId],
+    queryFn: () => {
+      if (groupId === undefined) {
+        return Promise.reject(new Error('Missing group id'));
+      }
+      return api.deviceLimits.getGroupLimit(groupId).then((r) => r.data);
+    },
+    enabled: groupId !== undefined,
+  });
+  const [maxDevices, setMaxDevices] = useState(
+    limitOverride?.max_devices != null ? String(limitOverride.max_devices) : '',
+  );
+  const [maxConnections, setMaxConnections] = useState(
+    limitOverride?.max_connections != null ? String(limitOverride.max_connections) : '',
+  );
+
+  useEffect(() => {
+    if (storedGroupLimit && !limitOverride) {
+      setMaxDevices(
+        storedGroupLimit.max_devices != null ? String(storedGroupLimit.max_devices) : '',
+      );
+      setMaxConnections(
+        storedGroupLimit.max_connections != null
+          ? String(storedGroupLimit.max_connections)
+          : '',
+      );
+    }
+  }, [storedGroupLimit, limitOverride]);
+
+  const parseOptionalLimit = (raw: string): number | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isNaN(parsed) || parsed < 0 ? null : parsed;
+  };
 
   const formSchema = useMemo(
     () =>
@@ -198,6 +255,12 @@ const StartStep = ({ reservedNames, setModalState, groupInfo, startForm }: StepP
               name: value.name,
               is_admin: isAdmin,
             },
+            limitOverride: groupInfo
+              ? {
+                  max_devices: parseOptionalLimit(maxDevices),
+                  max_connections: parseOptionalLimit(maxConnections),
+                }
+              : undefined,
           };
         }
         return null;
@@ -237,6 +300,30 @@ const StartStep = ({ reservedNames, setModalState, groupInfo, startForm }: StepP
             setIsAdmin((s) => !s);
           }}
         />
+        {groupInfo && (
+          <>
+            <Divider spacing={ThemeSpacing.Xl} />
+            <DescriptionBlock title={m.settings_device_limits_title()}>
+              <p>{m.settings_device_limits_description()}</p>
+            </DescriptionBlock>
+            <SizedBox height={ThemeSpacing.Md} />
+            <Input
+              type="number"
+              label={m.settings_device_limits_max_devices()}
+              helper={m.settings_device_limits_helper_override()}
+              value={maxDevices}
+              onChange={(val) => setMaxDevices(val == null ? '' : String(val))}
+            />
+            <SizedBox height={ThemeSpacing.Md} />
+            <Input
+              type="number"
+              label={m.settings_device_limits_max_connections()}
+              helper={m.settings_device_limits_helper_override()}
+              value={maxConnections}
+              onChange={(val) => setMaxConnections(val == null ? '' : String(val))}
+            />
+          </>
+        )}
       </form>
       <ModalControls
         cancelProps={{

@@ -315,6 +315,15 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::ClientSettingsUpdated { .. } => {
             Some("Updated client and device settings".into())
         }
+        ApiEventType::DeviceLimitsUpdated { .. } => {
+            Some("Updated global device and connection limits".into())
+        }
+        ApiEventType::GroupDeviceLimitUpdated { group_name, .. } => {
+            Some(format!("Updated device limits for group '{group_name}'"))
+        }
+        ApiEventType::UserDeviceLimitUpdated { username, .. } => {
+            Some(format!("Updated device limits for user '{username}'"))
+        }
         ApiEventType::LocationGroupMtusChanged {
             location_name,
             after,

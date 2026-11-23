@@ -371,6 +371,14 @@ fn api_event_cases() -> Vec<EventTestCase> {
         username: None,
         cert: None,
         password_set: false,
+        tls_verify: true,
+        client_cert: None,
+        client_key_set: false,
+        body_format: xguard_core::log_stream::BodyFormat::Ndjson,
+        headers: Vec::new(),
+        syslog: None,
+        splunk: None,
+        token_set: false,
     };
     let api_token = xguard_common::db::models::ApiToken {
         id: 1,
@@ -1268,6 +1276,49 @@ fn api_event_cases() -> Vec<EventTestCase> {
             event_type: EventType::EnterpriseSettingsUpdated,
             module: ActivityLogModule::XGuard,
             description_contains: Some("client and device settings"),
+        },
+        EventTestCase {
+            name: "DeviceLimitsUpdated",
+            message: api_message(ApiEventType::DeviceLimitsUpdated {
+                before: xguard_common::db::models::device_limit::DeviceLimitSettings::default(),
+                after: xguard_common::db::models::device_limit::DeviceLimitSettings {
+                    max_devices_per_user: 3,
+                    max_connections_per_user: 2,
+                },
+            }),
+            event_type: EventType::EnterpriseSettingsUpdated,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("device and connection limits"),
+        },
+        EventTestCase {
+            name: "GroupDeviceLimitUpdated",
+            message: api_message(ApiEventType::GroupDeviceLimitUpdated {
+                group_id: 1,
+                group_name: "eng".into(),
+                before: xguard_common::db::models::device_limit::DeviceLimitOverride::default(),
+                after: xguard_common::db::models::device_limit::DeviceLimitOverride {
+                    max_devices: Some(5),
+                    max_connections: None,
+                },
+            }),
+            event_type: EventType::EnterpriseSettingsUpdated,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("group 'eng'"),
+        },
+        EventTestCase {
+            name: "UserDeviceLimitUpdated",
+            message: api_message(ApiEventType::UserDeviceLimitUpdated {
+                user_id: 1,
+                username: "alice".into(),
+                before: xguard_common::db::models::device_limit::DeviceLimitOverride::default(),
+                after: xguard_common::db::models::device_limit::DeviceLimitOverride {
+                    max_devices: Some(2),
+                    max_connections: Some(1),
+                },
+            }),
+            event_type: EventType::EnterpriseSettingsUpdated,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("user 'alice'"),
         },
         EventTestCase {
             name: "LocationGroupMtusChanged",

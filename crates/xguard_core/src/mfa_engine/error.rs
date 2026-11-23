@@ -42,6 +42,10 @@ pub(super) enum FinishCoreError {
     /// The device no longer meets the location's posture policies.
     #[error("device posture check failed")]
     PostureRejected(Vec<String>),
+    #[error(
+        "connection_limit_reached: Maximum number of simultaneous VPN connections ({0}) reached."
+    )]
+    ConnectionLimitReached(i32),
     #[error("unexpected error")]
     Internal,
     #[error(transparent)]

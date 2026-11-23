@@ -380,6 +380,22 @@ pub enum ApiEventType {
         before: xguard_common::db::models::client_settings::ClientSettingsInfo,
         after: xguard_common::db::models::client_settings::ClientSettingsInfo,
     },
+    DeviceLimitsUpdated {
+        before: xguard_common::db::models::device_limit::DeviceLimitSettings,
+        after: xguard_common::db::models::device_limit::DeviceLimitSettings,
+    },
+    GroupDeviceLimitUpdated {
+        group_id: Id,
+        group_name: String,
+        before: xguard_common::db::models::device_limit::DeviceLimitOverride,
+        after: xguard_common::db::models::device_limit::DeviceLimitOverride,
+    },
+    UserDeviceLimitUpdated {
+        user_id: Id,
+        username: String,
+        before: xguard_common::db::models::device_limit::DeviceLimitOverride,
+        after: xguard_common::db::models::device_limit::DeviceLimitOverride,
+    },
     LocationGroupMtusChanged {
         location_id: Id,
         location_name: String,

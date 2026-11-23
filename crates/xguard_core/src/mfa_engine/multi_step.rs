@@ -112,6 +112,10 @@ pub enum StepFinishError {
     /// The device no longer meets the location's posture policies.
     #[error("device posture check failed")]
     PostureRejected(Vec<String>),
+    #[error(
+        "connection_limit_reached: Maximum number of simultaneous VPN connections ({0}) reached."
+    )]
+    ConnectionLimitReached(i32),
     #[error("unexpected error")]
     Internal,
     #[error(transparent)]
@@ -813,6 +817,9 @@ fn map_step_finish_core_error(error: FinishCoreError) -> StepFinishError {
         FinishCoreError::UninitializedStep => StepFinishError::UninitializedStep,
         FinishCoreError::StaleAttempt => StepFinishError::StaleAttempt,
         FinishCoreError::PostureRejected(failed) => StepFinishError::PostureRejected(failed),
+        FinishCoreError::ConnectionLimitReached(limit) => {
+            StepFinishError::ConnectionLimitReached(limit)
+        }
         FinishCoreError::Internal => StepFinishError::Internal,
         FinishCoreError::Event(error) => StepFinishError::Event(error),
     }

@@ -678,6 +678,28 @@ pub struct ClientSettingsUpdateMetadata {
 }
 
 #[derive(Serialize)]
+pub struct DeviceLimitsUpdateMetadata {
+    pub before: xguard_common::db::models::device_limit::DeviceLimitSettings,
+    pub after: xguard_common::db::models::device_limit::DeviceLimitSettings,
+}
+
+#[derive(Serialize)]
+pub struct GroupDeviceLimitUpdateMetadata {
+    pub group_id: Id,
+    pub group_name: String,
+    pub before: xguard_common::db::models::device_limit::DeviceLimitOverride,
+    pub after: xguard_common::db::models::device_limit::DeviceLimitOverride,
+}
+
+#[derive(Serialize)]
+pub struct UserDeviceLimitUpdateMetadata {
+    pub user_id: Id,
+    pub username: String,
+    pub before: xguard_common::db::models::device_limit::DeviceLimitOverride,
+    pub after: xguard_common::db::models::device_limit::DeviceLimitOverride,
+}
+
+#[derive(Serialize)]
 pub struct LocationGroupMtusMetadata {
     pub location_id: Id,
     pub location_name: String,

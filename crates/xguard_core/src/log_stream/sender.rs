@@ -29,12 +29,11 @@ use tokio::{
 };
 use xguard_common::db::Id;
 
-use super::{ActivityLogStream, StoredConfig, StreamTarget};
+use super::{ActivityLogStream, StreamTarget, output::Output};
 
 const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_BATCH_BYTES: usize = 1024 * 1024;
 const MAX_BUFFER_BYTES: usize = 8 * 1024 * 1024;
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const MIN_BACKOFF: Duration = Duration::from_secs(1);
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 
@@ -75,47 +74,6 @@ fn update_status(id: Id, change: impl FnOnce(&mut StreamStatus)) {
     }
 }
 
-/// An HTTP client for one destination.
-pub fn client_for(config: &StoredConfig) -> Result<reqwest::Client, String> {
-    let mut builder = reqwest::Client::builder()
-        .timeout(REQUEST_TIMEOUT)
-        .connect_timeout(REQUEST_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::none())
-        .https_only(!config.url.starts_with("http://"));
-    if let Some(cert) = &config.cert {
-        let cert = reqwest::Certificate::from_pem(cert.as_bytes())
-            .map_err(|err| format!("invalid CA certificate: {err}"))?;
-        builder = builder
-            .tls_built_in_root_certs(false)
-            .add_root_certificate(cert);
-    }
-    builder.build().map_err(|err| err.to_string())
-}
-
-/// Sends one batch. Any 2xx status counts as delivered.
-pub async fn post(
-    client: &reqwest::Client,
-    config: &StoredConfig,
-    body: Bytes,
-) -> Result<(), String> {
-    let mut request = client
-        .post(&config.url)
-        .header(reqwest::header::CONTENT_TYPE, "application/x-ndjson")
-        .body(body);
-    if let Some(username) = &config.username {
-        request = request.basic_auth(username, config.password.as_deref());
-    }
-    let response = request.send().await.map_err(|err| {
-        // Without the URL: it is already known, and errors end up in the UI.
-        err.without_url().to_string()
-    })?;
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err(format!("the collector answered {}", response.status()))
-    }
-}
-
 /// Buffered lines of one destination.
 #[derive(Default)]
 struct Buffer {
@@ -153,18 +111,18 @@ impl Buffer {
         }
     }
 
-    /// The next batch, without removing it.
-    fn batch(&self) -> (Bytes, usize) {
-        let mut body = BytesMut::new();
-        let mut count = 0;
+    /// The next batch of lines, without removing them.
+    fn batch(&self) -> Vec<Bytes> {
+        let mut batch = Vec::new();
+        let mut size = 0;
         for line in &self.lines {
-            if count > 0 && body.len() + line.len() > MAX_BATCH_BYTES {
+            if !batch.is_empty() && size + line.len() > MAX_BATCH_BYTES {
                 break;
             }
-            body.extend_from_slice(line);
-            count += 1;
+            size += line.len();
+            batch.push(line.clone());
         }
-        (body.freeze(), count)
+        batch
     }
 
     fn remove(&mut self, count: usize) {
@@ -176,8 +134,8 @@ impl Buffer {
 
 async fn worker(target: StreamTarget, mut rx: broadcast::Receiver<Bytes>) {
     let id = target.id;
-    let client = match client_for(&target.config) {
-        Ok(client) => client,
+    let mut output = match Output::from_target(target.stream_type, target.config) {
+        Ok(output) => output,
         Err(err) => {
             error!("Activity log stream {}: {err}", target.name);
             update_status(id, |status| {
@@ -202,8 +160,9 @@ async fn worker(target: StreamTarget, mut rx: broadcast::Receiver<Bytes>) {
             },
             () = sleep_until(next_send) => {
                 if !buffer.lines.is_empty() {
-                    let (body, count) = buffer.batch();
-                    match post(&client, &target.config, body).await {
+                    let batch = buffer.batch();
+                    let count = batch.len();
+                    match output.send_batch(&batch).await {
                         Ok(()) => {
                             buffer.remove(count);
                             backoff = MIN_BACKOFF;
@@ -274,9 +233,11 @@ mod tests {
         buffer.push(&Bytes::from_static(b"{\"a\":1}\n{\"b\":2}\n"));
         buffer.push(&Bytes::from_static(b"{\"c\":3}"));
         assert_eq!(buffer.lines.len(), 3);
-        let (body, count) = buffer.batch();
-        assert_eq!(count, 3);
-        assert_eq!(&body[..], b"{\"a\":1}\n{\"b\":2}\n{\"c\":3}\n");
+        let batch = buffer.batch();
+        assert_eq!(batch.len(), 3);
+        assert_eq!(&batch[0][..], b"{\"a\":1}\n");
+        assert_eq!(&batch[1][..], b"{\"b\":2}\n");
+        assert_eq!(&batch[2][..], b"{\"c\":3}\n");
         buffer.remove(2);
         assert_eq!(buffer.bytes, 8);
     }
@@ -288,9 +249,10 @@ mod tests {
         for _ in 0..4 {
             buffer.push(&line);
         }
-        let (body, count) = buffer.batch();
-        assert_eq!(count, 2);
-        assert!(body.len() <= MAX_BATCH_BYTES);
+        let batch = buffer.batch();
+        assert_eq!(batch.len(), 2);
+        let total: usize = batch.iter().map(Bytes::len).sum();
+        assert!(total <= MAX_BATCH_BYTES);
     }
 
     #[test]
