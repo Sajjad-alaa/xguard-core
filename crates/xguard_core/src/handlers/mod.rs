@@ -33,6 +33,7 @@ pub mod auth;
 pub(crate) mod client_settings;
 pub mod component_setup;
 pub mod core_certs;
+pub(crate) mod device_limits;
 pub(crate) mod device_posture;
 pub(crate) mod directory;
 pub mod dirsync;
@@ -85,6 +86,7 @@ pub enum WebErrorCode {
     NetworkFull,
     UserGroupsNotSynced,
     LicenseLimitReached,
+    DeviceLimitReached,
     CertMissingCertPem,
     CertMissingKeyPem,
     CertInvalidCertOrKey,
@@ -288,6 +290,14 @@ impl From<WebError> for ApiResponse {
                 warn!(msg);
                 Self::new(
                     json!({"msg": msg, "code": WebErrorCode::LicenseLimitReached}),
+                    StatusCode::FORBIDDEN,
+                )
+            }
+            WebError::DeviceLimitReached(limit) => {
+                let msg = format!("Maximum number of registered devices ({limit}) reached.");
+                warn!("{msg}");
+                Self::new(
+                    json!({"msg": msg, "code": WebErrorCode::DeviceLimitReached, "limit": limit}),
                     StatusCode::FORBIDDEN,
                 )
             }

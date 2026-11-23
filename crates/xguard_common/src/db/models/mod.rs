@@ -5,6 +5,7 @@ pub mod biometric_auth;
 pub mod certificates;
 pub mod client_settings;
 pub mod device;
+pub mod device_limit;
 pub mod device_login;
 pub mod device_posture;
 pub mod error;

@@ -45,6 +45,9 @@ import type {
   DeleteApiTokenRequest,
   DeleteAuthKeyRequest,
   Device,
+  DeviceLimitOverride,
+  DeviceLimitSettings,
+  DeviceLimitsOverview,
   DeviceLocationIpsResponse,
   DevicePostureSnapshot,
   DevicePostureVersionCatalog,
@@ -135,6 +138,7 @@ import type {
   User,
   UserChangePasswordRequest,
   UserDevice,
+  UserDeviceLimitInfo,
   UserListParams,
   UserProfileResponse,
   ValidateDeviceIpsRequest,
@@ -512,6 +516,19 @@ const api = {
       client.post<DirectorySyncReport>('/openid/provider/sync', data),
     directorySyncStatus: () =>
       client.get<DirectorySyncStatus>('/openid/provider/sync/status'),
+  },
+  deviceLimits: {
+    getOverview: () => client.get<DeviceLimitsOverview>('/device_limits'),
+    updateDefaults: (data: DeviceLimitSettings) =>
+      client.patch<DeviceLimitSettings>('/device_limits', data),
+    getGroupLimit: (groupId: number) =>
+      client.get<DeviceLimitOverride>(`/device_limits/group/${groupId}`),
+    setGroupLimit: (groupId: number, data: DeviceLimitOverride) =>
+      client.put<DeviceLimitOverride>(`/device_limits/group/${groupId}`, data),
+    getUserLimit: (userId: number) =>
+      client.get<UserDeviceLimitInfo>(`/device_limits/user/${userId}`),
+    setUserLimit: (userId: number, data: DeviceLimitOverride) =>
+      client.put<UserDeviceLimitInfo>(`/device_limits/user/${userId}`, data),
   },
   activityLogStream: {
     getStreams: () => client.get<ActivityLogStream[]>('/activity_log_stream'),

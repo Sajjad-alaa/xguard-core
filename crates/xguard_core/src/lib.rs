@@ -440,6 +440,21 @@ pub fn build_webapp(
                 "/settings_enterprise",
                 get(get_client_settings).patch(patch_client_settings),
             )
+            .route(
+                "/device_limits",
+                get(handlers::device_limits::get_device_limits)
+                    .patch(handlers::device_limits::patch_device_limits),
+            )
+            .route(
+                "/device_limits/group/{id}",
+                get(handlers::device_limits::get_group_device_limit)
+                    .put(handlers::device_limits::put_group_device_limit),
+            )
+            .route(
+                "/device_limits/user/{id}",
+                get(handlers::device_limits::get_user_device_limit)
+                    .put(handlers::device_limits::put_user_device_limit),
+            )
             // settings for frontend
             .route("/settings_essentials", get(get_settings_essentials))
             .route("/ldap/test", post(test_directory))

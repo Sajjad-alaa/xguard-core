@@ -46,6 +46,8 @@ pub enum WebError {
     UserGroupsNotSynced(String),
     #[error("License limit reached: {0}")]
     LicenseLimitReached(String),
+    #[error("Maximum number of registered devices ({0}) reached.")]
+    DeviceLimitReached(i32),
     #[error("Authentication error")]
     Authentication,
     #[error("Forbidden error: {0}")]
@@ -141,6 +143,19 @@ impl From<xguard_common::db::models::api_token::ApiTokenError> for WebError {
             ApiTokenError::Invalid(_) | ApiTokenError::TooMany => Self::BadRequest(err.to_string()),
             ApiTokenError::NotFound => Self::ObjectNotFound(err.to_string()),
             ApiTokenError::Database(err) => err.into(),
+        }
+    }
+}
+
+impl From<xguard_common::db::models::device_limit::DeviceLimitError> for WebError {
+    fn from(err: xguard_common::db::models::device_limit::DeviceLimitError) -> Self {
+        use xguard_common::db::models::device_limit::DeviceLimitError;
+        match err {
+            DeviceLimitError::DeviceLimitReached { limit, .. } => Self::DeviceLimitReached(limit),
+            DeviceLimitError::ConnectionLimitReached { .. } | DeviceLimitError::Invalid(_) => {
+                Self::BadRequest(err.to_string())
+            }
+            DeviceLimitError::Database(err) => err.into(),
         }
     }
 }

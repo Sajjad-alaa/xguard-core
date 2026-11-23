@@ -434,6 +434,7 @@ export const WebErrorCode = {
   NetworkFull: 'network_full',
   UserGroupsNotSynced: 'user_groups_not_synced',
   LicenseLimitReached: 'license_limit_reached',
+  DeviceLimitReached: 'device_limit_reached',
   CertMissingCertPem: 'cert_missing_cert_pem',
   CertMissingKeyPem: 'cert_missing_key_pem',
   CertInvalidCertOrKey: 'cert_invalid_cert_or_key',
@@ -2047,6 +2048,35 @@ export interface ActivityLogStreamConfig {
   syslog?: SyslogOptions | null;
   splunk?: SplunkOptions | null;
   token?: SecretValue;
+}
+
+export interface DeviceLimitSettings {
+  max_devices_per_user: number;
+  max_connections_per_user: number;
+}
+
+export interface DeviceLimitOverride {
+  max_devices: number | null;
+  max_connections: number | null;
+}
+
+export interface GroupDeviceLimit {
+  group_id: number;
+  max_devices: number | null;
+  max_connections: number | null;
+}
+
+export interface DeviceLimitsOverview extends DeviceLimitSettings {
+  group_overrides: GroupDeviceLimit[];
+}
+
+export interface UserDeviceLimitInfo {
+  user_id: number;
+  device_count: number;
+  effective_max_devices: number;
+  effective_max_connections: number;
+  override_max_devices: number | null;
+  override_max_connections: number | null;
 }
 
 export type ActivityLogSortKey =

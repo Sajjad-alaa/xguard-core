@@ -709,6 +709,50 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     )
                     .ok(),
                 ),
+                ApiEventType::DeviceLimitsUpdated { before, after } => (
+                    EventType::EnterpriseSettingsUpdated,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::DeviceLimitsUpdateMetadata {
+                            before,
+                            after,
+                        },
+                    )
+                    .ok(),
+                ),
+                ApiEventType::GroupDeviceLimitUpdated {
+                    group_id,
+                    group_name,
+                    before,
+                    after,
+                } => (
+                    EventType::EnterpriseSettingsUpdated,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::GroupDeviceLimitUpdateMetadata {
+                            group_id,
+                            group_name,
+                            before,
+                            after,
+                        },
+                    )
+                    .ok(),
+                ),
+                ApiEventType::UserDeviceLimitUpdated {
+                    user_id,
+                    username,
+                    before,
+                    after,
+                } => (
+                    EventType::EnterpriseSettingsUpdated,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::UserDeviceLimitUpdateMetadata {
+                            user_id,
+                            username,
+                            before,
+                            after,
+                        },
+                    )
+                    .ok(),
+                ),
                 ApiEventType::LocationGroupMtusChanged {
                     location_id,
                     location_name,

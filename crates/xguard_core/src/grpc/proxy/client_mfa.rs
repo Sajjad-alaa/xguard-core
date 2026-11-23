@@ -227,6 +227,7 @@ impl From<AuthorizeError> for Status {
                 Self::internal("unexpected error")
             }
             AuthorizeError::Event(e) => Self::from(e),
+            AuthorizeError::ConnectionLimitReached(_) => Self::resource_exhausted(err.to_string()),
         }
     }
 }
@@ -418,6 +419,7 @@ impl From<FinishError> for Status {
             FinishError::MissingBiometricChallenge | FinishError::Internal => Code::Internal,
             FinishError::Event(e) => return Self::from(e),
             FinishError::PostureRejected(failed) => return posture_rejected_status(&failed),
+            FinishError::ConnectionLimitReached(_) => Code::ResourceExhausted,
         };
         Self::new(code, err.to_string())
     }
@@ -438,6 +440,7 @@ impl From<StepFinishError> for Status {
             }
             StepFinishError::Event(e) => return Status::from(e),
             StepFinishError::PostureRejected(failed) => return posture_rejected_status(&failed),
+            StepFinishError::ConnectionLimitReached(_) => Code::ResourceExhausted,
         };
         Status::new(code, err.to_string())
     }

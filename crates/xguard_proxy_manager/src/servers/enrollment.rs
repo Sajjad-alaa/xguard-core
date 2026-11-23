@@ -959,6 +959,23 @@ impl EnrollmentServer {
                 "Creating new device for user {}({:?}): {}.",
                 user.username, user.id, request.name
             );
+            xguard_common::db::models::device_limit::enforce_registered_device_limit(
+                &mut transaction,
+                enrollment_token.user_id,
+            )
+            .await
+            .map_err(|err| match err {
+                xguard_common::db::models::device_limit::DeviceLimitError::DeviceLimitReached {
+                    limit,
+                    ..
+                } => Status::resource_exhausted(format!(
+                    "device_limit_reached: Maximum number of registered devices ({limit}) reached."
+                )),
+                other => {
+                    error!("Failed to check device limit for user {}: {other}", user.username);
+                    Status::internal("unexpected error")
+                }
+            })?;
             let device = Device::new(
                 request.name.clone(),
                 request.pubkey.clone(),

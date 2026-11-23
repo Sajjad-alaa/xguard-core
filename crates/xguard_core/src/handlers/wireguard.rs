@@ -1227,6 +1227,11 @@ pub(crate) async fn add_device(
 
     // save the device
     let mut transaction = appstate.pool.begin().await?;
+    xguard_common::db::models::device_limit::enforce_registered_device_limit(
+        &mut transaction,
+        user.id,
+    )
+    .await?;
     let device = Device::new(
         add_device.name,
         add_device.wireguard_pubkey,

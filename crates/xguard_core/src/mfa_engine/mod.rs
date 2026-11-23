@@ -604,12 +604,17 @@ impl MfaEngine {
             preshared_key.clone(),
         )
         .await
-        .map_err(|err| {
-            error!(
-                "Failed to create new VPN client session for device {} in location {}: {err}",
-                ctx.device, ctx.location
-            );
-            FinishCoreError::Internal
+        .map_err(|err| match err {
+            authorize::AuthorizeError::ConnectionLimitReached(limit) => {
+                FinishCoreError::ConnectionLimitReached(limit)
+            }
+            other => {
+                error!(
+                    "Failed to create new VPN client session for device {} in location {}: {other}",
+                    ctx.device, ctx.location
+                );
+                FinishCoreError::Internal
+            }
         })?;
         debug!(
             "Created new VPN client session with id {}",

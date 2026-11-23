@@ -34,6 +34,10 @@ pub enum AuthorizeError {
     Event(#[from] ClientMfaServerError),
     #[error("gateway event channel error: {0}")]
     Gateway(Box<SendError<GatewayCommand>>),
+    #[error(
+        "connection_limit_reached: Maximum number of simultaneous VPN connections ({0}) reached."
+    )]
+    ConnectionLimitReached(i32),
 }
 
 pub enum SessionDisconnectReason {
@@ -91,6 +95,29 @@ pub async fn create_new_session(
     preshared_key: SecretStringWrapper,
 ) -> Result<VpnClientSession<Id>, AuthorizeError> {
     debug!("Creating new VPN session for device {device} of user {user} in location {location}.");
+
+    if is_mfa_session {
+        xguard_common::db::models::device_limit::enforce_connection_limit(
+            &mut *conn,
+            user.id,
+            location.id,
+            device.id,
+        )
+        .await
+        .map_err(|err| match err {
+            xguard_common::db::models::device_limit::DeviceLimitError::ConnectionLimitReached {
+                limit,
+                ..
+            } => AuthorizeError::ConnectionLimitReached(limit),
+            xguard_common::db::models::device_limit::DeviceLimitError::Database(e) => {
+                AuthorizeError::Db(e)
+            }
+            other => {
+                error!("Unexpected device limit error: {other}");
+                AuthorizeError::Db(sqlx::Error::Protocol(other.to_string()))
+            }
+        })?;
+    }
 
     let active_sessions = VpnClientSession::get_all_active_device_sessions_in_location(
         &mut *conn,
