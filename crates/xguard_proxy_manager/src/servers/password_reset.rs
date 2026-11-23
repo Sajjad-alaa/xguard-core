@@ -1,7 +1,10 @@
 use sqlx::PgPool;
 use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 use tonic::Status;
-use xguard_common::db::models::{ClientSettings, Settings, User};
+use xguard_common::db::{
+    Id,
+    models::{ClientSettings, Settings, ThrottleScope, User},
+};
 use xguard_core::{
     db::models::enrollment::{PASSWORD_RESET_TOKEN_TYPE, Token},
     events::{
@@ -123,6 +126,20 @@ impl PasswordResetServer {
         }
 
         let email = request.email;
+        if !ThrottleScope::VpnMfaInitiate
+            .hit(
+                &self.pool,
+                &format!("pwreset:{}", email.trim().to_lowercase()),
+            )
+            .await
+            .map_err(|err| {
+                error!("Failed to check password reset throttle: {err}");
+                Status::internal("unexpected error")
+            })?
+        {
+            debug!("Password reset throttled for {email}");
+            return Ok(());
+        }
 
         let user = User::find_by_email(&self.pool, email.clone().as_str())
             .await
@@ -237,7 +254,7 @@ impl PasswordResetServer {
         .await
         {
             error!("Failed to send password reset email: {err}");
-            return Err(Status::internal("password reset email"));
+            return Ok(());
         }
 
         transaction.commit().await.map_err(|_| {
@@ -391,6 +408,28 @@ impl PasswordResetServer {
             Status::internal("unexpected error")
         })?;
 
+        let locked_token: Option<(Id, Option<chrono::NaiveDateTime>, Option<String>)> =
+            sqlx::query_as(
+                "SELECT user_id, used_at, token_type FROM token WHERE id = $1 FOR UPDATE",
+            )
+            .bind(&enrollment.id)
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(|err| {
+                error!("Failed to lock password reset token: {err}");
+                Status::internal("unexpected error")
+            })?;
+        let Some((token_user_id, Some(used_at), Some(token_type))) = locked_token else {
+            return Err(Status::unauthenticated("Session expired"));
+        };
+        if token_type != PASSWORD_RESET_TOKEN_TYPE || token_user_id != user.id {
+            return Err(Status::permission_denied("invalid token"));
+        }
+        let session_timeout = settings.password_reset_session_timeout().as_secs() as i64;
+        if chrono::Utc::now().naive_utc() >= used_at + chrono::TimeDelta::seconds(session_timeout) {
+            return Err(Status::unauthenticated("Session expired"));
+        }
+
         // update user, in the directory first so the two never disagree
         xguard_core::directory::push::set_password(&self.pool, &user, &request.password)
             .await
@@ -413,8 +452,18 @@ impl PasswordResetServer {
                 error!("Failed to log out user sessions: {err}");
                 Status::internal("Failed to log out user sessions".to_owned())
             })?;
-        Token::delete_user_tokens_of_type(&mut *transaction, user.id, PASSWORD_RESET_TOKEN_TYPE)
-            .await?;
+        let deleted = sqlx::query("DELETE FROM token WHERE user_id = $1 AND token_type = $2")
+            .bind(user.id)
+            .bind(PASSWORD_RESET_TOKEN_TYPE)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|err| {
+                error!("Failed to delete password reset tokens: {err}");
+                Status::internal("unexpected error")
+            })?;
+        if deleted.rows_affected() < 1 {
+            return Err(Status::unauthenticated("Session expired"));
+        }
 
         if let Err(err) = password_reset_success_mail(
             &user.email,

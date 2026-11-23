@@ -171,6 +171,50 @@ impl Session {
         Ok(())
     }
 
+    /// Atomically removes and returns `webauthn_challenge` so any WebAuthn ceremony challenge
+    /// can be consumed at most once.
+    pub async fn take_webauthn_challenge(
+        &mut self,
+        pool: &PgPool,
+    ) -> sqlx::Result<Option<Vec<u8>>> {
+        let mut transaction = pool.begin().await?;
+        let challenge: Option<Option<Vec<u8>>> =
+            sqlx::query_scalar("SELECT webauthn_challenge FROM session WHERE id = $1 FOR UPDATE")
+                .bind(&self.id)
+                .fetch_optional(&mut *transaction)
+                .await?;
+        let Some(Some(challenge)) = challenge else {
+            return Ok(None);
+        };
+        sqlx::query("UPDATE session SET webauthn_challenge = NULL WHERE id = $1")
+            .bind(&self.id)
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        self.webauthn_challenge = None;
+        Ok(Some(challenge))
+    }
+
+    pub async fn take_passkey_registration(
+        &mut self,
+        pool: &PgPool,
+    ) -> sqlx::Result<Option<PasskeyRegistration>> {
+        Ok(self
+            .take_webauthn_challenge(pool)
+            .await?
+            .and_then(|bytes| serde_cbor::from_slice(&bytes).ok()))
+    }
+
+    pub async fn take_passkey_authentication(
+        &mut self,
+        pool: &PgPool,
+    ) -> sqlx::Result<Option<PasskeyAuthentication>> {
+        Ok(self
+            .take_webauthn_challenge(pool)
+            .await?
+            .and_then(|bytes| serde_cbor::from_slice(&bytes).ok()))
+    }
+
     pub async fn delete_expired<'e, E>(executor: E) -> sqlx::Result<()>
     where
         E: PgExecutor<'e>,
@@ -210,5 +254,57 @@ impl Session {
         .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+
+    use super::*;
+    use crate::db::{
+        models::{User, settings::initialize_current_settings},
+        setup_pool,
+    };
+
+    #[sqlx::test]
+    async fn test_take_webauthn_challenge_is_single_use(
+        _: PgPoolOptions,
+        options: PgConnectOptions,
+    ) {
+        let pool = setup_pool(options).await;
+        initialize_current_settings(&pool).await.unwrap();
+        let user = User::new(
+            "challenge_user",
+            Some("pass123"),
+            "Tester",
+            "Challenge",
+            "challenge@example.com",
+            None,
+        )
+        .save(&pool)
+        .await
+        .unwrap();
+
+        let mut session = Session::new(
+            user.id,
+            SessionState::PasswordVerified,
+            "127.0.0.1".into(),
+            None,
+        );
+        session.save(&pool).await.unwrap();
+
+        let raw = vec![1u8, 2, 3, 4];
+        sqlx::query("UPDATE session SET webauthn_challenge = $1 WHERE id = $2")
+            .bind(&raw)
+            .bind(&session.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let first = session.take_webauthn_challenge(&pool).await.unwrap();
+        assert_eq!(first, Some(raw));
+        let second = session.take_webauthn_challenge(&pool).await.unwrap();
+        assert!(second.is_none());
     }
 }

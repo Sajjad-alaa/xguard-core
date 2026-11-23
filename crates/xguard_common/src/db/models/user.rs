@@ -33,6 +33,19 @@ use crate::{
     types::user_info::OAuth2AuthorizedAppInfo,
 };
 
+fn constant_time_str_eq(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    std::hint::black_box(diff) == 0
+}
+
 const RECOVERY_CODES_COUNT: usize = 8;
 pub const TOTP_CODE_VALIDITY_PERIOD: u64 = 30;
 pub const EMAIL_CODE_DIGITS: u32 = 6;
@@ -835,24 +848,42 @@ impl User<Id> {
         false
     }
 
-    /// Verify recovery code. If it is valid, consume it, so it can't be used again.
+    /// Verify recovery code atomically in constant time and consume it so it cannot be reused.
     pub async fn verify_recovery_code(&mut self, pool: &PgPool, code: &str) -> sqlx::Result<bool> {
-        if let Some(index) = self.recovery_codes.iter().position(|c| c == code) {
-            // Note: swap_remove() should be faster than remove().
-            self.recovery_codes.swap_remove(index);
+        let mut transaction = pool.begin().await?;
+        let Some(mut recovery_codes) = sqlx::query_scalar::<_, Vec<String>>(
+            r#"SELECT recovery_codes FROM "user" WHERE id = $1 FOR UPDATE"#,
+        )
+        .bind(self.id)
+        .fetch_optional(&mut *transaction)
+        .await?
+        else {
+            return Ok(false);
+        };
 
-            query!(
-                "UPDATE \"user\" SET recovery_codes = $2 WHERE id = $1",
-                self.id,
-                &self.recovery_codes
-            )
-            .execute(pool)
-            .await?;
-
-            Ok(true)
-        } else {
-            Ok(false)
+        let mut matched_index = None;
+        for (index, stored) in recovery_codes.iter().enumerate() {
+            if constant_time_str_eq(stored, code) && matched_index.is_none() {
+                matched_index = Some(index);
+            }
         }
+
+        let Some(index) = matched_index else {
+            return Ok(false);
+        };
+
+        // Note: swap_remove() should be faster than remove().
+        recovery_codes.swap_remove(index);
+
+        sqlx::query(r#"UPDATE "user" SET recovery_codes = $2 WHERE id = $1"#)
+            .bind(self.id)
+            .bind(&recovery_codes)
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        self.recovery_codes = recovery_codes;
+
+        Ok(true)
     }
 
     pub async fn find_by_username<'e, E>(executor: E, username: &str) -> sqlx::Result<Option<Self>>
@@ -1558,6 +1589,10 @@ mod test {
         let codes = user.recovery_codes.clone();
         for code in &codes {
             assert!(user.verify_recovery_code(&pool, code).await.unwrap());
+            assert!(
+                !user.verify_recovery_code(&pool, code).await.unwrap(),
+                "consumed recovery code must not succeed twice"
+            );
         }
         assert_eq!(user.recovery_codes.len(), 0);
     }

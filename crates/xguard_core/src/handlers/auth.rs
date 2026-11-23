@@ -399,7 +399,7 @@ pub async fn mfa_enable(
     user.enable_mfa(&appstate.pool).await?;
     if user.mfa_enabled {
         info!("Enabled MFA for user {}", user.username);
-        let cookies = cookies.remove(Cookie::from("xguard_sesssion"));
+        let cookies = cookies.remove(Cookie::from(SESSION_COOKIE_NAME));
         user.logout_all_sessions(&appstate.pool).await?;
         debug!(
             "Removed auth sessions for user {} after enabling MFA",
@@ -555,7 +555,7 @@ pub async fn webauthn_init(
     )
 ))]
 pub async fn webauthn_finish(
-    session: SessionInfo,
+    mut session: SessionInfo,
     context: ApiRequestContext,
     State(appstate): State<AppState>,
     Json(webauth_reg): Json<WebAuthnRegistration>,
@@ -565,13 +565,13 @@ pub async fn webauthn_finish(
         session.user.username
     );
     let webauthn = appstate.webauthn()?;
-    let passkey_reg =
-        session
-            .session
-            .get_passkey_registration()
-            .ok_or(WebError::WebauthnRegistration(
-                "Passkey registration session not found".into(),
-            ))?;
+    let passkey_reg = session
+        .session
+        .take_passkey_registration(&appstate.pool)
+        .await?
+        .ok_or(WebError::WebauthnRegistration(
+            "Passkey registration session not found".into(),
+        ))?;
 
     let ccdj: CollectedClientData = serde_json::from_slice(
         webauth_reg.rpkc.response.client_data_json.as_ref(),
@@ -689,7 +689,7 @@ pub async fn webauthn_end(
     State(appstate): State<AppState>,
     Json(pubkey): Json<PublicKeyCredential>,
 ) -> Result<(PrivateCookieJar, ApiResponse), WebError> {
-    if let Some(passkey_auth) = session.get_passkey_authentication() {
+    if let Some(passkey_auth) = session.take_passkey_authentication(&appstate.pool).await? {
         let webauthn = appstate.webauthn()?;
         match webauthn.finish_passkey_authentication(&pubkey, &passkey_auth) {
             Ok(auth_result) => {
@@ -1381,11 +1381,13 @@ pub async fn recovery_code(
 ) -> Result<(PrivateCookieJar, ApiResponse), WebError> {
     if let Some(mut user) = User::find_by_id(&appstate.pool, session.user_id).await? {
         let username = user.username.clone();
+        charge_login_attempt(&appstate.pool, &username).await?;
         debug!("Authenticating user {username} with recovery code");
         if user
             .verify_recovery_code(&appstate.pool, &recovery_code.code)
             .await?
         {
+            refund_login_attempt(&appstate.pool, &username).await?;
             session
                 .set_state(&appstate.pool, SessionState::MultiFactorVerified)
                 .await?;

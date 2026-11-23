@@ -7,7 +7,7 @@ use xguard_common::{
         Id,
         models::{
             BiometricAuth, ClientSettings, Device, DeviceConfig, DeviceType, MFAMethod, Settings,
-            User, WireguardNetwork,
+            ThrottleScope, User, WireguardNetwork,
             device::{DeviceInfo, WireguardNetworkDevice},
             polling_token::PollingToken,
             webauthn::{AuthenticatorInfo, RegistrationSource, WebAuthn},
@@ -1002,19 +1002,6 @@ impl EnrollmentServer {
         };
 
         debug!(
-            "Sending DeviceCreated event to gateway for device {}, user {}({:?})",
-            device.wireguard_pubkey, user.username, user.id,
-        );
-        self.send_gateway_command(GatewayCommand::DeviceCreated(DeviceInfo {
-            device: device.clone(),
-            network_info,
-        }));
-        info!(
-            "Sent DeviceCreated event to gateway for device {}, user {}({:?})",
-            device.wireguard_pubkey, user.username, user.id,
-        );
-
-        debug!(
             "Fetching settings for device {} creation process for user {}({:?})",
             device.wireguard_pubkey, user.username, user.id,
         );
@@ -1091,6 +1078,19 @@ impl EnrollmentServer {
             Status::internal("unexpected error")
         })?;
 
+        debug!(
+            "Sending DeviceCreated event to gateway for device {}, user {}({:?})",
+            device.wireguard_pubkey, user.username, user.id,
+        );
+        self.send_gateway_command(GatewayCommand::DeviceCreated(DeviceInfo {
+            device: device.clone(),
+            network_info,
+        }));
+        info!(
+            "Sent DeviceCreated event to gateway for device {}, user {}({:?})",
+            device.wireguard_pubkey, user.username, user.id,
+        );
+
         info!("Device {} remote configuration done.", device.name);
 
         let instance_info = InstanceInfo::build(&self.pool, &settings, &user, Some(device.id))
@@ -1141,6 +1141,10 @@ impl EnrollmentServer {
     ) -> Result<DeviceConfigResponse, Status> {
         debug!("Getting network info for device: {:?}", request.pubkey);
         let token = self.validate_session(request.token.as_ref()).await?;
+        let user = token.fetch_user(&self.pool).await?;
+        if !user.is_active {
+            return Err(Status::permission_denied("user is disabled"));
+        }
 
         Device::validate_pubkey(&request.pubkey).map_err(|_| {
             error!("Invalid pubkey {}", &request.pubkey);
@@ -1196,6 +1200,16 @@ impl EnrollmentServer {
                     error!("Unable to start email MFA setup; SMTP is not configured");
                     return Err(CoreError::internal("SMTP not configured")
                         .with_code(CoreErrorCode::SmtpNotConfigured));
+                }
+                if !ThrottleScope::VpnMfaInitiate
+                    .hit(&self.pool, &format!("mfa_setup_send:user:{}", user.id))
+                    .await
+                    .map_err(|err| {
+                        error!("Failed to check email MFA setup throttle: {err}");
+                        Status::internal("unexpected error")
+                    })?
+                {
+                    return Err(Status::resource_exhausted("too many code requests").into());
                 }
                 user.new_email_secret(&self.pool).await.map_err(|_| {
                     error!("Failed to create email secret");
@@ -1345,6 +1359,9 @@ impl EnrollmentServer {
             return Err(Status::permission_denied("User is already enrolled"));
         }
 
+        let setup_throttle_key = matches!(method, MfaMethod::Email | MfaMethod::Totp)
+            .then(|| format!("mfa_setup:token:{}", token.id));
+
         // Verified before the transaction; saved and enabled for VPN MFA inside it.
         let security_key = if method == MfaMethod::Fido2 {
             if is_enrollment {
@@ -1354,6 +1371,18 @@ impl EnrollmentServer {
         } else {
             None
         };
+
+        if let Some(key) = &setup_throttle_key
+            && !ThrottleScope::VpnMfaCode
+                .hit(&self.pool, key)
+                .await
+                .map_err(|err| {
+                    error!("Failed to check MFA setup throttle: {err}");
+                    Status::internal("unexpected error")
+                })?
+        {
+            return Err(Status::permission_denied("Too many failed attempts"));
+        }
 
         let mut transaction = self.pool.begin().await.map_err(|err| {
             error!("Failed to begin database transaction: {err}");
@@ -1383,6 +1412,11 @@ impl EnrollmentServer {
                 if !user.verify_email_mfa_code(&request.code) {
                     return Err(Status::invalid_argument("Email code invalid".to_owned()));
                 }
+                if let Some(key) = &setup_throttle_key
+                    && let Err(err) = ThrottleScope::VpnMfaCode.refund(&self.pool, key).await
+                {
+                    error!("Failed to refund MFA setup throttle: {err}");
+                }
                 user.enable_email_mfa(&mut *transaction)
                     .await
                     .map_err(|_| Status::internal("Enabling method failed.".to_owned()))?;
@@ -1391,6 +1425,11 @@ impl EnrollmentServer {
             MfaMethod::Totp => {
                 if !user.verify_totp_code(&request.code) {
                     return Err(Status::invalid_argument("Code invalid".to_owned()));
+                }
+                if let Some(key) = &setup_throttle_key
+                    && let Err(err) = ThrottleScope::VpnMfaCode.refund(&self.pool, key).await
+                {
+                    error!("Failed to refund MFA setup throttle: {err}");
                 }
                 user.enable_totp(&mut *transaction)
                     .await

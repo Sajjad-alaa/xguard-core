@@ -14,7 +14,7 @@ use std::{
     collections::HashMap,
     future::Future,
     pin::Pin,
-    sync::{LazyLock, Mutex},
+    sync::{Arc, LazyLock, Mutex},
     time::{Duration, Instant},
 };
 
@@ -28,7 +28,7 @@ use openidconnect::{
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use super::provider::{ProviderConfig, is_trusted_url};
+use super::provider::{ProviderConfig, is_trusted_url, resolve_and_validate_host};
 
 const METADATA_TTL: Duration = Duration::from_secs(600);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -128,9 +128,25 @@ impl<'c> AsyncHttpClient<'c> for SafeHttpClient {
     }
 }
 
+struct SafeDnsResolver;
+
+impl openidconnect::reqwest::dns::Resolve for SafeDnsResolver {
+    fn resolve(
+        &self,
+        name: openidconnect::reqwest::dns::Name,
+    ) -> openidconnect::reqwest::dns::Resolving {
+        let host = name.as_str().to_owned();
+        Box::pin(async move {
+            let addrs = resolve_and_validate_host(&host).await?;
+            Ok(Box::new(addrs.into_iter()) as openidconnect::reqwest::dns::Addrs)
+        })
+    }
+}
+
 pub(crate) fn http_client() -> Result<openidconnect::reqwest::Client, FlowError> {
     openidconnect::reqwest::ClientBuilder::new()
         .redirect(openidconnect::reqwest::redirect::Policy::none())
+        .dns_resolver(Arc::new(SafeDnsResolver))
         .timeout(HTTP_TIMEOUT)
         .build()
         .map_err(|err| FlowError::Config(err.to_string()))
@@ -159,12 +175,7 @@ async fn metadata(issuer: &str, refresh: bool) -> Result<CoreProviderMetadata, F
     let metadata = CoreProviderMetadata::discover_async(issuer_url, &http)
         .await
         .map_err(|err| FlowError::Discovery(error_chain(&err)))?;
-    let valid_endpoints = is_trusted_url(metadata.authorization_endpoint().url())
-        && metadata
-            .token_endpoint()
-            .is_none_or(|endpoint| is_trusted_url(endpoint.url()))
-        && is_trusted_url(metadata.jwks_uri().url());
-    if !valid_endpoints {
+    if !has_trusted_discovery_endpoints(&parsed_issuer, &metadata) {
         return Err(FlowError::Discovery(
             "the provider metadata contained an untrusted endpoint URL".into(),
         ));
@@ -173,6 +184,20 @@ async fn metadata(issuer: &str, refresh: bool) -> Result<CoreProviderMetadata, F
         cache.insert(issuer.to_owned(), (Instant::now(), metadata.clone()));
     }
     Ok(metadata)
+}
+
+pub(super) fn has_trusted_discovery_endpoints(
+    issuer: &Url,
+    metadata: &CoreProviderMetadata,
+) -> bool {
+    let https_only = issuer.scheme() == "https";
+    let valid_endpoint =
+        |url: &Url| is_trusted_url(url) && (!https_only || url.scheme() == "https");
+    valid_endpoint(metadata.authorization_endpoint().url())
+        && metadata
+            .token_endpoint()
+            .is_none_or(|endpoint| valid_endpoint(endpoint.url()))
+        && valid_endpoint(metadata.jwks_uri().url())
 }
 
 fn error_chain(err: &dyn std::error::Error) -> String {

@@ -12,6 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use chrono::Utc;
 use sqlx::{PgConnection, PgPool};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, warn};
@@ -27,7 +28,7 @@ use xguard_common::{
                 StepOutcome, StepsSnapshot, VPN_MFA_SESSION_TIMEOUT, VpnClientMfaSession,
                 VpnMfaFlowKind,
             },
-            vpn_client_session::VpnClientMfaMethod,
+            vpn_client_session::{VpnClientMfaMethod, VpnClientSession, VpnClientSessionState},
         },
         wireguard_key::WireguardKey,
     },
@@ -148,6 +149,15 @@ struct CompletedFlow {
     gateway_command: GatewayCommand,
     posture_event: Option<BidiStreamEvent>,
     event: BidiStreamEvent,
+}
+
+enum CompleteFlowOutcome {
+    Completed(Box<CompletedFlow>),
+    PostureRejected {
+        failed_checks: Vec<String>,
+        gateway_command: Option<Box<GatewayCommand>>,
+        events: Vec<BidiStreamEvent>,
+    },
 }
 
 pub(in crate::mfa_engine) struct LoadedFinishContext {
@@ -380,7 +390,7 @@ impl MfaEngine {
             });
         }
 
-        let completed = self
+        let outcome = self
             .complete_flow(&mut transaction, session, snapshot, ctx, context)
             .await?;
         transaction.commit().await.map_err(|err| {
@@ -388,24 +398,45 @@ impl MfaEngine {
             FinishCoreError::Internal
         })?;
 
-        debug!("Sending `peer_create` message to gateway");
-        self.channels
-            .gateway_tx
-            .send(completed.gateway_command)
-            .map_err(|err| {
-                error!("Error sending WireGuard event: {err}");
-                FinishCoreError::Internal
-            })?;
-        if let Some(posture_event) = completed.posture_event {
-            self.channels.emit_event(posture_event)?;
+        match outcome {
+            CompleteFlowOutcome::Completed(completed) => {
+                debug!("Sending `peer_create` message to gateway");
+                self.channels
+                    .gateway_tx
+                    .send(completed.gateway_command)
+                    .map_err(|err| {
+                        error!("Error sending WireGuard event: {err}");
+                        FinishCoreError::Internal
+                    })?;
+                if let Some(posture_event) = completed.posture_event {
+                    self.channels.emit_event(posture_event)?;
+                }
+                self.channels.emit_event(completed.event)?;
+                Ok(completed.outcome)
+            }
+            CompleteFlowOutcome::PostureRejected {
+                failed_checks,
+                gateway_command,
+                events,
+            } => {
+                if let Some(cmd) = gateway_command
+                    && let Err(err) = self.channels.gateway_tx.send(*cmd)
+                {
+                    error!("Failed to send gateway deauthorization after posture failure: {err}");
+                }
+                for event in events {
+                    if let Err(err) = self.channels.emit_event(event) {
+                        error!("Failed to emit posture event: {err}");
+                    }
+                }
+                Err(FinishCoreError::PostureRejected(failed_checks))
+            }
         }
-        self.channels.emit_event(completed.event)?;
-        Ok(completed.outcome)
     }
 
     /// Completes the flow by creating the preshared key and VPN session, then removing the MFA
-    /// session. Database changes happen together; [`CompletedFlow`] carries events for dispatch
-    /// after the commit.
+    /// session. Database changes happen together; [`CompleteFlowOutcome`] carries events for
+    /// dispatch after the commit.
     async fn complete_flow(
         &self,
         transaction: &mut PgConnection,
@@ -413,7 +444,7 @@ impl MfaEngine {
         snapshot: StepsSnapshot,
         ctx: &MfaSessionContext,
         context: BidiRequestContext,
-    ) -> Result<CompletedFlow, FinishCoreError> {
+    ) -> Result<CompleteFlowOutcome, FinishCoreError> {
         let Ok(Some(network_device)) =
             WireguardNetworkDevice::find(&mut *transaction, ctx.device.id, ctx.location.id).await
         else {
@@ -474,7 +505,65 @@ impl MfaEngine {
                     ctx.location,
                     failed_checks.join("; ")
                 );
-                if let Err(err) = self.channels.emit_event(BidiStreamEvent {
+                session.delete(&mut *transaction).await.map_err(|err| {
+                    error!("Failed to delete rejected MFA session: {err}");
+                    FinishCoreError::Internal
+                })?;
+
+                let active_sessions = VpnClientSession::get_all_active_device_sessions_in_location(
+                    &mut *transaction,
+                    ctx.location.id,
+                    ctx.device.id,
+                )
+                .await
+                .map_err(|err| {
+                    error!(
+                        "Failed to fetch active VPN sessions for device {} in location {}: {err}",
+                        ctx.device, ctx.location
+                    );
+                    FinishCoreError::Internal
+                })?;
+
+                let mut events = Vec::new();
+                let disconnect_timestamp = Utc::now().naive_utc();
+                let gateway_command = if active_sessions.is_empty() {
+                    None
+                } else {
+                    for mut active in active_sessions {
+                        let was_connected = active.state == VpnClientSessionState::Connected;
+                        let is_mfa_session = active.is_mfa_session;
+                        active.disconnected_at = Some(disconnect_timestamp);
+                        active.state = VpnClientSessionState::Disconnected;
+                        active.save(&mut *transaction).await.map_err(|err| {
+                            error!("Failed to revoke VPN session {}: {err}", active.id);
+                            FinishCoreError::Internal
+                        })?;
+                        if was_connected {
+                            events.push(BidiStreamEvent {
+                                context: BidiRequestContext {
+                                    timestamp: disconnect_timestamp,
+                                    user_id: ctx.user.id,
+                                    username: ctx.user.username.clone(),
+                                    ip: None,
+                                    device_name: format!("{}", ctx.device),
+                                },
+                                event: BidiStreamEventType::DesktopClientMfa(Box::new(
+                                    DesktopClientMfaEvent::Disconnected {
+                                        location: ctx.location.clone(),
+                                        device: ctx.device.clone(),
+                                        is_mfa_session,
+                                    },
+                                )),
+                            });
+                        }
+                    }
+                    Some(Box::new(GatewayCommand::VpnSessionDeauthorized(
+                        ctx.location.id,
+                        ctx.device.clone(),
+                    )))
+                };
+
+                events.push(BidiStreamEvent {
                     context: context.clone(),
                     event: BidiStreamEventType::DesktopClientMfa(Box::new(
                         DesktopClientMfaEvent::PostureCheckFailed {
@@ -484,10 +573,13 @@ impl MfaEngine {
                             failed_checks: failed_checks.clone(),
                         },
                     )),
-                }) {
-                    error!("Failed to emit posture event: {err}");
-                }
-                return Err(FinishCoreError::PostureRejected(failed_checks));
+                });
+
+                return Ok(CompleteFlowOutcome::PostureRejected {
+                    failed_checks,
+                    gateway_command,
+                    events,
+                });
             }
         };
 
@@ -561,12 +653,12 @@ impl MfaEngine {
             FinishCoreError::Internal
         })?;
 
-        Ok(CompletedFlow {
+        Ok(CompleteFlowOutcome::Completed(Box::new(CompletedFlow {
             outcome: FinishOutcome::Completed { preshared_key },
             gateway_command,
             posture_event,
             event,
-        })
+        })))
     }
 
     /// Record a proof-verification failure, deleting the session once the per-step cap is reached

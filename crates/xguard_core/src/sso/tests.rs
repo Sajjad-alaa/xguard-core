@@ -481,6 +481,24 @@ async fn discovery_rejects_untrusted_endpoints() {
     assert!(matches!(err, FlowError::Discovery(_)), "{err:?}");
 }
 
+#[test]
+fn discovery_rejects_https_to_http_loopback_downgrade() {
+    use openidconnect::core::CoreProviderMetadata;
+
+    let issuer = url::Url::parse("https://idp.example.com").unwrap();
+    let metadata: CoreProviderMetadata = serde_json::from_value(serde_json::json!({
+        "issuer": "https://idp.example.com",
+        "authorization_endpoint": "http://127.0.0.1:8080/auth",
+        "token_endpoint": "https://idp.example.com/token",
+        "jwks_uri": "https://idp.example.com/jwks",
+        "response_types_supported": ["code"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["RS256"]
+    }))
+    .unwrap();
+    assert!(!flow::has_trusted_discovery_endpoints(&issuer, &metadata));
+}
+
 fn expect_grant(mock: &MockProvider, url: &str) {
     let mut expected = mock.expected.lock().unwrap();
     expected.challenge = query_param(url, "code_challenge");

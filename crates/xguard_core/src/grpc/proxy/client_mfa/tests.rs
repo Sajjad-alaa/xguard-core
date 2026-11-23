@@ -2177,7 +2177,7 @@ mod posture {
         let status = server
             .legacy_mfa_finish(
                 ClientMfaFinishRequest {
-                    token,
+                    token: token.clone(),
                     code: Some(code()),
                     auth_pub_key: None,
                 },
@@ -2198,6 +2198,26 @@ mod posture {
             .is_empty()
         );
         assert!(gateway_rx.try_recv().is_err());
+        assert!(
+            VpnClientMfaSession::<Id>::find_active_by_token(&pool, &token)
+                .await
+                .unwrap()
+                .is_none(),
+            "rejected posture finish must delete the MFA session"
+        );
+        let stored_snapshot = PostureSnapshot::find(&pool, device.id)
+            .await
+            .unwrap()
+            .expect("non-compliant posture snapshot must persist across rejection");
+        assert!(!stored_snapshot.compliant);
+        assert!(
+            stored_snapshot
+                .failed_checks
+                .iter()
+                .any(|check| check.contains("firewall is required")),
+            "{:?}",
+            stored_snapshot.failed_checks
+        );
 
         // A stale report is not accepted either.
         set_rules(&pool, &posture, false).await;

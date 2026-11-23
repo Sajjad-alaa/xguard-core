@@ -5,7 +5,7 @@ use xguard_common::{
     db::{
         Id,
         models::{
-            Device, MFAMethod, Settings, User, polling_token::PollingToken,
+            Device, MFAMethod, Settings, ThrottleScope, User, polling_token::PollingToken,
             vpn_client_session::VpnClientMfaMethod,
         },
     },
@@ -94,17 +94,20 @@ async fn load_session(pool: &PgPool, session_token: &str) -> Result<MfaConfigSes
     let token = Token::find_by_id(pool, session_token).await?;
     if token.token_type.as_deref() != Some(MFA_CONFIG_TOKEN_TYPE) {
         error!(
-            "MFA config: token {} has type {:?}, expected {MFA_CONFIG_TOKEN_TYPE}",
-            token.id, token.token_type
+            "MFA config: session for user {} has type {:?}, expected {MFA_CONFIG_TOKEN_TYPE}",
+            token.user_id, token.token_type
         );
         return Err(Status::unauthenticated("invalid token"));
     }
     if token.is_expired() {
-        error!("MFA config: token {} expired", token.id);
+        error!("MFA config: session for user {} expired", token.user_id);
         return Err(Status::unauthenticated("invalid token"));
     }
     if token.is_used() {
-        error!("MFA config: token {} is already authorized", token.id);
+        error!(
+            "MFA config: session for user {} is already authorized",
+            token.user_id
+        );
         return Err(Status::failed_precondition("session already authorized"));
     }
     let user = token.fetch_user(pool).await?;
@@ -113,7 +116,10 @@ async fn load_session(pool: &PgPool, session_token: &str) -> Result<MfaConfigSes
         return Err(Status::permission_denied("user is inactive"));
     }
     let Some(device_id) = token.device_id else {
-        error!("MFA config: token {} has no device", token.id);
+        error!(
+            "MFA config: session for user {} has no device",
+            token.user_id
+        );
         return Err(Status::internal("unexpected error"));
     };
 
@@ -317,6 +323,16 @@ impl MfaConfigServer {
             );
             return Err(Status::permission_denied("method not configured"));
         }
+        if !ThrottleScope::VpnMfaInitiate
+            .hit(&self.pool, &format!("mfa_config_send:user:{}", user.id))
+            .await
+            .map_err(|err| {
+                error!("MFA config send code: throttle check failed: {err}");
+                Status::internal("unexpected error")
+            })?
+        {
+            return Err(Status::resource_exhausted("too many code requests"));
+        }
 
         let code = user.generate_email_mfa_code().map_err(|err| {
             error!("MFA config send code: failed to generate email code: {err}");
@@ -486,6 +502,42 @@ impl MfaConfigServer {
             return Err(Status::permission_denied("method not configured"));
         }
 
+        let code_throttle_keys = matches!(method, MfaMethod::Totp | MfaMethod::Email).then(|| {
+            (
+                format!("mfa_config:user:{}", user.id),
+                format!("mfa_config:token:{}", token.id),
+            )
+        });
+        if let Some((user_key, token_key)) = &code_throttle_keys {
+            let user_ok = ThrottleScope::VpnMfaCode
+                .hit(&self.pool, user_key)
+                .await
+                .map_err(|err| {
+                    error!("MFA config authorize: throttle check failed: {err}");
+                    Status::internal("unexpected error")
+                })?;
+            let token_ok = ThrottleScope::WebLogin
+                .hit(&self.pool, token_key)
+                .await
+                .map_err(|err| {
+                    error!("MFA config authorize: throttle check failed: {err}");
+                    Status::internal("unexpected error")
+                })?;
+            if !user_ok || !token_ok {
+                if !token_ok
+                    && let Err(err) = sqlx::query("DELETE FROM token WHERE id = $1")
+                        .bind(&token.id)
+                        .execute(&self.pool)
+                        .await
+                {
+                    error!("MFA config authorize: failed to delete throttled session: {err}");
+                }
+                return Err(Status::permission_denied(
+                    "Too many failed MFA attempts. Please start again.",
+                ));
+            }
+        }
+
         let valid = match method {
             MfaMethod::Totp => user.verify_totp_code(&request.code),
             MfaMethod::Fido2 => {
@@ -518,6 +570,14 @@ impl MfaConfigServer {
                 user.username
             );
             return Err(Status::unauthenticated("invalid code"));
+        }
+        if let Some((user_key, token_key)) = &code_throttle_keys {
+            if let Err(err) = ThrottleScope::VpnMfaCode.refund(&self.pool, user_key).await {
+                error!("MFA config authorize: failed to refund user throttle: {err}");
+            }
+            if let Err(err) = ThrottleScope::WebLogin.refund(&self.pool, token_key).await {
+                error!("MFA config authorize: failed to refund token throttle: {err}");
+            }
         }
 
         let mut transaction = self.pool.begin().await.map_err(|err| {
@@ -679,8 +739,8 @@ impl MfaConfigServer {
         // Only MFA configuration tokens may be deleted here.
         if token.token_type.as_deref() != Some(MFA_CONFIG_TOKEN_TYPE) {
             error!(
-                "MFA config end: token {} has type {:?}, expected {MFA_CONFIG_TOKEN_TYPE}",
-                token.id, token.token_type
+                "MFA config end: session for user {} has type {:?}, expected {MFA_CONFIG_TOKEN_TYPE}",
+                token.user_id, token.token_type
             );
             return Err(Status::permission_denied("invalid token"));
         }

@@ -1,6 +1,6 @@
 //! The external OpenID Connect provider users can sign in with (one at a time).
 
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgConnection, PgExecutor, Type};
@@ -108,7 +108,22 @@ fn invalid(message: impl Into<String>) -> ProviderError {
     ProviderError::Invalid(message.into())
 }
 
-fn is_blocked_ip(ip: IpAddr) -> bool {
+pub(crate) fn allow_insecure_loopback() -> bool {
+    cfg!(any(test, debug_assertions))
+        || std::env::var("XGUARD_ALLOW_INSECURE_LOOPBACK_OIDC")
+            .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+}
+
+pub(crate) fn is_loopback_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_loopback(),
+        IpAddr::V6(v6) => {
+            v6.is_loopback() || v6.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback())
+        }
+    }
+}
+
+pub(crate) fn is_blocked_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => v4.is_link_local() || v4.is_unspecified(),
         IpAddr::V6(v6) => {
@@ -120,8 +135,38 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
     }
 }
 
-/// HTTPS, or HTTP to this machine (for development and tests). Link-local and unspecified
-/// addresses are rejected even over HTTPS.
+pub(crate) fn is_blocked_resolved_ip(ip: IpAddr) -> bool {
+    is_blocked_ip(ip) || (is_loopback_ip(ip) && !allow_insecure_loopback())
+}
+
+pub(crate) async fn resolve_and_validate_host(
+    host: &str,
+) -> Result<Vec<SocketAddr>, std::io::Error> {
+    let bare_host = host.trim_start_matches('[').trim_end_matches(']');
+    let is_literal = bare_host.parse::<IpAddr>().is_ok();
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((bare_host, 0)).await?.collect();
+    if addrs.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "host resolved to no addresses",
+        ));
+    }
+    for addr in &addrs {
+        let ip = addr.ip();
+        if is_blocked_resolved_ip(ip)
+            || (!is_literal && !bare_host.eq_ignore_ascii_case("localhost") && is_loopback_ip(ip))
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "resolved to a blocked IP address",
+            ));
+        }
+    }
+    Ok(addrs)
+}
+
+/// HTTPS, or HTTP to this machine when explicitly permitted (for development and tests).
+/// Link-local and unspecified addresses are rejected even over HTTPS.
 pub(crate) fn is_trusted_url(url: &Url) -> bool {
     let Some(host) = url.host_str() else {
         return false;
@@ -135,8 +180,8 @@ pub(crate) fn is_trusted_url(url: &Url) -> bool {
         return true;
     }
     url.scheme() == "http"
-        && (bare_host.eq_ignore_ascii_case("localhost")
-            || parsed_ip.is_some_and(|ip| ip.is_loopback()))
+        && allow_insecure_loopback()
+        && (bare_host.eq_ignore_ascii_case("localhost") || parsed_ip.is_some_and(is_loopback_ip))
 }
 
 pub(crate) fn same_origin(a: &str, b: &str) -> bool {

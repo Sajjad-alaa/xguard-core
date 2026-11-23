@@ -9,10 +9,11 @@
 //! - **Rate limits:** a `429` or `503` is retried twice, waiting as `Retry-After` asks (at most
 //!   10 seconds).
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use reqwest::{
     Client, RequestBuilder, Response, StatusCode,
+    dns::{Addrs, Name, Resolve, Resolving},
     header::{HeaderMap, RETRY_AFTER},
     redirect::Policy,
 };
@@ -20,6 +21,19 @@ use serde::de::DeserializeOwned;
 use url::Url;
 
 use super::DirSyncError;
+use crate::sso::provider::resolve_and_validate_host;
+
+struct SafeDnsResolver;
+
+impl Resolve for SafeDnsResolver {
+    fn resolve(&self, name: Name) -> Resolving {
+        let host = name.as_str().to_owned();
+        Box::pin(async move {
+            let addrs = resolve_and_validate_host(&host).await?;
+            Ok(Box::new(addrs.into_iter()) as Addrs)
+        })
+    }
+}
 
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(10);
 /// The largest response body read.
@@ -36,6 +50,7 @@ const MAX_ERROR_CHARS: usize = 300;
 pub(crate) fn client() -> Result<Client, DirSyncError> {
     Client::builder()
         .redirect(Policy::none())
+        .dns_resolver(Arc::new(SafeDnsResolver))
         .timeout(TIMEOUT)
         .connect_timeout(TIMEOUT)
         .user_agent(concat!(

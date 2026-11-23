@@ -452,3 +452,49 @@ async fn test_email_setup_reports_smtp_disabled_during_session(
     ));
     context.finish().await.expect_server_finished().await;
 }
+
+#[sqlx::test]
+async fn test_mfa_config_authorize_throttles_and_invalidates_session(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    let mut context = HandlerTestContext::new(options).await;
+    complete_proxy_handshake(&mut context).await;
+
+    let (mut user, device) = create_user_with_device(&context.pool).await;
+    setup_user_totp_mfa(&context.pool, &mut user).await;
+    let polling_token = create_polling_token(&context.pool, device.id).await;
+
+    let start_response =
+        send_mfa_config_start(&mut context, &polling_token, &device.wireguard_pubkey).await;
+    let Some(core_response::Payload::MfaConfigStart(session)) = &start_response.payload else {
+        panic!("expected MfaConfigStartResponse");
+    };
+    let session_token = session.session_token.clone();
+
+    for _ in 0..5 {
+        let resp =
+            send_mfa_config_authorize(&mut context, &session_token, MfaMethod::Totp, "000000")
+                .await;
+        assert_eq!(assert_error_response(&resp), tonic::Code::Unauthenticated);
+    }
+
+    let throttled =
+        send_mfa_config_authorize(&mut context, &session_token, MfaMethod::Totp, "000000").await;
+    assert_eq!(
+        assert_error_response(&throttled),
+        tonic::Code::PermissionDenied
+    );
+
+    let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM token WHERE id = $1")
+        .bind(&session_token)
+        .fetch_one(&context.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        remaining, 0,
+        "exceeding per-session authorize cap must delete the MFA config token"
+    );
+
+    context.finish().await.expect_server_finished().await;
+}
