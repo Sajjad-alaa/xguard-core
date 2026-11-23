@@ -1344,6 +1344,18 @@ fn api_event_cases() -> Vec<EventTestCase> {
             module: ActivityLogModule::Posture,
             description_contains: Some("posture policy(ies)"),
         },
+        EventTestCase {
+            name: "RadiusSettingsUpdated",
+            message: api_message(ApiEventType::RadiusSettingsUpdated {
+                enabled: true,
+                web_login_enabled: true,
+                vpn_mfa_enabled: true,
+                primary_host: "radius.example.com".into(),
+            }),
+            event_type: EventType::EnterpriseSettingsUpdated,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("RADIUS MFA settings"),
+        },
     ];
 
     assert_eq!(

@@ -18,6 +18,7 @@ const mfaSchema = z.object({
   totp_available: z.boolean(),
   webauthn_available: z.boolean(),
   email_available: z.boolean(),
+  radius_available: z.boolean().optional(),
 });
 
 export const Route = createFileRoute('/auth')({
@@ -124,6 +125,9 @@ function RouteComponent() {
               break;
             case 'Webauthn':
               navigate({ to: '/auth/mfa/webauthn', replace: true });
+              break;
+            case 'Radius':
+              navigate({ to: '/auth/mfa/radius', replace: true });
               break;
           }
         } else {

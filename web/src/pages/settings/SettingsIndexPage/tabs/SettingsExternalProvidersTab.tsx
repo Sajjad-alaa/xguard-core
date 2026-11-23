@@ -28,5 +28,13 @@ export const SettingsExternalProvidersTab = () => (
         content={m.settings_ldap_subtitle()}
       />
     </Link>
+    <SizedBox height={ThemeSpacing.Xl} />
+    <Link to="/settings/radius">
+      <SectionSelect
+        image="id-providers"
+        title={m.settings_radius_title()}
+        content={m.settings_radius_subtitle()}
+      />
+    </Link>
   </SettingsLayout>
 );

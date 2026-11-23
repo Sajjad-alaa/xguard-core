@@ -15,6 +15,7 @@ export const mfaFlowMethodLabels: Record<MfaFlowMethodValue, string> = {
   [MfaFlowMethod.Email]: m.mfa_flow_method_email_code(),
   [MfaFlowMethod.Biometric]: m.mfa_flow_method_biometric(),
   [MfaFlowMethod.Fido2]: m.mfa_flow_method_fido2(),
+  [MfaFlowMethod.Radius]: m.mfa_flow_method_radius(),
 };
 
 export const mfaFlowMethodHints: Partial<
@@ -45,6 +46,8 @@ export const mfaFlowUnavailableText = (
       return m.location_mfa_flow_unavailable_smtp();
     case MfaMethodAvailabilityReason.OidcProviderMissing:
       return m.location_mfa_flow_unavailable_oidc();
+    case MfaMethodAvailabilityReason.RadiusNotConfigured:
+      return m.location_mfa_flow_unavailable_radius();
     default:
       return undefined;
   }

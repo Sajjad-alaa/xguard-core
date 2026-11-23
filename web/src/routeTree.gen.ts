@@ -45,6 +45,7 @@ import { Route as AuthorizedWizardSetupEdgeRouteImport } from './routes/_authori
 import { Route as WizardMigrationIndexRouteImport } from './routes/_wizard/migration/index'
 import { Route as WizardMigrationLocationsRouteImport } from './routes/_wizard/migration/locations'
 import { Route as AuthMfaEmailRouteImport } from './routes/auth/mfa/email'
+import { Route as AuthMfaRadiusRouteImport } from './routes/auth/mfa/radius'
 import { Route as AuthMfaRecoveryRouteImport } from './routes/auth/mfa/recovery'
 import { Route as AuthMfaTotpRouteImport } from './routes/auth/mfa/totp'
 import { Route as AuthMfaWebauthnRouteImport } from './routes/auth/mfa/webauthn'
@@ -59,6 +60,7 @@ import { Route as AuthorizedDefaultSettingsGatewayNotificationsRouteImport } fro
 import { Route as AuthorizedDefaultSettingsInstanceRouteImport } from './routes/_authorized/_default/settings/instance'
 import { Route as AuthorizedDefaultSettingsLdapRouteImport } from './routes/_authorized/_default/settings/ldap'
 import { Route as AuthorizedDefaultSettingsOpenidRouteImport } from './routes/_authorized/_default/settings/openid'
+import { Route as AuthorizedDefaultSettingsRadiusRouteImport } from './routes/_authorized/_default/settings/radius'
 import { Route as AuthorizedDefaultSettingsSmtpRouteImport } from './routes/_authorized/_default/settings/smtp'
 import { Route as AuthorizedDefaultUserUsernameRouteImport } from './routes/_authorized/_default/user/$username'
 import { Route as AuthorizedDefaultVpnOverviewIndexRouteImport } from './routes/_authorized/_default/vpn-overview/index'
@@ -258,6 +260,11 @@ const AuthMfaEmailRoute = AuthMfaEmailRouteImport.update({
   path: '/email',
   getParentRoute: () => AuthMfaRoute,
 } as any)
+const AuthMfaRadiusRoute = AuthMfaRadiusRouteImport.update({
+  id: '/radius',
+  path: '/radius',
+  getParentRoute: () => AuthMfaRoute,
+} as any)
 const AuthMfaRecoveryRoute = AuthMfaRecoveryRouteImport.update({
   id: '/recovery',
   path: '/recovery',
@@ -337,6 +344,12 @@ const AuthorizedDefaultSettingsOpenidRoute =
   AuthorizedDefaultSettingsOpenidRouteImport.update({
     id: '/settings/openid',
     path: '/settings/openid',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
+const AuthorizedDefaultSettingsRadiusRoute =
+  AuthorizedDefaultSettingsRadiusRouteImport.update({
+    id: '/settings/radius',
+    path: '/settings/radius',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
 const AuthorizedDefaultSettingsSmtpRoute =
@@ -422,6 +435,7 @@ export interface FileRoutesByFullPath {
   '/setup-edge': typeof AuthorizedWizardSetupEdgeRoute
   '/migration/locations': typeof WizardMigrationLocationsRoute
   '/auth/mfa/email': typeof AuthMfaEmailRoute
+  '/auth/mfa/radius': typeof AuthMfaRadiusRoute
   '/auth/mfa/recovery': typeof AuthMfaRecoveryRoute
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
@@ -434,6 +448,7 @@ export interface FileRoutesByFullPath {
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
   '/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
+  '/settings/radius': typeof AuthorizedDefaultSettingsRadiusRoute
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -479,6 +494,7 @@ export interface FileRoutesByTo {
   '/setup-edge': typeof AuthorizedWizardSetupEdgeRoute
   '/migration/locations': typeof WizardMigrationLocationsRoute
   '/auth/mfa/email': typeof AuthMfaEmailRoute
+  '/auth/mfa/radius': typeof AuthMfaRadiusRoute
   '/auth/mfa/recovery': typeof AuthMfaRecoveryRoute
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
@@ -491,6 +507,7 @@ export interface FileRoutesByTo {
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
   '/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
+  '/settings/radius': typeof AuthorizedDefaultSettingsRadiusRoute
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -540,6 +557,7 @@ export interface FileRoutesById {
   '/_authorized/_wizard/setup-edge': typeof AuthorizedWizardSetupEdgeRoute
   '/_wizard/migration/locations': typeof WizardMigrationLocationsRoute
   '/auth/mfa/email': typeof AuthMfaEmailRoute
+  '/auth/mfa/radius': typeof AuthMfaRadiusRoute
   '/auth/mfa/recovery': typeof AuthMfaRecoveryRoute
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
@@ -552,6 +570,7 @@ export interface FileRoutesById {
   '/_authorized/_default/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/_authorized/_default/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
   '/_authorized/_default/settings/openid': typeof AuthorizedDefaultSettingsOpenidRoute
+  '/_authorized/_default/settings/radius': typeof AuthorizedDefaultSettingsRadiusRoute
   '/_authorized/_default/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/_authorized/_default/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/_authorized/_default/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -600,6 +619,7 @@ export interface FileRouteTypes {
     | '/setup-edge'
     | '/migration/locations'
     | '/auth/mfa/email'
+    | '/auth/mfa/radius'
     | '/auth/mfa/recovery'
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
@@ -612,6 +632,7 @@ export interface FileRouteTypes {
     | '/settings/instance'
     | '/settings/ldap'
     | '/settings/openid'
+    | '/settings/radius'
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
@@ -657,6 +678,7 @@ export interface FileRouteTypes {
     | '/setup-edge'
     | '/migration/locations'
     | '/auth/mfa/email'
+    | '/auth/mfa/radius'
     | '/auth/mfa/recovery'
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
@@ -669,6 +691,7 @@ export interface FileRouteTypes {
     | '/settings/instance'
     | '/settings/ldap'
     | '/settings/openid'
+    | '/settings/radius'
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
@@ -717,6 +740,7 @@ export interface FileRouteTypes {
     | '/_authorized/_wizard/setup-edge'
     | '/_wizard/migration/locations'
     | '/auth/mfa/email'
+    | '/auth/mfa/radius'
     | '/auth/mfa/recovery'
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
@@ -729,6 +753,7 @@ export interface FileRouteTypes {
     | '/_authorized/_default/settings/instance'
     | '/_authorized/_default/settings/ldap'
     | '/_authorized/_default/settings/openid'
+    | '/_authorized/_default/settings/radius'
     | '/_authorized/_default/settings/smtp'
     | '/_authorized/_default/user/$username'
     | '/_authorized/_default/vpn-overview/$locationId'
@@ -1012,6 +1037,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthMfaEmailRouteImport
       parentRoute: typeof AuthMfaRoute
     }
+    '/auth/mfa/radius': {
+      id: '/auth/mfa/radius'
+      path: '/radius'
+      fullPath: '/auth/mfa/radius'
+      preLoaderRoute: typeof AuthMfaRadiusRouteImport
+      parentRoute: typeof AuthMfaRoute
+    }
     '/auth/mfa/recovery': {
       id: '/auth/mfa/recovery'
       path: '/recovery'
@@ -1110,6 +1142,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultSettingsOpenidRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
+    '/_authorized/_default/settings/radius': {
+      id: '/_authorized/_default/settings/radius'
+      path: '/settings/radius'
+      fullPath: '/settings/radius'
+      preLoaderRoute: typeof AuthorizedDefaultSettingsRadiusRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
     '/_authorized/_default/settings/smtp': {
       id: '/_authorized/_default/settings/smtp'
       path: '/settings/smtp'
@@ -1189,6 +1228,7 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultSettingsInstanceRoute: typeof AuthorizedDefaultSettingsInstanceRoute
   AuthorizedDefaultSettingsLdapRoute: typeof AuthorizedDefaultSettingsLdapRoute
   AuthorizedDefaultSettingsOpenidRoute: typeof AuthorizedDefaultSettingsOpenidRoute
+  AuthorizedDefaultSettingsRadiusRoute: typeof AuthorizedDefaultSettingsRadiusRoute
   AuthorizedDefaultSettingsSmtpRoute: typeof AuthorizedDefaultSettingsSmtpRoute
   AuthorizedDefaultUserUsernameRoute: typeof AuthorizedDefaultUserUsernameRoute
   AuthorizedDefaultVpnOverviewLocationIdRoute: typeof AuthorizedDefaultVpnOverviewLocationIdRoute
@@ -1224,6 +1264,7 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
     AuthorizedDefaultSettingsInstanceRoute,
   AuthorizedDefaultSettingsLdapRoute: AuthorizedDefaultSettingsLdapRoute,
   AuthorizedDefaultSettingsOpenidRoute: AuthorizedDefaultSettingsOpenidRoute,
+  AuthorizedDefaultSettingsRadiusRoute: AuthorizedDefaultSettingsRadiusRoute,
   AuthorizedDefaultSettingsSmtpRoute: AuthorizedDefaultSettingsSmtpRoute,
   AuthorizedDefaultUserUsernameRoute: AuthorizedDefaultUserUsernameRoute,
   AuthorizedDefaultVpnOverviewLocationIdRoute:
@@ -1270,6 +1311,7 @@ const AuthorizedRouteWithChildren = AuthorizedRoute._addFileChildren(
 
 interface AuthMfaRouteChildren {
   AuthMfaEmailRoute: typeof AuthMfaEmailRoute
+  AuthMfaRadiusRoute: typeof AuthMfaRadiusRoute
   AuthMfaRecoveryRoute: typeof AuthMfaRecoveryRoute
   AuthMfaTotpRoute: typeof AuthMfaTotpRoute
   AuthMfaWebauthnRoute: typeof AuthMfaWebauthnRoute
@@ -1277,6 +1319,7 @@ interface AuthMfaRouteChildren {
 
 const AuthMfaRouteChildren: AuthMfaRouteChildren = {
   AuthMfaEmailRoute: AuthMfaEmailRoute,
+  AuthMfaRadiusRoute: AuthMfaRadiusRoute,
   AuthMfaRecoveryRoute: AuthMfaRecoveryRoute,
   AuthMfaTotpRoute: AuthMfaTotpRoute,
   AuthMfaWebauthnRoute: AuthMfaWebauthnRoute,

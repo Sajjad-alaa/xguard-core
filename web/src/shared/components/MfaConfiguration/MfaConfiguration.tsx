@@ -33,6 +33,8 @@ const getDisabledHelper = (reason: MfaMethodAvailabilityReasonValue) => {
       return m.mfa_flow_method_smtp_required();
     case MfaMethodAvailabilityReason.OidcProviderMissing:
       return m.mfa_flow_error_oidc_provider_missing();
+    case MfaMethodAvailabilityReason.RadiusNotConfigured:
+      return m.mfa_flow_error_radius_not_configured();
     case MfaMethodAvailabilityReason.Available:
       return undefined;
   }

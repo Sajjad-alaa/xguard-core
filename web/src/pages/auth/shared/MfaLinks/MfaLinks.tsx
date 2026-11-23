@@ -35,6 +35,15 @@ export const MfaLinks = () => {
           </span>
         </Link>
       )}
+      {mfa.radius_available && (
+        <Link to="/auth/mfa/radius">
+          <span>
+            {m.login_mfa_use_instead({
+              method: m.login_mfa_alternative_radius(),
+            })}
+          </span>
+        </Link>
+      )}
       <Link to="/auth/mfa/recovery">
         <span>
           {m.login_mfa_use_instead({

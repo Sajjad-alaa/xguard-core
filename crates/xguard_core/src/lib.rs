@@ -102,11 +102,12 @@ use crate::{
         app_info::get_app_info,
         auth::{
             authenticate, email_mfa_code, email_mfa_disable, email_mfa_enable, email_mfa_init,
-            logout, mfa_disable, mfa_enable, recovery_code, request_email_mfa_code, totp_code,
-            totp_disable, totp_enable, totp_secret, webauthn_end, webauthn_finish, webauthn_init,
-            webauthn_start,
+            logout, mfa_disable, mfa_enable, radius_code, recovery_code, request_email_mfa_code,
+            totp_code, totp_disable, totp_enable, totp_secret, webauthn_end, webauthn_finish,
+            webauthn_init, webauthn_start,
         },
         client_settings::{get_client_settings, patch_client_settings},
+        radius::{get_radius_settings, test_radius_settings, update_radius_settings},
         component_setup::{adopt_gateway, setup_gateway_tls_stream},
         core_certs::{get_ca, get_certs, set_external_url_settings, set_internal_url_settings},
         device_posture::{
@@ -207,6 +208,7 @@ pub mod log_stream;
 pub mod mail;
 pub mod mfa_engine;
 pub mod posture;
+pub mod radius;
 pub mod setup_logs;
 pub mod sso;
 pub mod support;
@@ -333,6 +335,7 @@ pub fn build_webapp(
                 get(request_email_mfa_code).post(email_mfa_enable),
             )
             .route("/auth/email/verify", post(email_mfa_code))
+            .route("/auth/radius", post(radius_code))
             .route("/auth/recovery", post(recovery_code))
             // /user
             .route("/reserved", get(check_reserved))
@@ -464,6 +467,11 @@ pub fn build_webapp(
                 post(preview_cloud_directory_sync),
             )
             .route("/openid/provider/sync/status", get(directory_sync_status))
+            .route(
+                "/settings/radius",
+                get(get_radius_settings).put(update_radius_settings),
+            )
+            .route("/settings/radius/test", post(test_radius_settings))
             .route(
                 "/activity_log_stream/{id}",
                 put(update_stream).delete(delete_stream),

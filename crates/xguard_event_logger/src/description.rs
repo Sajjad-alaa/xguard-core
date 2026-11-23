@@ -315,6 +315,15 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::ClientSettingsUpdated { .. } => {
             Some("Updated client and device settings".into())
         }
+        ApiEventType::RadiusSettingsUpdated {
+            enabled,
+            primary_host,
+            ..
+        } => Some(if *enabled {
+            format!("Updated RADIUS MFA settings (enabled, primary {primary_host})")
+        } else {
+            "Updated RADIUS MFA settings (disabled)".into()
+        }),
         ApiEventType::LocationGroupMtusChanged {
             location_name,
             after,

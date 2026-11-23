@@ -36,16 +36,18 @@ pub enum VpnClientMfaMethod {
     Biometric,
     MobileApprove,
     Fido2,
+    Radius,
 }
 
 impl VpnClientMfaMethod {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Totp,
         Self::Email,
         Self::Oidc,
         Self::Biometric,
         Self::MobileApprove,
         Self::Fido2,
+        Self::Radius,
     ];
 
     /// Methods an MFA configuration session can set up.
@@ -103,6 +105,11 @@ impl VpnClientMfaMethod {
                 .await?
                 .is_empty(),
             Self::Fido2 => WebAuthn::vpn_key_exists_for_user(executor, user.id).await?,
+            Self::Radius => {
+                crate::db::models::radius::RadiusSettings::get(executor)
+                    .await?
+                    .is_vpn_mfa_ready()
+            }
         };
         Ok(configured)
     }
