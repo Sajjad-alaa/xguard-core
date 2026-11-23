@@ -246,7 +246,9 @@ impl From<InstanceInfo> for xguard_proto::client_types::InstanceInfo {
             disable_all_traffic: instance.client_traffic_policy
                 == XGuardClientTrafficPolicy::DisableAllTraffic,
             client_traffic_policy: Some(proto_traffic_policy(instance.client_traffic_policy) as i32),
-            enterprise_enabled: false,
+            // XGuard has no paid tier: every feature is available, so tell clients (including
+            // upstream Defguard clients, which hide features when this is false) it is on.
+            enterprise_enabled: true,
             openid_display_name: instance.openid.as_ref().and_then(|(name, _)| name.clone()),
             openid_provider_kind: instance
                 .openid
