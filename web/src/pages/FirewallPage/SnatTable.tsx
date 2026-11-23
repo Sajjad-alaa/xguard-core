@@ -1,18 +1,21 @@
 import {
   createColumnHelper,
   getCoreRowModel,
+  getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import type { SnatBinding } from '../../shared/api/types';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
+import { Badge } from '../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
 import type { MenuItemsGroup } from '../../shared/xguard-ui/components/Menu/types';
+import { Search } from '../../shared/xguard-ui/components/Search/Search';
 import { tableEditColumnSize } from '../../shared/xguard-ui/components/table/consts';
 import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/TableBody';
 import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
@@ -29,6 +32,8 @@ type Props = {
 };
 
 export const SnatTable = ({ bindings, names }: Props) => {
+  const [search, setSearch] = useState('');
+
   const label = useMemo(() => {
     const users = new Map(names.users.map((u) => [u.id, u.label]));
     const locations = new Map(names.locations.map((l) => [l.id, l.label]));
@@ -37,6 +42,17 @@ export const SnatTable = ({ bindings, names }: Props) => {
       location: (id: number) => locations.get(id) ?? `#${id}`,
     };
   }, [names]);
+
+  const visibleBindings = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return bindings;
+    return bindings.filter((b) =>
+      [label.user(b.user_id), label.location(b.location_id), b.public_ip]
+        .join('\n')
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [bindings, label, search]);
 
   const addButtonProps = useMemo(
     (): ButtonProps => ({
@@ -50,31 +66,36 @@ export const SnatTable = ({ bindings, names }: Props) => {
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('user_id', {
+      columnHelper.accessor((b) => label.user(b.user_id), {
+        id: 'user',
         header: m.firewall_snat_col_user(),
         minSize: 220,
+        enableSorting: true,
         meta: { flex: true },
         cell: (info) => (
           <TableCell>
-            <span>{label.user(info.getValue())}</span>
+            <Badge variant="neutral" showIcon icon="user" text={info.getValue()} />
           </TableCell>
         ),
       }),
-      columnHelper.accessor('location_id', {
+      columnHelper.accessor((b) => label.location(b.location_id), {
+        id: 'location',
         header: m.firewall_snat_col_location(),
         minSize: 180,
+        enableSorting: true,
         cell: (info) => (
           <TableCell>
-            <span>{label.location(info.getValue())}</span>
+            <Badge variant="neutral" showIcon icon="location" text={info.getValue()} />
           </TableCell>
         ),
       }),
       columnHelper.accessor('public_ip', {
         header: m.firewall_snat_col_ip(),
         minSize: 180,
+        enableSorting: true,
         cell: (info) => (
           <TableCell>
-            <span>{info.getValue()}</span>
+            <Badge variant="outlined" text={info.getValue()} />
           </TableCell>
         ),
       }),
@@ -82,6 +103,7 @@ export const SnatTable = ({ bindings, names }: Props) => {
         id: 'edit',
         header: '',
         size: tableEditColumnSize,
+        enableResizing: false,
         cell: (info) => {
           const binding = info.row.original;
           const menuItems: MenuItemsGroup[] = [
@@ -125,8 +147,10 @@ export const SnatTable = ({ bindings, names }: Props) => {
 
   const table = useReactTable({
     columns,
-    data: bindings,
+    data: visibleBindings,
+    getRowId: (b) => String(b.id),
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     enableRowSelection: false,
     columnResizeMode: 'onChange',
   });
@@ -142,12 +166,26 @@ export const SnatTable = ({ bindings, names }: Props) => {
     );
   }
 
+  const noMatches = table.getRowModel().rows.length === 0;
+
   return (
     <>
       <TableTop text={m.firewall_snat_title()}>
+        <Search
+          placeholder={m.firewall_snat_search()}
+          value={search}
+          onChange={setSearch}
+        />
         <Button {...addButtonProps} />
       </TableTop>
       <TableBody table={table} />
+      {noMatches && (
+        <EmptyStateFlexible
+          icon="search"
+          title={m.search_empty_common_title()}
+          subtitle={m.search_empty_common_subtitle()}
+        />
+      )}
     </>
   );
 };

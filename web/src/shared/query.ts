@@ -242,6 +242,13 @@ export const getFirewallRulesQueryOptions = queryOptions({
   select: (resp) => resp.data,
 });
 
+export const getFirewallLocationPolicyQueryOptions = (locationId: number) =>
+  queryOptions({
+    queryFn: () => api.firewall.getLocationPolicy(locationId),
+    queryKey: ['firewall', 'policy', locationId],
+    select: (resp) => resp.data,
+  });
+
 export const getSnatBindingsQueryOptions = queryOptions({
   queryFn: api.firewall.getSnatBindings,
   queryKey: ['firewall', 'snat'],

@@ -1,0 +1,46 @@
+#firewall-page {
+  .rule-order {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    color: var(--fg-secondary);
+  }
+
+  .rule-name-cell {
+    .rule-name {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      gap: 2px;
+
+      .name {
+        font-weight: 500;
+        color: var(--fg-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .description {
+        font-size: var(--font-size-xs);
+        color: var(--fg-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  .muted {
+    color: var(--fg-muted);
+  }
+
+  .location-link {
+    font-weight: 500;
+    color: var(--fg-action);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

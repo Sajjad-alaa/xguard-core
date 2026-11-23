@@ -2148,6 +2148,25 @@ export interface FirewallRule extends FirewallRuleInput {
   updated_at: string;
 }
 
+/** Action of a compiled rule or a location's default, as the gateway applies it. */
+export type FirewallPolicyAction = 'Accept' | 'Drop' | 'Reject';
+
+/** What a location's gateways enforce right now, compiled from the stored rules. */
+export interface FirewallLocationPolicy {
+  revision: string;
+  /** `null` when filtering is off and only SNAT applies. */
+  default_action: FirewallPolicyAction | null;
+  rules: {
+    id: number;
+    action: FirewallPolicyAction;
+    source_ranges: number | null;
+    destination_ranges: number | null;
+    protocols: number[];
+    ports: string[];
+  }[];
+  snat_bindings: number;
+}
+
 export interface SnatBinding {
   id: number;
   user_id: number;

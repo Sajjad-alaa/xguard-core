@@ -30,7 +30,6 @@ import { Route as ErrorMigrationAuthRouteImport } from './routes/error/migration
 import { Route as AuthorizedDefaultActivityRouteImport } from './routes/_authorized/_default/activity'
 import { Route as AuthorizedDefaultEdgesRouteImport } from './routes/_authorized/_default/edges'
 import { Route as AuthorizedDefaultEnrollmentRouteImport } from './routes/_authorized/_default/enrollment'
-import { Route as AuthorizedDefaultFirewallRouteImport } from './routes/_authorized/_default/firewall'
 import { Route as AuthorizedDefaultGroupsRouteImport } from './routes/_authorized/_default/groups'
 import { Route as AuthorizedDefaultNetworkDevicesRouteImport } from './routes/_authorized/_default/network-devices'
 import { Route as AuthorizedDefaultOpenidRouteImport } from './routes/_authorized/_default/openid'
@@ -48,6 +47,8 @@ import { Route as AuthMfaEmailRouteImport } from './routes/auth/mfa/email'
 import { Route as AuthMfaRecoveryRouteImport } from './routes/auth/mfa/recovery'
 import { Route as AuthMfaTotpRouteImport } from './routes/auth/mfa/totp'
 import { Route as AuthMfaWebauthnRouteImport } from './routes/auth/mfa/webauthn'
+import { Route as AuthorizedDefaultFirewallIndexRouteImport } from './routes/_authorized/_default/firewall/index'
+import { Route as AuthorizedDefaultFirewallAddRuleRouteImport } from './routes/_authorized/_default/firewall/add-rule'
 import { Route as AuthorizedDefaultLocationsIndexRouteImport } from './routes/_authorized/_default/locations/index'
 import { Route as AuthorizedDefaultMfaIndexRouteImport } from './routes/_authorized/_default/mfa/index'
 import { Route as AuthorizedDefaultMfaAddFlowRouteImport } from './routes/_authorized/_default/mfa/add-flow'
@@ -64,6 +65,7 @@ import { Route as AuthorizedDefaultUserUsernameRouteImport } from './routes/_aut
 import { Route as AuthorizedDefaultVpnOverviewIndexRouteImport } from './routes/_authorized/_default/vpn-overview/index'
 import { Route as AuthorizedDefaultVpnOverviewLocationIdRouteImport } from './routes/_authorized/_default/vpn-overview/$locationId'
 import { Route as AuthorizedDefaultEdgeEdgeIdEditRouteImport } from './routes/_authorized/_default/edge/$edgeId/edit'
+import { Route as AuthorizedDefaultFirewallRuleIdEditRouteImport } from './routes/_authorized/_default/firewall/$ruleId/edit'
 import { Route as AuthorizedDefaultGatewayGatewayIdEditRouteImport } from './routes/_authorized/_default/gateway/$gatewayId/edit'
 import { Route as AuthorizedDefaultLocationsLocationIdEditRouteImport } from './routes/_authorized/_default/locations/$locationId/edit'
 import { Route as AuthorizedDefaultMfaFlowIdEditRouteImport } from './routes/_authorized/_default/mfa-flow/$id/edit'
@@ -173,12 +175,6 @@ const AuthorizedDefaultEnrollmentRoute =
     path: '/enrollment',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
-const AuthorizedDefaultFirewallRoute =
-  AuthorizedDefaultFirewallRouteImport.update({
-    id: '/firewall',
-    path: '/firewall',
-    getParentRoute: () => AuthorizedDefaultRoute,
-  } as any)
 const AuthorizedDefaultGroupsRoute = AuthorizedDefaultGroupsRouteImport.update({
   id: '/groups',
   path: '/groups',
@@ -273,6 +269,18 @@ const AuthMfaWebauthnRoute = AuthMfaWebauthnRouteImport.update({
   path: '/webauthn',
   getParentRoute: () => AuthMfaRoute,
 } as any)
+const AuthorizedDefaultFirewallIndexRoute =
+  AuthorizedDefaultFirewallIndexRouteImport.update({
+    id: '/firewall/',
+    path: '/firewall/',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
+const AuthorizedDefaultFirewallAddRuleRoute =
+  AuthorizedDefaultFirewallAddRuleRouteImport.update({
+    id: '/firewall/add-rule',
+    path: '/firewall/add-rule',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
 const AuthorizedDefaultLocationsIndexRoute =
   AuthorizedDefaultLocationsIndexRouteImport.update({
     id: '/locations/',
@@ -369,6 +377,12 @@ const AuthorizedDefaultEdgeEdgeIdEditRoute =
     path: '/edge/$edgeId/edit',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
+const AuthorizedDefaultFirewallRuleIdEditRoute =
+  AuthorizedDefaultFirewallRuleIdEditRouteImport.update({
+    id: '/firewall/$ruleId/edit',
+    path: '/firewall/$ruleId/edit',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
 const AuthorizedDefaultGatewayGatewayIdEditRoute =
   AuthorizedDefaultGatewayGatewayIdEditRouteImport.update({
     id: '/gateway/$gatewayId/edit',
@@ -408,7 +422,6 @@ export interface FileRoutesByFullPath {
   '/activity': typeof AuthorizedDefaultActivityRoute
   '/edges': typeof AuthorizedDefaultEdgesRoute
   '/enrollment': typeof AuthorizedDefaultEnrollmentRoute
-  '/firewall': typeof AuthorizedDefaultFirewallRoute
   '/groups': typeof AuthorizedDefaultGroupsRoute
   '/network-devices': typeof AuthorizedDefaultNetworkDevicesRoute
   '/openid': typeof AuthorizedDefaultOpenidRoute
@@ -426,6 +439,7 @@ export interface FileRoutesByFullPath {
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
   '/migration/': typeof WizardMigrationIndexRoute
+  '/firewall/add-rule': typeof AuthorizedDefaultFirewallAddRuleRoute
   '/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
@@ -437,11 +451,13 @@ export interface FileRoutesByFullPath {
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
+  '/firewall/': typeof AuthorizedDefaultFirewallIndexRoute
   '/locations/': typeof AuthorizedDefaultLocationsIndexRoute
   '/mfa/': typeof AuthorizedDefaultMfaIndexRoute
   '/settings/': typeof AuthorizedDefaultSettingsIndexRoute
   '/vpn-overview/': typeof AuthorizedDefaultVpnOverviewIndexRoute
   '/edge/$edgeId/edit': typeof AuthorizedDefaultEdgeEdgeIdEditRoute
+  '/firewall/$ruleId/edit': typeof AuthorizedDefaultFirewallRuleIdEditRoute
   '/gateway/$gatewayId/edit': typeof AuthorizedDefaultGatewayGatewayIdEditRoute
   '/locations/$locationId/edit': typeof AuthorizedDefaultLocationsLocationIdEditRoute
   '/mfa-flow/$id/edit': typeof AuthorizedDefaultMfaFlowIdEditRoute
@@ -465,7 +481,6 @@ export interface FileRoutesByTo {
   '/activity': typeof AuthorizedDefaultActivityRoute
   '/edges': typeof AuthorizedDefaultEdgesRoute
   '/enrollment': typeof AuthorizedDefaultEnrollmentRoute
-  '/firewall': typeof AuthorizedDefaultFirewallRoute
   '/groups': typeof AuthorizedDefaultGroupsRoute
   '/network-devices': typeof AuthorizedDefaultNetworkDevicesRoute
   '/openid': typeof AuthorizedDefaultOpenidRoute
@@ -483,6 +498,7 @@ export interface FileRoutesByTo {
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
   '/migration': typeof WizardMigrationIndexRoute
+  '/firewall/add-rule': typeof AuthorizedDefaultFirewallAddRuleRoute
   '/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
@@ -494,11 +510,13 @@ export interface FileRoutesByTo {
   '/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
+  '/firewall': typeof AuthorizedDefaultFirewallIndexRoute
   '/locations': typeof AuthorizedDefaultLocationsIndexRoute
   '/mfa': typeof AuthorizedDefaultMfaIndexRoute
   '/settings': typeof AuthorizedDefaultSettingsIndexRoute
   '/vpn-overview': typeof AuthorizedDefaultVpnOverviewIndexRoute
   '/edge/$edgeId/edit': typeof AuthorizedDefaultEdgeEdgeIdEditRoute
+  '/firewall/$ruleId/edit': typeof AuthorizedDefaultFirewallRuleIdEditRoute
   '/gateway/$gatewayId/edit': typeof AuthorizedDefaultGatewayGatewayIdEditRoute
   '/locations/$locationId/edit': typeof AuthorizedDefaultLocationsLocationIdEditRoute
   '/mfa-flow/$id/edit': typeof AuthorizedDefaultMfaFlowIdEditRoute
@@ -526,7 +544,6 @@ export interface FileRoutesById {
   '/_authorized/_default/activity': typeof AuthorizedDefaultActivityRoute
   '/_authorized/_default/edges': typeof AuthorizedDefaultEdgesRoute
   '/_authorized/_default/enrollment': typeof AuthorizedDefaultEnrollmentRoute
-  '/_authorized/_default/firewall': typeof AuthorizedDefaultFirewallRoute
   '/_authorized/_default/groups': typeof AuthorizedDefaultGroupsRoute
   '/_authorized/_default/network-devices': typeof AuthorizedDefaultNetworkDevicesRoute
   '/_authorized/_default/openid': typeof AuthorizedDefaultOpenidRoute
@@ -544,6 +561,7 @@ export interface FileRoutesById {
   '/auth/mfa/totp': typeof AuthMfaTotpRoute
   '/auth/mfa/webauthn': typeof AuthMfaWebauthnRoute
   '/_wizard/migration/': typeof WizardMigrationIndexRoute
+  '/_authorized/_default/firewall/add-rule': typeof AuthorizedDefaultFirewallAddRuleRoute
   '/_authorized/_default/mfa/add-flow': typeof AuthorizedDefaultMfaAddFlowRoute
   '/_authorized/_default/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/_authorized/_default/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
@@ -555,11 +573,13 @@ export interface FileRoutesById {
   '/_authorized/_default/settings/smtp': typeof AuthorizedDefaultSettingsSmtpRoute
   '/_authorized/_default/user/$username': typeof AuthorizedDefaultUserUsernameRoute
   '/_authorized/_default/vpn-overview/$locationId': typeof AuthorizedDefaultVpnOverviewLocationIdRoute
+  '/_authorized/_default/firewall/': typeof AuthorizedDefaultFirewallIndexRoute
   '/_authorized/_default/locations/': typeof AuthorizedDefaultLocationsIndexRoute
   '/_authorized/_default/mfa/': typeof AuthorizedDefaultMfaIndexRoute
   '/_authorized/_default/settings/': typeof AuthorizedDefaultSettingsIndexRoute
   '/_authorized/_default/vpn-overview/': typeof AuthorizedDefaultVpnOverviewIndexRoute
   '/_authorized/_default/edge/$edgeId/edit': typeof AuthorizedDefaultEdgeEdgeIdEditRoute
+  '/_authorized/_default/firewall/$ruleId/edit': typeof AuthorizedDefaultFirewallRuleIdEditRoute
   '/_authorized/_default/gateway/$gatewayId/edit': typeof AuthorizedDefaultGatewayGatewayIdEditRoute
   '/_authorized/_default/locations/$locationId/edit': typeof AuthorizedDefaultLocationsLocationIdEditRoute
   '/_authorized/_default/mfa-flow/$id/edit': typeof AuthorizedDefaultMfaFlowIdEditRoute
@@ -586,7 +606,6 @@ export interface FileRouteTypes {
     | '/activity'
     | '/edges'
     | '/enrollment'
-    | '/firewall'
     | '/groups'
     | '/network-devices'
     | '/openid'
@@ -604,6 +623,7 @@ export interface FileRouteTypes {
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
     | '/migration/'
+    | '/firewall/add-rule'
     | '/mfa/add-flow'
     | '/settings/ca'
     | '/settings/certs'
@@ -615,11 +635,13 @@ export interface FileRouteTypes {
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
+    | '/firewall/'
     | '/locations/'
     | '/mfa/'
     | '/settings/'
     | '/vpn-overview/'
     | '/edge/$edgeId/edit'
+    | '/firewall/$ruleId/edit'
     | '/gateway/$gatewayId/edit'
     | '/locations/$locationId/edit'
     | '/mfa-flow/$id/edit'
@@ -643,7 +665,6 @@ export interface FileRouteTypes {
     | '/activity'
     | '/edges'
     | '/enrollment'
-    | '/firewall'
     | '/groups'
     | '/network-devices'
     | '/openid'
@@ -661,6 +682,7 @@ export interface FileRouteTypes {
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
     | '/migration'
+    | '/firewall/add-rule'
     | '/mfa/add-flow'
     | '/settings/ca'
     | '/settings/certs'
@@ -672,11 +694,13 @@ export interface FileRouteTypes {
     | '/settings/smtp'
     | '/user/$username'
     | '/vpn-overview/$locationId'
+    | '/firewall'
     | '/locations'
     | '/mfa'
     | '/settings'
     | '/vpn-overview'
     | '/edge/$edgeId/edit'
+    | '/firewall/$ruleId/edit'
     | '/gateway/$gatewayId/edit'
     | '/locations/$locationId/edit'
     | '/mfa-flow/$id/edit'
@@ -703,7 +727,6 @@ export interface FileRouteTypes {
     | '/_authorized/_default/activity'
     | '/_authorized/_default/edges'
     | '/_authorized/_default/enrollment'
-    | '/_authorized/_default/firewall'
     | '/_authorized/_default/groups'
     | '/_authorized/_default/network-devices'
     | '/_authorized/_default/openid'
@@ -721,6 +744,7 @@ export interface FileRouteTypes {
     | '/auth/mfa/totp'
     | '/auth/mfa/webauthn'
     | '/_wizard/migration/'
+    | '/_authorized/_default/firewall/add-rule'
     | '/_authorized/_default/mfa/add-flow'
     | '/_authorized/_default/settings/ca'
     | '/_authorized/_default/settings/certs'
@@ -732,11 +756,13 @@ export interface FileRouteTypes {
     | '/_authorized/_default/settings/smtp'
     | '/_authorized/_default/user/$username'
     | '/_authorized/_default/vpn-overview/$locationId'
+    | '/_authorized/_default/firewall/'
     | '/_authorized/_default/locations/'
     | '/_authorized/_default/mfa/'
     | '/_authorized/_default/settings/'
     | '/_authorized/_default/vpn-overview/'
     | '/_authorized/_default/edge/$edgeId/edit'
+    | '/_authorized/_default/firewall/$ruleId/edit'
     | '/_authorized/_default/gateway/$gatewayId/edit'
     | '/_authorized/_default/locations/$locationId/edit'
     | '/_authorized/_default/mfa-flow/$id/edit'
@@ -907,13 +933,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultEnrollmentRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
-    '/_authorized/_default/firewall': {
-      id: '/_authorized/_default/firewall'
-      path: '/firewall'
-      fullPath: '/firewall'
-      preLoaderRoute: typeof AuthorizedDefaultFirewallRouteImport
-      parentRoute: typeof AuthorizedDefaultRoute
-    }
     '/_authorized/_default/groups': {
       id: '/_authorized/_default/groups'
       path: '/groups'
@@ -1033,6 +1052,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthMfaWebauthnRouteImport
       parentRoute: typeof AuthMfaRoute
     }
+    '/_authorized/_default/firewall/': {
+      id: '/_authorized/_default/firewall/'
+      path: '/firewall'
+      fullPath: '/firewall/'
+      preLoaderRoute: typeof AuthorizedDefaultFirewallIndexRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
+    '/_authorized/_default/firewall/add-rule': {
+      id: '/_authorized/_default/firewall/add-rule'
+      path: '/firewall/add-rule'
+      fullPath: '/firewall/add-rule'
+      preLoaderRoute: typeof AuthorizedDefaultFirewallAddRuleRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
     '/_authorized/_default/locations/': {
       id: '/_authorized/_default/locations/'
       path: '/locations'
@@ -1145,6 +1178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultEdgeEdgeIdEditRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
+    '/_authorized/_default/firewall/$ruleId/edit': {
+      id: '/_authorized/_default/firewall/$ruleId/edit'
+      path: '/firewall/$ruleId/edit'
+      fullPath: '/firewall/$ruleId/edit'
+      preLoaderRoute: typeof AuthorizedDefaultFirewallRuleIdEditRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
     '/_authorized/_default/gateway/$gatewayId/edit': {
       id: '/_authorized/_default/gateway/$gatewayId/edit'
       path: '/gateway/$gatewayId/edit'
@@ -1173,7 +1213,6 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultActivityRoute: typeof AuthorizedDefaultActivityRoute
   AuthorizedDefaultEdgesRoute: typeof AuthorizedDefaultEdgesRoute
   AuthorizedDefaultEnrollmentRoute: typeof AuthorizedDefaultEnrollmentRoute
-  AuthorizedDefaultFirewallRoute: typeof AuthorizedDefaultFirewallRoute
   AuthorizedDefaultGroupsRoute: typeof AuthorizedDefaultGroupsRoute
   AuthorizedDefaultNetworkDevicesRoute: typeof AuthorizedDefaultNetworkDevicesRoute
   AuthorizedDefaultOpenidRoute: typeof AuthorizedDefaultOpenidRoute
@@ -1181,6 +1220,7 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultSupportRoute: typeof AuthorizedDefaultSupportRoute
   AuthorizedDefaultUsersRoute: typeof AuthorizedDefaultUsersRoute
   AuthorizedDefaultWebhooksRoute: typeof AuthorizedDefaultWebhooksRoute
+  AuthorizedDefaultFirewallAddRuleRoute: typeof AuthorizedDefaultFirewallAddRuleRoute
   AuthorizedDefaultMfaAddFlowRoute: typeof AuthorizedDefaultMfaAddFlowRoute
   AuthorizedDefaultSettingsCaRoute: typeof AuthorizedDefaultSettingsCaRoute
   AuthorizedDefaultSettingsCertsRoute: typeof AuthorizedDefaultSettingsCertsRoute
@@ -1192,11 +1232,13 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultSettingsSmtpRoute: typeof AuthorizedDefaultSettingsSmtpRoute
   AuthorizedDefaultUserUsernameRoute: typeof AuthorizedDefaultUserUsernameRoute
   AuthorizedDefaultVpnOverviewLocationIdRoute: typeof AuthorizedDefaultVpnOverviewLocationIdRoute
+  AuthorizedDefaultFirewallIndexRoute: typeof AuthorizedDefaultFirewallIndexRoute
   AuthorizedDefaultLocationsIndexRoute: typeof AuthorizedDefaultLocationsIndexRoute
   AuthorizedDefaultMfaIndexRoute: typeof AuthorizedDefaultMfaIndexRoute
   AuthorizedDefaultSettingsIndexRoute: typeof AuthorizedDefaultSettingsIndexRoute
   AuthorizedDefaultVpnOverviewIndexRoute: typeof AuthorizedDefaultVpnOverviewIndexRoute
   AuthorizedDefaultEdgeEdgeIdEditRoute: typeof AuthorizedDefaultEdgeEdgeIdEditRoute
+  AuthorizedDefaultFirewallRuleIdEditRoute: typeof AuthorizedDefaultFirewallRuleIdEditRoute
   AuthorizedDefaultGatewayGatewayIdEditRoute: typeof AuthorizedDefaultGatewayGatewayIdEditRoute
   AuthorizedDefaultLocationsLocationIdEditRoute: typeof AuthorizedDefaultLocationsLocationIdEditRoute
   AuthorizedDefaultMfaFlowIdEditRoute: typeof AuthorizedDefaultMfaFlowIdEditRoute
@@ -1206,7 +1248,6 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
   AuthorizedDefaultActivityRoute: AuthorizedDefaultActivityRoute,
   AuthorizedDefaultEdgesRoute: AuthorizedDefaultEdgesRoute,
   AuthorizedDefaultEnrollmentRoute: AuthorizedDefaultEnrollmentRoute,
-  AuthorizedDefaultFirewallRoute: AuthorizedDefaultFirewallRoute,
   AuthorizedDefaultGroupsRoute: AuthorizedDefaultGroupsRoute,
   AuthorizedDefaultNetworkDevicesRoute: AuthorizedDefaultNetworkDevicesRoute,
   AuthorizedDefaultOpenidRoute: AuthorizedDefaultOpenidRoute,
@@ -1214,6 +1255,7 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
   AuthorizedDefaultSupportRoute: AuthorizedDefaultSupportRoute,
   AuthorizedDefaultUsersRoute: AuthorizedDefaultUsersRoute,
   AuthorizedDefaultWebhooksRoute: AuthorizedDefaultWebhooksRoute,
+  AuthorizedDefaultFirewallAddRuleRoute: AuthorizedDefaultFirewallAddRuleRoute,
   AuthorizedDefaultMfaAddFlowRoute: AuthorizedDefaultMfaAddFlowRoute,
   AuthorizedDefaultSettingsCaRoute: AuthorizedDefaultSettingsCaRoute,
   AuthorizedDefaultSettingsCertsRoute: AuthorizedDefaultSettingsCertsRoute,
@@ -1228,12 +1270,15 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
   AuthorizedDefaultUserUsernameRoute: AuthorizedDefaultUserUsernameRoute,
   AuthorizedDefaultVpnOverviewLocationIdRoute:
     AuthorizedDefaultVpnOverviewLocationIdRoute,
+  AuthorizedDefaultFirewallIndexRoute: AuthorizedDefaultFirewallIndexRoute,
   AuthorizedDefaultLocationsIndexRoute: AuthorizedDefaultLocationsIndexRoute,
   AuthorizedDefaultMfaIndexRoute: AuthorizedDefaultMfaIndexRoute,
   AuthorizedDefaultSettingsIndexRoute: AuthorizedDefaultSettingsIndexRoute,
   AuthorizedDefaultVpnOverviewIndexRoute:
     AuthorizedDefaultVpnOverviewIndexRoute,
   AuthorizedDefaultEdgeEdgeIdEditRoute: AuthorizedDefaultEdgeEdgeIdEditRoute,
+  AuthorizedDefaultFirewallRuleIdEditRoute:
+    AuthorizedDefaultFirewallRuleIdEditRoute,
   AuthorizedDefaultGatewayGatewayIdEditRoute:
     AuthorizedDefaultGatewayGatewayIdEditRoute,
   AuthorizedDefaultLocationsLocationIdEditRoute:
