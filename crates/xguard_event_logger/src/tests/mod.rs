@@ -1278,6 +1278,20 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("client and device settings"),
         },
         EventTestCase {
+            name: "ClientDownloadsUpdated",
+            message: api_message(ApiEventType::ClientDownloadsUpdated {
+                before:
+                    xguard_common::db::models::client_downloads::ClientDownloadSettings::default(),
+                after: xguard_common::db::models::client_downloads::ClientDownloadSettings {
+                    base_url: "https://mirror.example.com/xguard".into(),
+                    ..Default::default()
+                },
+            }),
+            event_type: EventType::SettingsUpdated,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("client download links"),
+        },
+        EventTestCase {
             name: "DeviceLimitsUpdated",
             message: api_message(ApiEventType::DeviceLimitsUpdated {
                 before: xguard_common::db::models::device_limit::DeviceLimitSettings::default(),

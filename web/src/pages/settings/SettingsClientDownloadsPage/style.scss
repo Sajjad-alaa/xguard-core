@@ -1,0 +1,18 @@
+#settings-client-downloads-card {
+  h3 {
+    font: var(--t-body-primary-600);
+  }
+
+  .client-downloads-example {
+    margin-top: var(--spacing-xs);
+    color: var(--fg-muted);
+    font: var(--t-body-xs-400);
+    word-break: break-all;
+  }
+
+  .client-downloads-controls {
+    display: flex;
+    justify-content: flex-end;
+    column-gap: var(--spacing-md);
+  }
+}

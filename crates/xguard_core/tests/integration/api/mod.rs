@@ -1,6 +1,7 @@
 mod activity_log;
 mod api_tokens;
 mod auth;
+mod client_downloads;
 mod client_settings;
 mod common;
 pub(crate) use common::make_test_client;

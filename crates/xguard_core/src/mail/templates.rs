@@ -11,7 +11,7 @@ use thiserror::Error;
 use tracing::{debug, warn};
 use xguard_common::{
     VERSION,
-    db::models::{Session, Settings, user::MFAMethod},
+    db::models::{Session, Settings, client_downloads::ClientDownloadSettings, user::MFAMethod},
     types::UrlParseError,
 };
 
@@ -181,6 +181,7 @@ pub(crate) async fn build_new_account_mail(
     context.insert("xguard_url", &Settings::url()?);
     context.insert("url", &enrollment_service_url);
     context.insert("token", enrollment_token);
+    insert_client_downloads(&mut *conn, &mut context).await?;
 
     // Build URL to Proxy's "open desktop" page, with token as query.
     if let Ok(mut url) = enrollment_service_url.path_segments_mut() {
@@ -220,6 +221,19 @@ pub(crate) async fn build_new_account_mail(
     message.mail(&mut tera, &context, to)
 }
 
+/// Adds the client download links (Settings -> Client downloads): `client_download_url` (the
+/// releases page) and the optional `android_url` / `ios_url`, which templates hide when unset.
+async fn insert_client_downloads(
+    conn: &mut PgConnection,
+    context: &mut Context,
+) -> Result<(), sqlx::Error> {
+    let downloads = ClientDownloadSettings::current(conn).await?;
+    context.insert("client_download_url", &downloads.releases_url);
+    context.insert("android_url", &downloads.android_url);
+    context.insert("ios_url", &downloads.ios_url);
+    Ok(())
+}
+
 /// Format a timeout duration as a short human-readable string, e.g. "1 week", "1 day",
 /// "24 hours", or "30 minutes".
 fn format_timeout(duration: Duration) -> String {
@@ -251,17 +265,30 @@ pub async fn desktop_start_mail(
     enrollment_service_url: &Url,
     enrollment_token: &str,
 ) -> Result<(), TemplateError> {
+    build_desktop_start_mail(to, conn, context, enrollment_service_url, enrollment_token)
+        .await?
+        .send_and_forget();
+    Ok(())
+}
+
+/// Build (but do not send) the desktop activation mail, so tests can check its content.
+pub(crate) async fn build_desktop_start_mail(
+    to: &str,
+    conn: &mut PgConnection,
+    context: Context,
+    enrollment_service_url: &Url,
+    enrollment_token: &str,
+) -> Result<Mail, TemplateError> {
     debug!("Render a mail template for desktop activation.");
     let (mut tera, mut context) = get_base_tera_mjml(context, None, None, None)?;
 
     context.insert("url", &enrollment_service_url);
     context.insert("token", enrollment_token);
+    insert_client_downloads(&mut *conn, &mut context).await?;
 
     let message = MailMessage::DesktopStart;
     message.fill_context(conn, &mut context).await?;
-    message.mail(&mut tera, &context, to)?.send_and_forget();
-
-    Ok(())
+    message.mail(&mut tera, &context, to)
 }
 
 /// Iterator that enforces the supported subset of CommonMark

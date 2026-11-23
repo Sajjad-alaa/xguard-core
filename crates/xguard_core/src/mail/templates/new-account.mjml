@@ -19,7 +19,7 @@
         <mj-text mj-class="t-body-sm-400 s-sm" css-class="fg-default-c">
           {{ download }}
         </mj-text>
-        {{ macros::action_link(text="https://xguard.local/download/", href="https://xguard.local/download/", mj_class="s-3xl") }}
+        {{ macros::action_link(text=client_download_url, href=client_download_url, mj_class="s-3xl") }}
         <mj-text mj-class="t-body-sm-500 s-lg" css-class="fg-neutral-c">
           {{ after_install }}
         </mj-text>

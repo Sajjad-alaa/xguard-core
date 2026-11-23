@@ -38,7 +38,7 @@
     <mj-text mj-class="s-xs t-body-xs-400" css-class="fg-muted-c">
       {{ click }}
     </mj-text>
-    {{ macros::action_link(href="https://xguard.local/download", text="https://xguard.local/download") }}
+    {{ macros::action_link(href=client_download_url, text=client_download_url) }}
   </mj-column>
 </mj-section>
 {% if scan_qr %}
@@ -62,9 +62,11 @@
         {{ scan_qr }}
       </mj-text>
       <mj-image src="cid:qr" width="200px" height="200px" alt="qr" padding="0 0 24px 0" align="left" />
+      {% if android_url or ios_url %}
       <mj-text mj-class="t-body-xs-500 s-lg" css-class="fg-muted-c">
         {{ mobile_install }}
       </mj-text>
+      {% if android_url %}
       <mj-text align="left" padding="0">
         <table align="left" border="0" cellpadding="0" cellspacing="0" role="presentation">
           <tr>
@@ -72,15 +74,18 @@
               <img width="20" height="20" src="cid:google_play" alt="Android store" style="display: block;" />
             </td>
             <td style="vertical-align: middle;">
-              <a mj-class="t-body-sm-400" css-class="fg-action-c link" href="https://play.google.com/store/apps/details?id=local.xguard.mobile" style="color: #3961DB; text-decoration: none; font-family: Geist, Arial, sans-serif; font-weight: 400; font-size: 14px; line-height: 20px;">
+              <a mj-class="t-body-sm-400" css-class="fg-action-c link" href="{{ android_url }}" style="color: #3961DB; text-decoration: none; font-family: Geist, Arial, sans-serif; font-weight: 400; font-size: 14px; line-height: 20px;">
                 {{ download_google }}
               </a>
             </td>
           </tr>
         </table>
       </mj-text>
-
+      {% endif %}
+      {% if android_url and ios_url %}
       <mj-divider mj-class="divider" padding="12px 0" />
+      {% endif %}
+      {% if ios_url %}
 
       <mj-text align="left" padding="0">
         <table align="left" border="0" cellpadding="0" cellspacing="0" role="presentation">
@@ -89,13 +94,15 @@
               <img width="20" height="20" src="cid:apple" alt="Apple store" style="display: block;" />
             </td>
             <td style="vertical-align: middle;">
-              <a mj-class="t-body-sm-400" css-class="fg-action-c link" href="https://apps.apple.com/us/app/xguard-vpn-client/id6748068630" style="color: #3961DB; text-decoration: none; font-family: Geist, Arial, sans-serif; font-weight: 400; font-size: 14px; line-height: 20px;">
+              <a mj-class="t-body-sm-400" css-class="fg-action-c link" href="{{ ios_url }}" style="color: #3961DB; text-decoration: none; font-family: Geist, Arial, sans-serif; font-weight: 400; font-size: 14px; line-height: 20px;">
                 {{ download_apple }}
               </a>
             </td>
           </tr>
         </table>
       </mj-text>
+      {% endif %}
+      {% endif %}
     </mj-column>
   </mj-group>
 </mj-section>

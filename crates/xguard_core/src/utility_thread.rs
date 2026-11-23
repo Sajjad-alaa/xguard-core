@@ -24,7 +24,8 @@ use crate::{
 
 // Times in seconds
 const UTILITY_THREAD_MAIN_SLEEP_TIME: Duration = Duration::from_secs(5);
-const UPDATES_CHECK_INTERVAL: u64 = 60 * 60 * 6;
+// At most one new-version check per day (GitHub releases API).
+const UPDATES_CHECK_INTERVAL: u64 = 60 * 60 * 24;
 const EXPIRED_ROWS_REAP_INTERVAL: u64 = 60 * 5;
 const LETSENCRYPT_EXPIRY_CHECK_INTERVAL: u64 = 60 * 60 * 24;
 const CERTIFICATE_EXPIRY_CHECK_INTERVAL: u64 = 60 * 60 * 24; // 1 day
@@ -42,14 +43,8 @@ pub async fn run_utility_thread(
     let mut last_certificate_check = Instant::now();
     let mut last_expired_rows_reap = Instant::now();
 
-    let updates_check_task = || async {
-        if let Err(e) = do_new_version_check()
-            .instrument(info_span!("updates_check_task"))
-            .await
-        {
-            error!("There was an error while checking for new XGuard version: {e:?}");
-        }
-    };
+    // Logs its own (debug-level) failures: no internet access is a normal deployment.
+    let updates_check_task = || do_new_version_check().instrument(info_span!("updates_check_task"));
 
     let expired_rows_reap_task = || async {
         if let Err(err) = vpn_client_mfa_session::reap_expired(pool)

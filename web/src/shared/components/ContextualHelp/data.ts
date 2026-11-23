@@ -1,14 +1,11 @@
 import { parseContextualHelp } from './schema';
 
 /**
- * Path (relative to the update service base URL) from which the contextual
- * help mapping is loaded.
- *
- * Production URL: https://pkgs.xguard.local/api/content/contextual-help
- * Override VITE_CONTEXTUAL_HELP_URL to use a different path on the same server,
- * or VITE_UPDATE_BASE_URL to redirect all update-service calls to a local server.
+ * Absolute URL of the contextual help mapping, set at build time with
+ * VITE_CONTEXTUAL_HELP_URL. XGuard has no public content server, so it is unset by default:
+ * nothing is fetched and the help sidebar stays empty.
  */
-export const contextualHelpPath: string =
-  import.meta.env.VITE_CONTEXTUAL_HELP_URL ?? '/content/contextual-help';
+export const contextualHelpSource: string | undefined =
+  import.meta.env.VITE_CONTEXTUAL_HELP_URL || undefined;
 
 export { parseContextualHelp };

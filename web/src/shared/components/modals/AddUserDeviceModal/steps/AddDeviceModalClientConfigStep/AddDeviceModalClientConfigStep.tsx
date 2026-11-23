@@ -6,8 +6,12 @@ import { useAddUserDeviceModal } from '../../store/useAddUserDeviceModal';
 import './style.scss';
 import { useQuery } from '@tanstack/react-query';
 import { titleCase } from 'text-case';
-import { externalLink } from '../../../../../constants';
-import { clientArtifactsQueryOptions } from '../../../../../query';
+import {
+  buildClientDownloadLinks,
+  linuxDownloadItems,
+  mobileDownloadItems,
+} from '../../../../../clientDownloads';
+import { clientDownloadsQueryOptions } from '../../../../../query';
 import { openClientLink } from '../../../../../utils/openVirtualLink';
 import { Button } from '../../../../../xguard-ui/components/Button/Button';
 import { CopyField } from '../../../../../xguard-ui/components/CopyField/CopyField';
@@ -24,7 +28,7 @@ import { Controls } from '../../../../Controls/Controls';
 export const AddDeviceModalClientConfigStep = () => {
   const enrollment = useAddUserDeviceModal((s) => s.enrollment);
   const [manualOpen, setManualOpen] = useState(false);
-  const { data: clientLinks } = useQuery(clientArtifactsQueryOptions);
+  const { data: clientLinks } = useQuery(clientDownloadsQueryOptions);
 
   const deepLink = useMemo(() => {
     if (!enrollment) return null;
@@ -41,88 +45,33 @@ export const AddDeviceModalClientConfigStep = () => {
     );
   }, [enrollment]);
 
-  const appleMenu = useMemo(
-    (): MenuItemsGroup[] => [
-      {
-        header: {
-          text: 'Apple Hardware',
-        },
-        items: [
-          {
-            icon: 'apple',
-            text: 'Intel',
-            onClick: () => openClientLink(clientLinks?.macos_amd64),
-          },
-          {
-            icon: 'apple',
-            text: 'ARM',
-            onClick: () => openClientLink(clientLinks?.macos_arm64),
-          },
-        ],
-      },
-    ],
-    [clientLinks],
-  );
-
-  const linuxMenu = useMemo(() => {
-    const res: MenuItemsGroup[] = [
+  const linuxMenu = useMemo((): MenuItemsGroup[] => {
+    const links = clientLinks ?? buildClientDownloadLinks();
+    return [
       {
         header: {
           text: `${titleCase(m.misc_for())} Linux`,
         },
-        items: [
-          {
-            icon: 'ubuntu',
-            text: 'Ubuntu 24.04 ARM',
-            onClick: () => openClientLink(clientLinks?.deb_arm64),
-          },
-          {
-            icon: 'ubuntu',
-            text: 'Ubuntu 24.04 AMD64',
-            onClick: () => openClientLink(clientLinks?.deb_amd64),
-          },
-        ],
-      },
-      {
-        items: [
-          {
-            icon: 'debian',
-            text: 'Ubuntu 22.04 / Debian 12&13 ARM',
-            onClick: () => openClientLink(clientLinks?.deb_legacy_arm64),
-          },
-          {
-            icon: 'debian',
-            text: 'Ubuntu 22.04 / Debian 12&13 AMD64',
-            onClick: () => openClientLink(clientLinks?.deb_legacy_amd64),
-          },
-        ],
+        items: linuxDownloadItems(links).map((item) => ({
+          icon: item.id.startsWith('deb') ? 'ubuntu' : 'linux',
+          text: item.label,
+          onClick: () => openClientLink(item.href),
+        })),
       },
       {
         items: [
           {
             icon: 'linux',
-            text: 'RPM ARM',
-            onClick: () => openClientLink(clientLinks?.rpm_arm64),
-          },
-          {
-            icon: 'linux',
-            text: 'RPM AMD64',
-            onClick: () => openClientLink(clientLinks?.rpm_amd64),
-          },
-        ],
-      },
-      {
-        items: [
-          {
-            icon: 'arch-linux',
-            text: 'Arch Linux',
-            onClick: () => openClientLink(externalLink.client.desktop.linux.arch),
+            text: m.client_downloads_all_downloads(),
+            onClick: () => openClientLink(links.releases),
           },
         ],
       },
     ];
-    return res;
   }, [clientLinks]);
+
+  const links = clientLinks ?? buildClientDownloadLinks();
+  const mobileLinks = mobileDownloadItems(links);
 
   if (!deepLink || !qrData || !enrollment) return null;
 
@@ -153,13 +102,23 @@ export const AddDeviceModalClientConfigStep = () => {
           <div className="download">
             <p>{m.modal_add_user_device_client_desktop_download()}</p>
             <a
-              href={clientLinks?.windows_amd64 ?? externalLink.xguard.download}
+              href={links.windowsX64}
               target="_blank"
               rel="noopener noreferrer"
+              title="Windows (x64, .msi)"
+              data-testid="download-windows"
             >
               <IconButton icon="windows" />
             </a>
-            <IconButtonMenu icon="apple" menuItems={appleMenu} />
+            <a
+              href={links.macosUniversal}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="macOS (.dmg)"
+              data-testid="download-macos"
+            >
+              <IconButton icon="apple" />
+            </a>
             <IconButtonMenu icon="linux" menuItems={linuxMenu} />
           </div>
         </div>
@@ -201,25 +160,28 @@ export const AddDeviceModalClientConfigStep = () => {
           <div className="qr">
             <QrCard value={qrData} />
           </div>
-          <div className="download">
-            <p>{m.modal_add_user_device_client_mobile_get_mobile()}</p>
-            <div className="links">
-              <a
-                href={externalLink.client.mobile.google}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button variant="outlined" iconLeft="android" text={'Google Play'} />
-              </a>
-              <a
-                href={externalLink.client.mobile.apple}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button variant="outlined" iconLeft="apple" text={'Apple Store'} />
-              </a>
+          {mobileLinks.length > 0 && (
+            <div className="download">
+              <p>{m.modal_add_user_device_client_mobile_get_mobile()}</p>
+              <div className="links">
+                {mobileLinks.map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid={`download-${item.id}`}
+                  >
+                    <Button
+                      variant="outlined"
+                      iconLeft={item.id === 'android' ? 'android' : 'apple'}
+                      text={item.label}
+                    />
+                  </a>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </ContainerWithIcon>
       <Controls>

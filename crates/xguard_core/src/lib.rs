@@ -444,6 +444,11 @@ pub fn build_webapp(
                 get(get_client_settings).patch(patch_client_settings),
             )
             .route(
+                "/client_downloads",
+                get(handlers::client_downloads::get_client_downloads)
+                    .put(handlers::client_downloads::put_client_downloads),
+            )
+            .route(
                 "/device_limits",
                 get(handlers::device_limits::get_device_limits)
                     .patch(handlers::device_limits::patch_device_limits),

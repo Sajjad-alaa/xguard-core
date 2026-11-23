@@ -11,12 +11,13 @@ use xguard_common::{
         Id,
         models::{
             ClientSettings, Settings, SettingsEssentials,
+            client_downloads::ClientDownloadSettings,
             settings::{SettingsPatch, update_current_settings},
         },
     },
     types::proxy::ProxyControlMessage,
 };
-use xguard_proto::proxy::PublicSettings;
+use xguard_proto::proxy::{ClientDownloads, PublicSettings};
 
 use super::{ApiResponse, ApiResult};
 #[cfg(feature = "openapi")]
@@ -35,24 +36,67 @@ static SETTINGS_WRITE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(()
 /// Settings the Edge (proxy) shows on its public pages. Password reset needs email delivery, so
 /// it is offered only when the admin allows it and SMTP is configured.
 #[must_use]
-pub fn edge_public_settings(settings: &Settings, client: &ClientSettings) -> PublicSettings {
+pub fn edge_public_settings(
+    settings: &Settings,
+    client: &ClientSettings,
+    downloads: &ClientDownloadSettings,
+) -> PublicSettings {
     PublicSettings {
         display_password_reset: client.display_password_reset && settings.smtp_configured(),
         display_download_step: client.display_download_step,
         public_url: settings.configured_public_proxy_url(),
         directory_enrollment: settings.directory_enrollment_enabled(),
+        client_downloads: Some(edge_client_downloads(downloads)),
     }
 }
 
-/// Wrap `PublicSettings` in the control message the proxy manager fans out to every connected
-/// proxy. Build the payload with [`edge_public_settings`].
+/// The client download links as the Edge receives them.
 #[must_use]
-pub(crate) fn public_settings_message(public_settings: PublicSettings) -> ProxyControlMessage {
+pub fn edge_client_downloads(downloads: &ClientDownloadSettings) -> ClientDownloads {
+    ClientDownloads {
+        base_url: downloads.base_url.clone(),
+        releases_url: downloads.releases_url.clone(),
+        android_url: downloads.android_url.clone(),
+        ios_url: downloads.ios_url.clone(),
+        macos_installer: downloads.macos_installer,
+    }
+}
+
+/// Everything [`edge_public_settings`] needs besides the global settings. Errors are logged; the
+/// caller then skips sending, so the Edge keeps its previous values rather than being told to
+/// show pages the admin may have hidden.
+pub async fn load_edge_settings(pool: &PgPool) -> Option<(ClientSettings, ClientDownloadSettings)> {
+    let client = match ClientSettings::current(pool).await {
+        Ok(client) => client,
+        Err(err) => {
+            error!("Failed to load client settings for the Edge public settings: {err}");
+            return None;
+        }
+    };
+    match ClientDownloadSettings::current(pool).await {
+        Ok(downloads) => Some((client, downloads)),
+        Err(err) => {
+            error!("Failed to load client download settings for the Edge public settings: {err}");
+            None
+        }
+    }
+}
+
+/// The control message the proxy manager fans out to every connected proxy. Carries the same
+/// values as [`edge_public_settings`].
+#[must_use]
+pub(crate) fn public_settings_message(
+    settings: &Settings,
+    client: &ClientSettings,
+    downloads: &ClientDownloadSettings,
+) -> ProxyControlMessage {
+    let public_settings = edge_public_settings(settings, client, downloads);
     ProxyControlMessage::BroadcastPublicSettings {
         display_password_reset: public_settings.display_password_reset,
         display_download_step: public_settings.display_download_step,
         public_url: public_settings.public_url,
         directory_enrollment: public_settings.directory_enrollment,
+        client_downloads: downloads.clone(),
     }
 }
 
@@ -64,16 +108,12 @@ pub(crate) async fn broadcast_public_settings(
     settings: &Settings,
     proxy_control_tx: &mpsc::Sender<ProxyControlMessage>,
 ) {
-    let client = match ClientSettings::current(pool).await {
-        Ok(client) => client,
-        Err(err) => {
-            error!("Failed to load client settings for the Edge public settings: {err}");
-            return;
-        }
+    let Some((client, downloads)) = load_edge_settings(pool).await else {
+        return;
     };
-    let message = public_settings_message(edge_public_settings(settings, &client));
+    let message = public_settings_message(settings, &client, &downloads);
     if let Err(err) = proxy_control_tx.send(message).await {
-        error!("Failed to broadcast PublicSettings after public proxy URL change: {err:?}");
+        error!("Failed to broadcast PublicSettings to the Edges: {err:?}");
     }
 }
 

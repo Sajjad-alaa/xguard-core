@@ -380,6 +380,10 @@ pub enum ApiEventType {
         before: xguard_common::db::models::client_settings::ClientSettingsInfo,
         after: xguard_common::db::models::client_settings::ClientSettingsInfo,
     },
+    ClientDownloadsUpdated {
+        before: xguard_common::db::models::client_downloads::ClientDownloadSettings,
+        after: xguard_common::db::models::client_downloads::ClientDownloadSettings,
+    },
     DeviceLimitsUpdated {
         before: xguard_common::db::models::device_limit::DeviceLimitSettings,
         after: xguard_common::db::models::device_limit::DeviceLimitSettings,

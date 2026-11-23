@@ -678,6 +678,12 @@ pub struct ClientSettingsUpdateMetadata {
 }
 
 #[derive(Serialize)]
+pub struct ClientDownloadsUpdateMetadata {
+    pub before: xguard_common::db::models::client_downloads::ClientDownloadSettings,
+    pub after: xguard_common::db::models::client_downloads::ClientDownloadSettings,
+}
+
+#[derive(Serialize)]
 pub struct DeviceLimitsUpdateMetadata {
     pub before: xguard_common::db::models::device_limit::DeviceLimitSettings,
     pub after: xguard_common::db::models::device_limit::DeviceLimitSettings,

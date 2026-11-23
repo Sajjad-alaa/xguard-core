@@ -20,6 +20,8 @@ pub enum ProxyControlMessage {
         display_download_step: bool,
         public_url: Option<String>,
         directory_enrollment: bool,
+        /// Where the Edge download pages link to.
+        client_downloads: crate::db::models::client_downloads::ClientDownloadSettings,
     },
 }
 

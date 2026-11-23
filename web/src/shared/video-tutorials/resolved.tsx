@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMatches } from '@tanstack/react-router';
 import { useApp } from '../hooks/useApp';
 import { getVersionQueryOptions, videoTutorialsQueryOptions } from '../query';
+import { videoTutorialsSource } from './data';
 import { resolveSections, resolveVideoGuidePlacement } from './resolver';
 import { canonicalizeRouteKey } from './route-key';
 import type { VideoGuidePlacement, VideoTutorial, VideoTutorialsSection } from './types';
@@ -62,7 +63,7 @@ export function useWizardVideoGuidePlacement(
   placementKey: string | undefined,
   stepKey?: string,
 ): VideoGuidePlacement | null {
-  const isEnabled = Boolean(placementKey);
+  const isEnabled = Boolean(placementKey) && videoTutorialsSource !== undefined;
   const { data } = useQuery({
     ...videoTutorialsQueryOptions,
     enabled: isEnabled,

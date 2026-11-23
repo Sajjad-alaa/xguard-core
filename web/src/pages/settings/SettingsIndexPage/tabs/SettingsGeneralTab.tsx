@@ -80,6 +80,14 @@ export const SettingsGeneralTab = () => {
         />
       </Link>
       <SizedBox height={ThemeSpacing.Xl} />
+      <Link to="/settings/client-downloads">
+        <SectionSelect
+          image="device-clc"
+          title={m.settings_client_downloads_title()}
+          content={m.settings_client_downloads_subtitle()}
+        />
+      </Link>
+      <SizedBox height={ThemeSpacing.Xl} />
       <MarkedSection icon="settings">
         <MarkedSectionHeader
           title={m.settings_device_limits_title()}

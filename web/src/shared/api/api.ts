@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import { cloneDeep } from 'lodash-es';
+import type { ClientDownloadSettings, ClientDownloadsResponse } from '../clientDownloads';
 import { removeEmptyStrings } from '../utils/removeEmptyStrings';
 import { client } from './api-client';
 import { fetchAllPages, fetchPage } from './pagination';
@@ -540,6 +541,11 @@ const api = {
       client.post<DirectorySyncReport>('/openid/provider/sync', data),
     directorySyncStatus: () =>
       client.get<DirectorySyncStatus>('/openid/provider/sync/status'),
+  },
+  clientDownloads: {
+    get: () => client.get<ClientDownloadsResponse>('/client_downloads'),
+    update: (data: ClientDownloadSettings) =>
+      client.put<ClientDownloadsResponse>('/client_downloads', data),
   },
   deviceLimits: {
     getOverview: () => client.get<DeviceLimitsOverview>('/device_limits'),

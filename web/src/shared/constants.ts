@@ -4,7 +4,6 @@ export const externalLink = {
   xguard: {
     docs: 'https://docs.xguard.local',
     pricing: 'https://xguard.local/pricing',
-    download: 'https://xguard.local/download',
     sales: 'https://xguard.local/contact/',
     scheduleCall:
       'https://docs.google.com/forms/d/e/1FAIpQLSdKr1NXH1DlQuAF5oQWvT7Zri5yPQ3txvwz3qgtb1n9FtKTgw/viewform',
@@ -17,17 +16,6 @@ export const externalLink = {
       'https://github.com/Sajjad-alaa/xguard-core/issues/new?template=02-bug.yml',
     featureRequest:
       'https://github.com/Sajjad-alaa/xguard-core/issues/new?template=01-feature-request.yml',
-  },
-  client: {
-    desktop: {
-      linux: {
-        arch: 'https://aur.archlinux.org/packages/xguard-client',
-      },
-    },
-    mobile: {
-      apple: 'https://apps.apple.com/us/app/xguard-vpn-client/id6748068630',
-      google: 'https://play.google.com/store/apps/details?id=local.xguard.mobile',
-    },
   },
 } as const;
 

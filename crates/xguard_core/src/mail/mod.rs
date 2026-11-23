@@ -158,6 +158,13 @@ impl Mail {
         &self.text
     }
 
+    /// Getter for the HTML body. Used by tests to assert rendered content.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn html(&self) -> &str {
+        &self.html
+    }
+
     /// Add to context.
     pub fn add_to_context<K, V>(&mut self, key: K, value: &V)
     where
