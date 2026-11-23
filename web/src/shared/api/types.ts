@@ -1964,10 +1964,41 @@ export interface ActivityLogEventDetails extends ActivityLogEvent {
 export const ActivityLogStreamType = {
   VectorHttp: 'vector_http',
   LogstashHttp: 'logstash_http',
+  Syslog: 'syslog',
+  Http: 'http',
+  SplunkHec: 'splunk_hec',
 } as const;
 
 export type ActivityLogStreamTypeValue =
   (typeof ActivityLogStreamType)[keyof typeof ActivityLogStreamType];
+
+export type ActivityLogBodyFormat = 'ndjson' | 'json_array' | 'json';
+export type SyslogFormat = 'rfc5424' | 'rfc3164';
+export type SyslogFraming = 'octet_counting' | 'newline';
+
+export interface SyslogOptions {
+  format: SyslogFormat;
+  framing: SyslogFraming;
+  facility: number;
+  app_name: string | null;
+  hostname: string | null;
+}
+
+export interface SplunkOptions {
+  sourcetype: string | null;
+  source: string | null;
+  index: string | null;
+}
+
+export interface ActivityLogHeaderView {
+  name: string;
+  value_set: boolean;
+}
+
+export interface ActivityLogHeaderInput {
+  name: string;
+  value?: string;
+}
 
 export interface ActivityLogStreamStatus {
   last_delivery: string | null;
@@ -1987,6 +2018,14 @@ export interface ActivityLogStream {
   username: string | null;
   cert: string | null;
   password_set: boolean;
+  tls_verify: boolean;
+  client_cert: string | null;
+  client_key_set: boolean;
+  body_format: ActivityLogBodyFormat;
+  headers: ActivityLogHeaderView[];
+  syslog: SyslogOptions | null;
+  splunk: SplunkOptions | null;
+  token_set: boolean;
   status: ActivityLogStreamStatus;
 }
 export interface CreateActivityLogStreamRequest {
@@ -1997,9 +2036,17 @@ export interface CreateActivityLogStreamRequest {
 
 export interface ActivityLogStreamConfig {
   url: string;
-  username: string | null;
+  username?: string | null;
   password?: SecretValue;
-  cert: string | null;
+  cert?: string | null;
+  tls_verify?: boolean;
+  client_cert?: string | null;
+  client_key?: SecretValue;
+  body_format?: ActivityLogBodyFormat;
+  headers?: ActivityLogHeaderInput[];
+  syslog?: SyslogOptions | null;
+  splunk?: SplunkOptions | null;
+  token?: SecretValue;
 }
 
 export type ActivityLogSortKey =

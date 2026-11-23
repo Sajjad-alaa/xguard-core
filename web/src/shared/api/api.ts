@@ -530,6 +530,15 @@ const api = {
         url: stream.url,
         username: stream.username,
         cert: stream.cert,
+        tls_verify: stream.tls_verify,
+        client_cert: stream.client_cert,
+        body_format: stream.body_format,
+        headers:
+          stream.stream_type === 'http'
+            ? stream.headers.map((header) => ({ name: header.name }))
+            : undefined,
+        syslog: stream.syslog,
+        splunk: stream.splunk,
       }),
   },
   settings: {

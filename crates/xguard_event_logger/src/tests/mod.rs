@@ -371,6 +371,14 @@ fn api_event_cases() -> Vec<EventTestCase> {
         username: None,
         cert: None,
         password_set: false,
+        tls_verify: true,
+        client_cert: None,
+        client_key_set: false,
+        body_format: xguard_core::log_stream::BodyFormat::Ndjson,
+        headers: Vec::new(),
+        syslog: None,
+        splunk: None,
+        token_set: false,
     };
     let api_token = xguard_common::db::models::ApiToken {
         id: 1,

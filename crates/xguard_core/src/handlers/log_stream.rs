@@ -20,6 +20,7 @@ use crate::{
     events::{ApiEvent, ApiEventType, ApiRequestContext},
     log_stream::{
         ActivityLogStream, StreamError, StreamInput,
+        output::Output,
         sender::{self, StreamStatus},
     },
 };
@@ -197,15 +198,11 @@ pub(crate) async fn test_stream(
     axum::extract::Query(query): axum::extract::Query<TestQuery>,
     Json(input): Json<StreamInput>,
 ) -> ApiResult {
-    let stored_password = match query.id {
-        Some(id) => ActivityLogStream::targets(&appstate.pool)
-            .await?
-            .into_iter()
-            .find(|target| target.id == id)
-            .and_then(|target| target.config.password),
+    let stored = match query.id {
+        Some(id) => ActivityLogStream::stored_config(&appstate.pool, id).await?,
         None => None,
     };
-    let (_, _, config) = input.into_config(stored_password)?;
+    let (_, stream_type, config) = input.into_config(stored)?;
     let line = json!({
         "timestamp": chrono::Utc::now().naive_utc(),
         "event": "activity_log_stream_test",
@@ -213,8 +210,8 @@ pub(crate) async fn test_stream(
         "username": session.user.username,
     });
     let body = Bytes::from(format!("{line}\n"));
-    let result = match sender::client_for(&config) {
-        Ok(client) => sender::post(&client, &config, body).await,
+    let result = match Output::from_target(stream_type, config) {
+        Ok(mut output) => output.send_batch(&[body]).await,
         Err(err) => Err(err),
     };
     match result {
