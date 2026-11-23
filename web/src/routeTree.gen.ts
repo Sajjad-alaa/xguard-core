@@ -57,6 +57,7 @@ import { Route as AuthorizedDefaultSettingsIndexRouteImport } from './routes/_au
 import { Route as AuthorizedDefaultSettingsCaRouteImport } from './routes/_authorized/_default/settings/ca'
 import { Route as AuthorizedDefaultSettingsCertsRouteImport } from './routes/_authorized/_default/settings/certs'
 import { Route as AuthorizedDefaultSettingsClientRouteImport } from './routes/_authorized/_default/settings/client'
+import { Route as AuthorizedDefaultSettingsClientDownloadsRouteImport } from './routes/_authorized/_default/settings/client-downloads'
 import { Route as AuthorizedDefaultSettingsGatewayNotificationsRouteImport } from './routes/_authorized/_default/settings/gateway-notifications'
 import { Route as AuthorizedDefaultSettingsInstanceRouteImport } from './routes/_authorized/_default/settings/instance'
 import { Route as AuthorizedDefaultSettingsLdapRouteImport } from './routes/_authorized/_default/settings/ldap'
@@ -330,6 +331,12 @@ const AuthorizedDefaultSettingsClientRoute =
     path: '/settings/client',
     getParentRoute: () => AuthorizedDefaultRoute,
   } as any)
+const AuthorizedDefaultSettingsClientDownloadsRoute =
+  AuthorizedDefaultSettingsClientDownloadsRouteImport.update({
+    id: '/settings/client-downloads',
+    path: '/settings/client-downloads',
+    getParentRoute: () => AuthorizedDefaultRoute,
+  } as any)
 const AuthorizedDefaultSettingsGatewayNotificationsRoute =
   AuthorizedDefaultSettingsGatewayNotificationsRouteImport.update({
     id: '/settings/gateway-notifications',
@@ -458,6 +465,7 @@ export interface FileRoutesByFullPath {
   '/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
   '/settings/client': typeof AuthorizedDefaultSettingsClientRoute
+  '/settings/client-downloads': typeof AuthorizedDefaultSettingsClientDownloadsRoute
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
@@ -519,6 +527,7 @@ export interface FileRoutesByTo {
   '/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
   '/settings/client': typeof AuthorizedDefaultSettingsClientRoute
+  '/settings/client-downloads': typeof AuthorizedDefaultSettingsClientDownloadsRoute
   '/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
@@ -584,6 +593,7 @@ export interface FileRoutesById {
   '/_authorized/_default/settings/ca': typeof AuthorizedDefaultSettingsCaRoute
   '/_authorized/_default/settings/certs': typeof AuthorizedDefaultSettingsCertsRoute
   '/_authorized/_default/settings/client': typeof AuthorizedDefaultSettingsClientRoute
+  '/_authorized/_default/settings/client-downloads': typeof AuthorizedDefaultSettingsClientDownloadsRoute
   '/_authorized/_default/settings/gateway-notifications': typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   '/_authorized/_default/settings/instance': typeof AuthorizedDefaultSettingsInstanceRoute
   '/_authorized/_default/settings/ldap': typeof AuthorizedDefaultSettingsLdapRoute
@@ -648,6 +658,7 @@ export interface FileRouteTypes {
     | '/settings/ca'
     | '/settings/certs'
     | '/settings/client'
+    | '/settings/client-downloads'
     | '/settings/gateway-notifications'
     | '/settings/instance'
     | '/settings/ldap'
@@ -709,6 +720,7 @@ export interface FileRouteTypes {
     | '/settings/ca'
     | '/settings/certs'
     | '/settings/client'
+    | '/settings/client-downloads'
     | '/settings/gateway-notifications'
     | '/settings/instance'
     | '/settings/ldap'
@@ -773,6 +785,7 @@ export interface FileRouteTypes {
     | '/_authorized/_default/settings/ca'
     | '/_authorized/_default/settings/certs'
     | '/_authorized/_default/settings/client'
+    | '/_authorized/_default/settings/client-downloads'
     | '/_authorized/_default/settings/gateway-notifications'
     | '/_authorized/_default/settings/instance'
     | '/_authorized/_default/settings/ldap'
@@ -1147,6 +1160,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthorizedDefaultSettingsClientRouteImport
       parentRoute: typeof AuthorizedDefaultRoute
     }
+    '/_authorized/_default/settings/client-downloads': {
+      id: '/_authorized/_default/settings/client-downloads'
+      path: '/settings/client-downloads'
+      fullPath: '/settings/client-downloads'
+      preLoaderRoute: typeof AuthorizedDefaultSettingsClientDownloadsRouteImport
+      parentRoute: typeof AuthorizedDefaultRoute
+    }
     '/_authorized/_default/settings/gateway-notifications': {
       id: '/_authorized/_default/settings/gateway-notifications'
       path: '/settings/gateway-notifications'
@@ -1264,6 +1284,7 @@ interface AuthorizedDefaultRouteChildren {
   AuthorizedDefaultSettingsCaRoute: typeof AuthorizedDefaultSettingsCaRoute
   AuthorizedDefaultSettingsCertsRoute: typeof AuthorizedDefaultSettingsCertsRoute
   AuthorizedDefaultSettingsClientRoute: typeof AuthorizedDefaultSettingsClientRoute
+  AuthorizedDefaultSettingsClientDownloadsRoute: typeof AuthorizedDefaultSettingsClientDownloadsRoute
   AuthorizedDefaultSettingsGatewayNotificationsRoute: typeof AuthorizedDefaultSettingsGatewayNotificationsRoute
   AuthorizedDefaultSettingsInstanceRoute: typeof AuthorizedDefaultSettingsInstanceRoute
   AuthorizedDefaultSettingsLdapRoute: typeof AuthorizedDefaultSettingsLdapRoute
@@ -1300,6 +1321,8 @@ const AuthorizedDefaultRouteChildren: AuthorizedDefaultRouteChildren = {
   AuthorizedDefaultSettingsCaRoute: AuthorizedDefaultSettingsCaRoute,
   AuthorizedDefaultSettingsCertsRoute: AuthorizedDefaultSettingsCertsRoute,
   AuthorizedDefaultSettingsClientRoute: AuthorizedDefaultSettingsClientRoute,
+  AuthorizedDefaultSettingsClientDownloadsRoute:
+    AuthorizedDefaultSettingsClientDownloadsRoute,
   AuthorizedDefaultSettingsGatewayNotificationsRoute:
     AuthorizedDefaultSettingsGatewayNotificationsRoute,
   AuthorizedDefaultSettingsInstanceRoute:

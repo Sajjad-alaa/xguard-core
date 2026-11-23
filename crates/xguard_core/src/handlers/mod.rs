@@ -30,6 +30,7 @@ pub(crate) mod activity_log;
 pub(crate) mod api_tokens;
 pub mod app_info;
 pub mod auth;
+pub(crate) mod client_downloads;
 pub(crate) mod client_settings;
 pub mod component_setup;
 pub mod core_certs;

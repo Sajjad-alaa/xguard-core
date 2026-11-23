@@ -3,6 +3,7 @@ pub mod auth_code;
 pub mod authentication_key;
 pub mod biometric_auth;
 pub mod certificates;
+pub mod client_downloads;
 pub mod client_settings;
 pub mod device;
 pub mod device_limit;

@@ -34,7 +34,7 @@ use xguard_common::{
     VERSION,
     db::{
         Id,
-        models::{Certificates, ClientSettings, Settings, proxy::Proxy},
+        models::{Certificates, Settings, proxy::Proxy},
     },
 };
 use xguard_core::{
@@ -43,7 +43,7 @@ use xguard_core::{
         GatewayCommand,
         proxy::client_mfa::{ClientMfaServer, MfaStartRejection, RemoteAuthWaiters},
     },
-    handlers::settings::edge_public_settings,
+    handlers::settings::{edge_public_settings, load_edge_settings},
     version::{IncompatibleComponents, IncompatibleProxyData, is_proxy_version_supported},
 };
 use xguard_grpc_tls::certs::{ProxyTlsTarget, proxy_mtls_channel};
@@ -412,16 +412,13 @@ impl ProxyHandler {
             // Push public settings (Edge UI controls) to the newly-connected proxy.
             // Skipped when the settings cannot be read: the Edge then keeps its previous values
             // rather than being told to show pages the admin may have hidden.
-            match ClientSettings::current(&self.pool).await {
-                Ok(client) => {
-                    let public_settings =
-                        edge_public_settings(&Settings::get_current_settings(), &client);
-                    let _ = tx.send(CoreResponse {
-                        id: 0,
-                        payload: Some(core_response::Payload::PublicSettings(public_settings)),
-                    });
-                }
-                Err(err) => error!("Failed to load client settings for the Edge: {err}"),
+            if let Some((client, downloads)) = load_edge_settings(&self.pool).await {
+                let public_settings =
+                    edge_public_settings(&Settings::get_current_settings(), &client, &downloads);
+                let _ = tx.send(CoreResponse {
+                    id: 0,
+                    payload: Some(core_response::Payload::PublicSettings(public_settings)),
+                });
             }
 
             // If a certificate has already been provisioned, push it to the newly-connected
@@ -1273,16 +1270,13 @@ impl ProxyHandler {
         // Push public settings to the test proxy.
         // Skipped when the settings cannot be read: the Edge then keeps its previous values
         // rather than being told to show pages the admin may have hidden.
-        match ClientSettings::current(&self.pool).await {
-            Ok(client) => {
-                let public_settings =
-                    edge_public_settings(&Settings::get_current_settings(), &client);
-                let _ = tx.send(CoreResponse {
-                    id: 0,
-                    payload: Some(core_response::Payload::PublicSettings(public_settings)),
-                });
-            }
-            Err(err) => error!("Failed to load client settings for the Edge: {err}"),
+        if let Some((client, downloads)) = load_edge_settings(&self.pool).await {
+            let public_settings =
+                edge_public_settings(&Settings::get_current_settings(), &client, &downloads);
+            let _ = tx.send(CoreResponse {
+                id: 0,
+                payload: Some(core_response::Payload::PublicSettings(public_settings)),
+            });
         }
 
         let result = self

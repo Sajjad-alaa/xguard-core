@@ -120,6 +120,8 @@ async fn main() -> Result<(), anyhow::Error> {
     initialize_current_settings(&pool).await?;
     xguard_core::mail::xoauth2::register_pool(&pool);
     xguard_common::db::models::client_settings::initialize_client_settings(&pool).await?;
+    xguard_common::db::models::client_downloads::initialize_client_download_settings(&pool)
+        .await?;
 
     // handle optional subcommands
     if let Some(command) = &config.cmd {

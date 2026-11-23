@@ -315,6 +315,9 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
         ApiEventType::ClientSettingsUpdated { .. } => {
             Some("Updated client and device settings".into())
         }
+        ApiEventType::ClientDownloadsUpdated { .. } => {
+            Some("Updated the client download links".into())
+        }
         ApiEventType::DeviceLimitsUpdated { .. } => {
             Some("Updated global device and connection limits".into())
         }

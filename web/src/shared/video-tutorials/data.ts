@@ -6,19 +6,12 @@ import type { VideoTutorialsMappings } from './types';
 // ---------------------------------------------------------------------------
 
 /**
- * Path (relative to the update service base URL) to load the video tutorials
- * mapping from. Resolved by Vite at build time.
- *
- * The shared updateServiceClient resolves this against its baseURL
- * (VITE_UPDATE_BASE_URL ?? 'https://pkgs.xguard.local/api'), so the
- * production URL is https://pkgs.xguard.local/api/content/video-tutorials.
- *
- * Override VITE_VIDEO_TUTORIALS_URL to use a different path on the same server,
- * or VITE_UPDATE_BASE_URL to redirect all update-service calls to a local
- * server for development.
+ * Absolute URL of the video tutorials mapping, set at build time with
+ * VITE_VIDEO_TUTORIALS_URL. XGuard has no public content server, so it is unset by default:
+ * nothing is fetched and the tutorials button, modal and widgets stay hidden.
  */
-export const videoTutorialsPath: string =
-  import.meta.env.VITE_VIDEO_TUTORIALS_URL ?? '/content/video-tutorials';
+export const videoTutorialsSource: string | undefined =
+  import.meta.env.VITE_VIDEO_TUTORIALS_URL || undefined;
 
 // ---------------------------------------------------------------------------
 // Zod schema + parser

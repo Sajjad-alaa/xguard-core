@@ -3,7 +3,7 @@
 
 Desktop client
 {{ download }}
-https://xguard.local/download/
+{{ client_download_url }}
 
 {{ after_install }}
 {{ label_url }}: {{ url }}

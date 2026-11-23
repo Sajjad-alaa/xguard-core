@@ -396,6 +396,7 @@ impl ProxyManager {
                             display_download_step,
                             public_url,
                             directory_enrollment,
+                            client_downloads,
                         }) => {
                             debug!("Broadcasting PublicSettings to all connected proxies");
                             let msg = CoreResponse {
@@ -406,6 +407,11 @@ impl ProxyManager {
                                         display_download_step,
                                         public_url,
                                         directory_enrollment,
+                                        client_downloads: Some(
+                                            xguard_core::handlers::settings::edge_client_downloads(
+                                                &client_downloads,
+                                            ),
+                                        ),
                                     },
                                 )),
                             };

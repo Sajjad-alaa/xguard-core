@@ -13,6 +13,7 @@ use xguard_common::{
     db::{
         models::{
             MFAMethod, Settings,
+            client_downloads::{ClientDownloadSettings, DEFAULT_CLIENT_RELEASES_URL},
             settings::{
                 initialize_current_settings, set_settings,
                 smtp::{SmtpAuthentication, SmtpEncryption},
@@ -91,6 +92,80 @@ async fn test_enrollment_email_reflects_configured_timeouts(
         text.contains("30 minutes"),
         "enrollment email should show the configured session timeout, got: {text}"
     );
+}
+
+/// Enrollment and desktop activation mails link the configured client downloads and show only
+/// the mobile app links that are set; nothing points at the old placeholders.
+#[sqlx::test]
+async fn test_mails_use_client_download_settings(_: PgPoolOptions, options: PgConnectOptions) {
+    let pool = setup_pool(options).await;
+    initialize_current_settings(&pool).await.unwrap();
+    let url = Url::parse("http://localhost:8001").unwrap();
+    let token = "zXc6N1ndXpWFeyBuogiFp1bD1UomAbZc";
+
+    // Defaults: the GitHub releases page, no mobile links.
+    let mut conn = pool.acquire().await.unwrap();
+    let mail = templates::build_new_account_mail(
+        "user@example.com",
+        &mut conn,
+        Context::new(),
+        url.clone(),
+        token,
+        Duration::from_hours(24),
+    )
+    .await
+    .unwrap();
+    for body in [mail.text(), mail.html()] {
+        assert!(body.contains(DEFAULT_CLIENT_RELEASES_URL), "{body}");
+        assert!(!body.contains("xguard.local"), "{body}");
+    }
+    let mail = templates::build_desktop_start_mail(
+        "user@example.com",
+        &mut conn,
+        Context::new(),
+        &url,
+        token,
+    )
+    .await
+    .unwrap();
+    for body in [mail.text(), mail.html()] {
+        assert!(body.contains(DEFAULT_CLIENT_RELEASES_URL), "{body}");
+        assert!(!body.contains("xguard.local"), "{body}");
+        assert!(!body.contains("play.google.com"), "{body}");
+        assert!(!body.contains("apps.apple.com"), "{body}");
+    }
+
+    // A self-hosted mirror and an Android link.
+    ClientDownloadSettings {
+        base_url: "https://mirror.example.lan/xguard".into(),
+        releases_url: "https://mirror.example.lan/xguard/".into(),
+        android_url: Some("https://mirror.example.lan/xguard/xguard.apk".into()),
+        ..Default::default()
+    }
+    .save(&mut *conn)
+    .await
+    .unwrap();
+    let mail = templates::build_desktop_start_mail(
+        "user@example.com",
+        &mut conn,
+        Context::new(),
+        &url,
+        token,
+    )
+    .await
+    .unwrap();
+    for body in [mail.text(), mail.html()] {
+        assert!(
+            body.contains("https://mirror.example.lan/xguard/"),
+            "{body}"
+        );
+        assert!(!body.contains(DEFAULT_CLIENT_RELEASES_URL), "{body}");
+        assert!(
+            body.contains("https://mirror.example.lan/xguard/xguard.apk"),
+            "{body}"
+        );
+        assert!(!body.contains("apps.apple.com"), "{body}");
+    }
 }
 
 /// Delay, so send_and_forget() can process the message.

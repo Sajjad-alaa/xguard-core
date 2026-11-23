@@ -1,13 +1,14 @@
 import { type QueryKey, queryOptions } from '@tanstack/react-query';
+import axios from 'axios';
 import api from './api/api';
 import type { UserProfile } from './api/types';
-import { updateServiceApi, updateServiceClient } from './api/update-service';
+import { buildClientDownloadLinks } from './clientDownloads';
 import {
-  contextualHelpPath,
+  contextualHelpSource,
   parseContextualHelp,
 } from './components/ContextualHelp/data';
 import { resourceDisplayMap } from './utils/resourceById';
-import { parseVideoTutorials, videoTutorialsPath } from './video-tutorials/data';
+import { parseVideoTutorials, videoTutorialsSource } from './video-tutorials/data';
 
 export const getLocationsCountQueryOptions = queryOptions({
   queryFn: api.location.getCount,
@@ -120,17 +121,30 @@ export const userProfileQueryOptions = (username: string) =>
     refetchOnReconnect: true,
   });
 
-export const clientArtifactsQueryOptions = queryOptions({
-  queryFn: updateServiceApi.getClientArtifacts,
-  queryKey: ['update-service', 'artifacts'],
+/** Client download links; falls back to the built-in defaults when the request fails. */
+export const clientDownloadsQueryOptions = queryOptions({
+  queryKey: ['client_downloads', 'links'],
+  queryFn: () =>
+    api.clientDownloads
+      .get()
+      .then((resp) => resp.data)
+      .catch(() => null),
+  select: (data) => buildClientDownloadLinks(data),
   staleTime: 180 * 1000,
   refetchOnWindowFocus: false,
-  refetchOnReconnect: true,
+});
+
+export const getClientDownloadSettingsQueryOptions = queryOptions({
+  queryKey: ['client_downloads'],
+  queryFn: () => api.clientDownloads.get().then((resp) => resp.data),
 });
 
 export const videoTutorialsQueryOptions = queryOptions({
-  queryKey: ['update-service', 'video-tutorials'],
-  queryFn: () => updateServiceClient.get<unknown>(videoTutorialsPath),
+  queryKey: ['content', 'video-tutorials'],
+  // No public source exists for XGuard yet: without VITE_VIDEO_TUTORIALS_URL nothing is fetched
+  // and every video tutorial entry point stays hidden.
+  enabled: videoTutorialsSource !== undefined,
+  queryFn: () => axios.get<unknown>(videoTutorialsSource ?? ''),
   select: (resp) => {
     try {
       return parseVideoTutorials(resp.data);
@@ -149,8 +163,10 @@ export const videoTutorialsQueryOptions = queryOptions({
 });
 
 export const contextualHelpQueryOptions = queryOptions({
-  queryKey: ['update-service', 'contextual-help'],
-  queryFn: () => updateServiceClient.get<unknown>(contextualHelpPath),
+  queryKey: ['content', 'contextual-help'],
+  // Same as the video tutorials: disabled unless VITE_CONTEXTUAL_HELP_URL is set at build time.
+  enabled: contextualHelpSource !== undefined,
+  queryFn: () => axios.get<unknown>(contextualHelpSource ?? ''),
   select: (resp) => {
     try {
       return parseContextualHelp(resp.data);

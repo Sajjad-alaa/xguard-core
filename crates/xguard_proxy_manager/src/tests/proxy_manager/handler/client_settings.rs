@@ -10,7 +10,12 @@ use xguard_common::db::{
     Id,
     models::{
         ClientSettings, ClientTrafficPolicy, Device, User,
-        client_settings::GroupClientTrafficPolicies, group::Group, wireguard::GroupClientMtu,
+        client_downloads::{
+            ClientDownloadSettings, DEFAULT_CLIENT_DOWNLOAD_BASE_URL, DEFAULT_CLIENT_RELEASES_URL,
+        },
+        client_settings::GroupClientTrafficPolicies,
+        group::Group,
+        wireguard::GroupClientMtu,
     },
     setup_pool,
 };
@@ -298,6 +303,50 @@ async fn test_edge_receives_display_flags_on_connect(_: PgPoolOptions, options: 
             assert!(!settings.display_download_step);
             // No SMTP in tests, so password reset stays hidden.
             assert!(!settings.display_password_reset);
+            // Until an admin changes them, the Edge links the GitHub releases.
+            let downloads = settings.client_downloads.expect("links are sent");
+            assert_eq!(downloads.base_url, DEFAULT_CLIENT_DOWNLOAD_BASE_URL);
+            assert_eq!(downloads.releases_url, DEFAULT_CLIENT_RELEASES_URL);
+            assert_eq!(downloads.android_url, None);
+            assert_eq!(downloads.ios_url, None);
+            assert!(!downloads.macos_installer);
+        }
+        _ => unreachable!(),
+    }
+    context.finish().await.expect_server_finished().await;
+}
+
+/// The Edge receives the admin's client download links when it connects.
+#[sqlx::test]
+async fn test_edge_receives_client_downloads_on_connect(
+    _: PgPoolOptions,
+    options: PgConnectOptions,
+) {
+    let pool = setup_pool(options.clone()).await;
+    ClientDownloadSettings {
+        base_url: "http://10.0.0.5/xguard".into(),
+        releases_url: "http://10.0.0.5/xguard/".into(),
+        ios_url: Some("https://apps.example.com/xguard".into()),
+        macos_installer: true,
+        allow_http: true,
+        ..Default::default()
+    }
+    .save(&pool)
+    .await
+    .unwrap();
+    let mut context = HandlerTestContext::new(options).await;
+    let _initial_info = context.mock_proxy_mut().recv_outbound().await;
+    match context.mock_proxy_mut().recv_public_settings().await {
+        core_response::Payload::PublicSettings(settings) => {
+            let downloads = settings.client_downloads.expect("links are sent");
+            assert_eq!(downloads.base_url, "http://10.0.0.5/xguard");
+            assert_eq!(downloads.releases_url, "http://10.0.0.5/xguard/");
+            assert_eq!(downloads.android_url, None);
+            assert_eq!(
+                downloads.ios_url.as_deref(),
+                Some("https://apps.example.com/xguard")
+            );
+            assert!(downloads.macos_installer);
         }
         _ => unreachable!(),
     }

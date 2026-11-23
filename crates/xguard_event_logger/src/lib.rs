@@ -709,6 +709,16 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     )
                     .ok(),
                 ),
+                ApiEventType::ClientDownloadsUpdated { before, after } => (
+                    EventType::SettingsUpdated,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::ClientDownloadsUpdateMetadata {
+                            before,
+                            after,
+                        },
+                    )
+                    .ok(),
+                ),
                 ApiEventType::DeviceLimitsUpdated { before, after } => (
                     EventType::EnterpriseSettingsUpdated,
                     serde_json::to_value(

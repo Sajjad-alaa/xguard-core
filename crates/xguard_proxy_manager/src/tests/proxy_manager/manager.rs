@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use xguard_common::{
-    db::models::settings::{Settings, update_current_settings},
+    db::models::{
+        client_downloads::{ClientDownloadSettings, DEFAULT_CLIENT_RELEASES_URL},
+        settings::{Settings, update_current_settings},
+    },
     types::proxy::ProxyControlMessage,
 };
 use xguard_proto::proxy::core_response;
@@ -624,6 +627,11 @@ async fn test_broadcast_public_settings_reaches_proxy(_: PgPoolOptions, options:
             display_download_step: false,
             public_url: Some("https://edge.example.com".to_owned()),
             directory_enrollment: false,
+            client_downloads: ClientDownloadSettings {
+                base_url: "https://mirror.example.com/xguard".to_owned(),
+                ios_url: Some("https://apps.example.com/xguard".to_owned()),
+                ..Default::default()
+            },
         })
         .await
         .expect("failed to send BroadcastPublicSettings control message");
@@ -645,6 +653,14 @@ async fn test_broadcast_public_settings_reaches_proxy(_: PgPoolOptions, options:
                     s.public_url.as_deref(),
                     Some("https://edge.example.com"),
                     "{label}: public_url should match the broadcast value"
+                );
+                let downloads = s.client_downloads.expect("client downloads are sent");
+                assert_eq!(downloads.base_url, "https://mirror.example.com/xguard");
+                assert_eq!(downloads.releases_url, DEFAULT_CLIENT_RELEASES_URL);
+                assert_eq!(downloads.android_url, None);
+                assert_eq!(
+                    downloads.ios_url.as_deref(),
+                    Some("https://apps.example.com/xguard")
                 );
             }
             other => panic!(

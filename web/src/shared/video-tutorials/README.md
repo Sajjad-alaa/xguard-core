@@ -1,13 +1,13 @@
 # Video Tutorials
 
-The video tutorials module displays YouTube-based help content sourced from the
-update service. It now powers two kinds of UI:
+The video tutorials module displays YouTube-based help content from a JSON
+mapping. It now powers two kinds of UI:
 
 - route-bound tutorials inside the authenticated app shell
 - placement-specific help content in wizard sidebars
 
-The configuration is fetched as static JSON from
-`https://pkgs.xguard.local/api/content/video-tutorials` by default.
+The configuration is fetched as static JSON from `VITE_VIDEO_TUTORIALS_URL`. It is unset by
+default (XGuard has no content server), and then nothing is fetched and nothing is shown.
 
 Route-based tutorials are mounted in `src/routes/_authorized/_default.tsx` and
 remain available across the authenticated layout. Placement-based content is
@@ -42,7 +42,7 @@ a clickable YouTube link.
 ```text
 video-tutorials/
 ├── types.ts                     — shared tutorial + placement types
-├── data.ts                      — Zod schema, parseVideoTutorials(), videoTutorialsPath
+├── data.ts                      — Zod schema, parseVideoTutorials(), videoTutorialsSource
 ├── resolver.ts                  — version selection and placement helpers
 ├── resolved.tsx                 — hooks for resolved sections, placements, and route matches
 ├── route-key.ts                 — canonicalizeRouteKey(), getNavRoot()
@@ -66,20 +66,14 @@ video-tutorials/
 
 ---
 
-## Testing without remote API access
+## Source of the mapping
 
-In production the module fetches its mapping via the shared update-service axios
-client. The default URL is:
-
-```text
-https://pkgs.xguard.local/api/content/video-tutorials
-```
-
-This is composed from the client's base URL (`https://pkgs.xguard.local/api`,
-overridable via `VITE_UPDATE_BASE_URL`) and the default path
-(`/content/video-tutorials`, overridable via `VITE_VIDEO_TUTORIALS_URL`).
-
-Both variables are read at build time and live in `web/.env.local` (git-ignored).
+XGuard has no public content server, so by default the mapping is **not fetched** and the
+tutorial button, modal, widget and wizard placements stay hidden. To enable them, build the
+web UI with `VITE_VIDEO_TUTORIALS_URL` set to the URL (absolute, or a path on the same origin)
+that serves the JSON mapping described below. The variable is read at build time and can live
+in `web/.env.local` (git-ignored). A cross-origin server must send
+`Access-Control-Allow-Origin`.
 
 ### Serve a local file via the Vite dev server (recommended)
 
@@ -95,8 +89,7 @@ available on the same origin, with no extra process or CORS issues.
    # create web/public/content/video-tutorials with the JSON structure shown below
    ```
 
-2. If you used no file extension, no env override is needed because the default
-   path already matches. If you used `.json`, set:
+2. Point the build at it:
 
    ```text
    # web/.env.local
@@ -109,37 +102,6 @@ available on the same origin, with no extra process or CORS issues.
 > Do not commit the test file. `web/public/content/` is not git-ignored by
 > default, so add it to your local `.git/info/exclude` or a global gitignore
 > if you want to keep it permanently.
-
-### Redirect the entire update service to a separate local server
-
-Use this approach when you need to test the client artifact check alongside the
-video tutorials fetch, or when you want to simulate a real remote server:
-
-```text
-# web/.env.local
-VITE_UPDATE_BASE_URL=http://localhost:4000
-```
-
-Then serve a JSON file at `http://localhost:4000/content/video-tutorials`.
-
-> The local server must respond with appropriate `Access-Control-Allow-Origin`
-> CORS headers since it runs on a different origin than the Vite dev server.
-
-### Override only the video tutorials path
-
-To redirect just the video tutorials fetch without affecting other update-service
-calls, override the path only:
-
-```text
-# web/.env.local
-VITE_VIDEO_TUTORIALS_URL=/content/my-test-config
-```
-
-The path is still resolved against `VITE_UPDATE_BASE_URL` (or the default
-`https://pkgs.xguard.local/api`), so this is most useful when you have a test
-endpoint on the same server.
-
----
 
 ## JSON structure
 
