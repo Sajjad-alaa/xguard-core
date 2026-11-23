@@ -3,37 +3,75 @@
     .status {
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
       gap: var(--spacing-md, 12px);
+      padding-bottom: var(--spacing-md, 12px);
+      border-bottom: 1px solid var(--border-primary);
+
+      .reported {
+        font-size: var(--font-size-sm);
+        color: var(--fg-muted);
+      }
     }
 
     .title {
       font-weight: 600;
-      margin-bottom: var(--spacing-sm, 8px);
+      font-size: var(--font-size-sm);
+      color: var(--fg-primary);
+      margin: 0 0 var(--spacing-sm, 8px);
     }
 
-    ul {
-      margin: 0;
-      padding-left: var(--spacing-xl, 16px);
+    .failed-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-xs, 6px);
     }
 
-    dl {
-      display: grid;
-      gap: var(--spacing-xs, 4px);
-      margin: 0;
+    .facts-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--border-primary);
+      border-radius: var(--border-radius-md, 8px);
+      overflow: hidden;
+      font-size: var(--font-size-sm);
 
-      div {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: var(--spacing-md, 12px);
+      th,
+      td {
+        padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+        text-align: left;
+        border-bottom: 1px solid var(--border-primary);
       }
 
-      dd {
-        margin: 0;
+      thead th {
+        background-color: var(--bg-secondary);
+        font-weight: 600;
+        color: var(--fg-secondary);
+      }
+
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .fact-label {
+        color: var(--fg-secondary);
+        font-weight: 500;
+      }
+
+      .fact-value-text {
+        color: var(--fg-primary);
+        font-variant-numeric: tabular-nums;
       }
     }
 
     .attestation {
-      opacity: 0.7;
+      margin: 0;
+      padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+      border-radius: var(--border-radius-sm, 6px);
+      background-color: var(--bg-secondary);
+      color: var(--fg-muted);
+      font-size: var(--font-size-xs);
+      line-height: 1.5;
     }
   }
 }
