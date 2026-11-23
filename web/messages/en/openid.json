@@ -10,6 +10,8 @@
   "openid_edit": "Edit OpenID application",
   "openid_table_top_title": "All applications",
   "openid_table_header_app_name": "Application name",
+  "openid_table_header_client_id": "Client ID",
+  "openid_search": "Search applications or client IDs...",
   "openid_delete_success": "OpenID application deleted",
   "openid_delete_failed": "Failed to delete OpenID application",
   "settings_openid_providers_title": "External identity providers",

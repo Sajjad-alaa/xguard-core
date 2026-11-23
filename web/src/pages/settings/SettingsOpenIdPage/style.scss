@@ -6,8 +6,40 @@
   }
 
   .directory-sync-status {
-    color: var(--fg-muted);
-    font: var(--t-body-sm-400);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
     margin: 0 0 var(--spacing-md);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-md);
+    background-color: var(--bg-secondary);
+    color: var(--fg-secondary);
+    font: var(--t-body-sm-400);
+  }
+}
+
+.ldap-dry-run-modal {
+  .sync-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+  }
+
+  .sync-new-groups {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+  }
+
+  .skipped-box {
+    padding: var(--spacing-md);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-md);
+    background-color: var(--bg-secondary);
   }
 }

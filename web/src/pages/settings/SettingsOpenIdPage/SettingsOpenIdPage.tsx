@@ -19,10 +19,15 @@ import { formChangeLogic } from '../../../shared/formLogic';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
 import { getSettingsQueryOptions } from '../../../shared/query';
+import { Badge } from '../../../shared/xguard-ui/components/Badge/Badge';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
+import { IconKind } from '../../../shared/xguard-ui/components/Icon';
+import { MarkedSection } from '../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
+import { MarkedSectionHeader } from '../../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+import { getConfiguredBadge, getNotConfiguredBadge } from '../SettingsIndexPage/types';
 import { DirectorySyncSection } from './DirectorySyncSection';
 import { needsConfirmation } from './dirsync';
 import { formSchema, knownIssuers, supportsDirectorySync, toForm, toInput } from './form';
@@ -48,23 +53,33 @@ const kindOptions = Object.values(OpenIdProviderKind).map((kind) => ({
   value: kind,
 }));
 
-export const SettingsOpenIdPage = () => (
-  <Page id="settings-openid-page" title={m.settings_page_title()}>
-    <Breadcrumbs links={breadcrumbs} />
-    <SettingsLayout>
-      <SettingsHeader
-        icon="globe"
-        title={m.settings_openid_page_title()}
-        subtitle={m.settings_openid_page_subtitle()}
-      />
-      <Suspense fallback={<Skeleton height={400} />}>
-        <SettingsCard>
-          <ProviderForm />
-        </SettingsCard>
-      </Suspense>
-    </SettingsLayout>
-  </Page>
-);
+export const SettingsOpenIdPage = () => {
+  const { data: provider = null } = useQuery({
+    queryKey: ['openid', 'provider'],
+    queryFn: api.openid.getProvider,
+    select: (resp) => resp.data,
+    retry: false,
+  });
+
+  return (
+    <Page id="settings-openid-page" title={m.settings_page_title()}>
+      <Breadcrumbs links={breadcrumbs} />
+      <SettingsLayout>
+        <SettingsHeader
+          icon="globe"
+          title={m.settings_openid_page_title()}
+          subtitle={m.settings_openid_page_subtitle()}
+          badgeProps={provider?.enabled ? getConfiguredBadge() : getNotConfiguredBadge()}
+        />
+        <Suspense fallback={<Skeleton height={400} />}>
+          <SettingsCard>
+            <ProviderForm />
+          </SettingsCard>
+        </Suspense>
+      </SettingsLayout>
+    </Page>
+  );
+};
 
 const ProviderForm = () => {
   const { data: settings } = useSuspenseQuery(getSettingsQueryOptions);
@@ -204,100 +219,120 @@ const ProviderForm = () => {
       }}
     >
       <form.AppForm>
-        <form.AppField
-          name="kind"
-          listeners={{
-            onChange: ({ value }) => {
-              const issuer = knownIssuers[value];
-              if (issuer && form.getFieldValue('issuer') === '') {
-                form.setFieldValue('issuer', issuer);
-              }
-            },
-          }}
-        >
-          {(field) => (
-            <field.FormSelect
-              required
-              label={m.settings_openid_label_kind()}
-              options={kindOptions}
-            />
-          )}
-        </form.AppField>
-        <SizedBox height={ThemeSpacing.Xl} />
-        <form.AppField name="issuer">
-          {(field) => (
-            <field.FormInput
-              required
-              label={m.settings_openid_label_issuer()}
-              helper={m.settings_openid_helper_issuer()}
-            />
-          )}
-        </form.AppField>
-        <SizedBox height={ThemeSpacing.Xl} />
-        <form.AppField name="client_id">
-          {(field) => (
-            <field.FormInput
-              required
-              label={m.settings_openid_provider_label_client_id()}
-            />
-          )}
-        </form.AppField>
-        <SizedBox height={ThemeSpacing.Xl} />
-        <form.AppField name="client_secret">
-          {(field) => (
-            <field.FormInput
-              type="password"
-              required={!provider?.client_secret_set}
-              label={m.settings_openid_provider_label_client_secret()}
-              helper={
-                provider?.client_secret_set
-                  ? m.settings_openid_helper_secret_kept()
-                  : m.settings_openid_helper_redirect({
-                      url: `${window.location.origin}/auth/callback`,
-                    })
-              }
-            />
-          )}
-        </form.AppField>
-        <SizedBox height={ThemeSpacing.Xl} />
-        <form.AppField name="display_name">
-          {(field) => (
-            <field.FormInput
-              label={m.settings_openid_provider_label_display_name()}
-              helper={m.settings_openid_helper_display_name()}
-            />
-          )}
-        </form.AppField>
-        <SizedBox height={ThemeSpacing.Xl} />
-        <form.AppField name="create_accounts">
-          {(field) => (
-            <field.FormCheckbox text={m.settings_openid_label_create_accounts()} />
-          )}
-        </form.AppField>
-        <SizedBox height={ThemeSpacing.Md} />
-        <form.AppField name="disable_password_management">
-          {(field) => (
-            <field.FormCheckbox
-              text={m.settings_openid_label_disable_password_management()}
-            />
-          )}
-        </form.AppField>
+        <MarkedSection icon={IconKind.Globe}>
+          <MarkedSectionHeader
+            title={m.settings_openid_provider_client_settings_title()}
+            description={m.settings_openid_page_subtitle()}
+          />
+          <form.AppField
+            name="kind"
+            listeners={{
+              onChange: ({ value }) => {
+                const issuer = knownIssuers[value];
+                if (issuer && form.getFieldValue('issuer') === '') {
+                  form.setFieldValue('issuer', issuer);
+                }
+              },
+            }}
+          >
+            {(field) => (
+              <field.FormSelect
+                required
+                label={m.settings_openid_label_kind()}
+                options={kindOptions}
+              />
+            )}
+          </form.AppField>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <form.AppField name="issuer">
+            {(field) => (
+              <field.FormInput
+                required
+                label={m.settings_openid_label_issuer()}
+                helper={m.settings_openid_helper_issuer()}
+              />
+            )}
+          </form.AppField>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <form.AppField name="client_id">
+            {(field) => (
+              <field.FormInput
+                required
+                label={m.settings_openid_provider_label_client_id()}
+              />
+            )}
+          </form.AppField>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <form.AppField name="client_secret">
+            {(field) => (
+              <field.FormInput
+                type="password"
+                required={!provider?.client_secret_set}
+                label={m.settings_openid_provider_label_client_secret()}
+                helper={
+                  provider?.client_secret_set
+                    ? m.settings_openid_helper_secret_kept()
+                    : m.settings_openid_helper_redirect({
+                        url: `${window.location.origin}/auth/callback`,
+                      })
+                }
+              />
+            )}
+          </form.AppField>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <form.AppField name="display_name">
+            {(field) => (
+              <field.FormInput
+                label={m.settings_openid_provider_label_display_name()}
+                helper={m.settings_openid_helper_display_name()}
+              />
+            )}
+          </form.AppField>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <form.AppField name="create_accounts">
+            {(field) => (
+              <field.FormCheckbox text={m.settings_openid_label_create_accounts()} />
+            )}
+          </form.AppField>
+          <SizedBox height={ThemeSpacing.Md} />
+          <form.AppField name="disable_password_management">
+            {(field) => (
+              <field.FormCheckbox
+                text={m.settings_openid_label_disable_password_management()}
+              />
+            )}
+          </form.AppField>
+        </MarkedSection>
         <DirectorySyncSection form={form} provider={provider} />
         {supportsDirectorySync(kind) && (
           <>
             <SizedBox height={ThemeSpacing.Xl} />
             {syncStatus?.last_run && (
-              <p className="directory-sync-status">
-                {syncStatus.last_run.success
-                  ? m.settings_openid_sync_last_run_ok({
-                      time: new Date(`${syncStatus.last_run.finished}Z`).toLocaleString(),
-                      changes: syncStatus.last_run.changes,
-                    })
-                  : m.settings_openid_sync_last_run_failed({
-                      time: new Date(`${syncStatus.last_run.finished}Z`).toLocaleString(),
-                      message: syncStatus.last_run.message ?? '',
-                    })}
-              </p>
+              <div className="directory-sync-status">
+                <Badge
+                  variant={syncStatus.last_run.success ? 'success' : 'critical'}
+                  showIcon
+                  icon={syncStatus.last_run.success ? 'check-filled' : 'warning-filled'}
+                  text={
+                    syncStatus.last_run.success ? m.state_active() : m.state_warning()
+                  }
+                />
+                <span>
+                  {syncStatus.last_run.success
+                    ? m.settings_openid_sync_last_run_ok({
+                        time: new Date(
+                          `${syncStatus.last_run.finished}Z`,
+                        ).toLocaleString(),
+                        changes: syncStatus.last_run.changes,
+                      })
+                    : m.settings_openid_sync_last_run_failed({
+                        time: new Date(
+                          `${syncStatus.last_run.finished}Z`,
+                        ).toLocaleString(),
+                        message: syncStatus.last_run.message ?? '',
+                      })}
+                </span>
+              </div>
             )}
             <div className="directory-sync-actions">
               <Button

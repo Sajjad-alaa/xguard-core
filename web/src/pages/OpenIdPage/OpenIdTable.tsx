@@ -5,7 +5,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
 import type { OpenIdClient } from '../../shared/api/types';
@@ -17,6 +17,7 @@ import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
 import type { MenuItemsGroup } from '../../shared/xguard-ui/components/Menu/types';
+import { Search } from '../../shared/xguard-ui/components/Search/Search';
 import { tableEditColumnSize } from '../../shared/xguard-ui/components/table/consts';
 import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/TableBody';
 import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
@@ -31,11 +32,21 @@ const columnHelper = createColumnHelper<RowData>();
 
 export const OpenIdClientTable = () => {
   const { data } = useSuspenseQuery(getOpenIdClientQueryOptions);
+  const [search, setSearch] = useState('');
 
   const reservedNames = useMemo(
     () => data.map((c) => c.name.toLowerCase().replaceAll(' ', '')),
     [data],
   );
+
+  const visibleClients = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return data;
+    return data.filter(
+      (c) =>
+        c.name.toLowerCase().includes(query) || c.client_id.toLowerCase().includes(query),
+    );
+  }, [data, search]);
 
   const { writeToClipboard } = useClipboard();
 
@@ -67,7 +78,7 @@ export const OpenIdClientTable = () => {
         enableSorting: true,
         sortingFn: 'text',
         size: 300,
-        minSize: 300,
+        minSize: 220,
         meta: {
           flex: true,
         },
@@ -77,15 +88,36 @@ export const OpenIdClientTable = () => {
           </TableCell>
         ),
       }),
+      columnHelper.accessor('client_id', {
+        header: m.openid_table_header_client_id(),
+        size: 260,
+        minSize: 200,
+        cell: (info) => (
+          <TableCell>
+            <Badge variant="outlined" text={info.getValue()} title={info.getValue()} />
+          </TableCell>
+        ),
+      }),
       columnHelper.accessor('enabled', {
         header: m.col_status(),
-        minSize: 125,
+        minSize: 130,
+        enableSorting: true,
         cell: (info) => (
           <TableCell>
             {info.getValue() ? (
-              <Badge variant="success" text={m.state_enabled()} />
+              <Badge
+                variant="success"
+                showIcon
+                icon="check-filled"
+                text={m.state_enabled()}
+              />
             ) : (
-              <Badge variant="critical" text={m.state_disabled()} />
+              <Badge
+                variant="critical"
+                showIcon
+                icon="disabled"
+                text={m.state_disabled()}
+              />
             )}
           </TableCell>
         ),
@@ -94,6 +126,7 @@ export const OpenIdClientTable = () => {
         id: 'edit',
         header: '',
         size: tableEditColumnSize,
+        enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
           const menuItems: MenuItemsGroup[] = [
@@ -168,29 +201,39 @@ export const OpenIdClientTable = () => {
 
   const table = useReactTable({
     columns,
-    data,
+    data: visibleClients,
+    getRowId: (row) => row.client_id,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     enableRowSelection: false,
     columnResizeMode: 'onChange',
   });
 
+  if (data.length === 0) {
+    return (
+      <EmptyStateFlexible
+        icon="openid"
+        title={m.openid_empty_title()}
+        subtitle={m.openid_empty_subtitle()}
+        primaryAction={addButtonProps}
+      />
+    );
+  }
+
+  const noMatches = table.getRowModel().rows.length === 0;
+
   return (
     <>
-      {data.length > 0 && (
-        <>
-          <TableTop text={m.openid_table_top_title()}>
-            <Button {...addButtonProps} />
-          </TableTop>
-          <TableBody table={table} />
-        </>
-      )}
-      {data.length === 0 && (
+      <TableTop text={m.openid_table_top_title()}>
+        <Search placeholder={m.openid_search()} value={search} onChange={setSearch} />
+        <Button {...addButtonProps} />
+      </TableTop>
+      <TableBody table={table} />
+      {noMatches && (
         <EmptyStateFlexible
-          icon="openid"
-          title={m.openid_empty_title()}
-          subtitle={m.openid_empty_subtitle()}
-          primaryAction={addButtonProps}
+          icon="search"
+          title={m.search_empty_common_title()}
+          subtitle={m.search_empty_common_subtitle()}
         />
       )}
     </>

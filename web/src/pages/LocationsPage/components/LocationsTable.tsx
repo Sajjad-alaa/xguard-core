@@ -15,6 +15,7 @@ import {
   type NetworkLocation,
 } from '../../../shared/api/types';
 import { GatewaysStatusBadge } from '../../../shared/components/GatewaysStatusBadge/GatewaysStatusBadge';
+import { TableBadgesCell } from '../../../shared/components/TableBadgesCell/TableBadgesCell';
 import { TableValuesListCell } from '../../../shared/components/TableValuesListCell/TableValuesListCell';
 import { openModal } from '../../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../../shared/hooks/modalControls/modalTypes';
@@ -202,7 +203,7 @@ export const LocationsTable = () => {
       }),
       columnHelper.accessor('service_location_mode', {
         header: m.location_col_type(),
-        minSize: 100,
+        minSize: 120,
         enableSorting: true,
         sortingFn: 'text',
         cell: (info) => {
@@ -210,19 +211,19 @@ export const LocationsTable = () => {
             case 'disabled':
               return (
                 <TableCell>
-                  <span>{m.location_type_regular()}</span>
+                  <Badge variant="neutral" text={m.location_type_regular()} />
                 </TableCell>
               );
             case 'prelogon':
               return (
                 <TableCell>
-                  <span>{m.location_type_prelogon()}</span>
+                  <Badge variant="plan" text={m.location_type_prelogon()} />
                 </TableCell>
               );
             case 'alwayson':
               return (
                 <TableCell>
-                  <span>{m.location_type_always()}</span>
+                  <Badge variant="plan" text={m.location_type_always()} />
                 </TableCell>
               );
           }
@@ -251,21 +252,29 @@ export const LocationsTable = () => {
         size: 400,
         minSize: 200,
         cell: (info) => {
-          const value = info.getValue();
-          const len = value?.length ?? 0;
+          const value = info.getValue() ?? [];
           const allowAllGroups = info.row.original.allow_all_groups;
-          return (
-            <TableCell>
-              {allowAllGroups && (
+          if (allowAllGroups) {
+            return (
+              <TableCell>
                 <Badge
                   showIcon
                   icon="status-available"
                   variant="success"
                   text={m.location_allowed_groups_all()}
                 />
-              )}
-              {!allowAllGroups && len > 0 && <span>{info.getValue()?.join(', ')}</span>}
-            </TableCell>
+              </TableCell>
+            );
+          }
+          return (
+            <TableBadgesCell
+              items={value.map((group) => ({
+                key: group,
+                label: group,
+                icon: 'groups',
+              }))}
+              limit={3}
+            />
           );
         },
       }),
