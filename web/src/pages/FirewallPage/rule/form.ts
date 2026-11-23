@@ -1,11 +1,11 @@
 import z from 'zod';
-import { m } from '../../../../paraglide/messages';
+import { m } from '../../../paraglide/messages';
 import {
   type FirewallRule,
   FirewallRuleAction,
   type FirewallRuleInput,
-} from '../../../../shared/api/types';
-import { nameValidator } from '../../../../shared/validators';
+} from '../../../shared/api/types';
+import { nameValidator } from '../../../shared/validators';
 
 /** Protocols offered as checkboxes; anything else stays as stored. */
 export const COMMON_PROTOCOLS = [6, 17, 1, 58] as const;
@@ -110,6 +110,12 @@ export const ruleToForm = (rule: FirewallRule): FormFields => ({
   destinations: rule.destinations.join(', ') || null,
   protocols: new Set(rule.protocols),
   ports: rule.ports.join(', ') || null,
+});
+
+export const duplicateRuleToForm = (rule: FirewallRule): FormFields => ({
+  ...ruleToForm(rule),
+  name: m.firewall_duplicate_suffix({ name: rule.name }),
+  enabled: true,
 });
 
 /** The payload the API takes. The server validates and canonicalises it again. */

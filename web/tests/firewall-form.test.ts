@@ -1,21 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import {
+  duplicateRuleToForm,
   emptyForm,
   formSchema,
   formToInput,
   ruleToForm,
-} from '../src/pages/FirewallPage/modals/CEFirewallRuleModal/form';
+} from '../src/pages/FirewallPage/rule/form';
 import {
+  destinationItems,
   destinationsSummary,
   isExpired,
+  locationItems,
+  RuleStatus,
+  ruleSearchText,
+  ruleStatus,
+  serviceItems,
   servicesSummary,
+  sourceItems,
   sourcesSummary,
 } from '../src/pages/FirewallPage/summary';
 import type { FirewallNames } from '../src/pages/FirewallPage/useFirewallNames';
-import type { FirewallRule } from '../src/shared/api/types';
+import { indexPolicies } from '../src/pages/FirewallPage/useLocationPolicies';
+import type { FirewallLocationPolicy, FirewallRule } from '../src/shared/api/types';
 
 const names: FirewallNames = {
-  locations: [{ id: 1, label: 'Office' }],
+  locations: [
+    { id: 1, label: 'Office' },
+    { id: 2, label: 'Cloud' },
+  ],
   users: [
     { id: 1, label: 'Alice' },
     { id: 2, label: 'Bob' },
@@ -88,6 +100,12 @@ describe('firewall rule form', () => {
     expect(formToInput(ruleToForm(stored), stored.expires_at)).toEqual(input);
   });
 
+  it('duplicates a rule with a copy suffix and enabled state', () => {
+    const copy = duplicateRuleToForm(rule({ name: 'SSH', enabled: false }));
+    expect(copy.name).toBe('SSH (copy)');
+    expect(copy.enabled).toBe(true);
+  });
+
   it('requires a source, a destination and a location', () => {
     const result = formSchema.safeParse({
       ...emptyForm(),
@@ -108,7 +126,7 @@ describe('firewall rule form', () => {
   });
 });
 
-describe('firewall rule summaries', () => {
+describe('firewall rule summaries and badges', () => {
   it('names a few selections and counts many', () => {
     expect(sourcesSummary(rule({ users: [1, 2] }), names)).toBe('Alice, Bob');
     expect(sourcesSummary(rule({ users: [1, 2, 3], groups: [7] }), names)).toMatch(
@@ -126,9 +144,64 @@ describe('firewall rule summaries', () => {
     expect(servicesSummary(rule())).toBe('Any');
   });
 
-  it('treats stored times as UTC when checking expiry', () => {
+  it('treats stored times as UTC when checking expiry and status', () => {
     expect(isExpired(rule({ expires_at: '2000-01-01T00:00:00' }))).toBe(true);
     expect(isExpired(rule({ expires_at: '2999-01-01T00:00:00' }))).toBe(false);
     expect(isExpired(rule())).toBe(false);
+    expect(ruleStatus(rule({ enabled: false }))).toBe(RuleStatus.Disabled);
+    expect(ruleStatus(rule({ expires_at: '2000-01-01T00:00:00' }))).toBe(
+      RuleStatus.Expired,
+    );
+    expect(ruleStatus(rule())).toBe(RuleStatus.Active);
+  });
+
+  it('builds structured badge items and search text', () => {
+    const r = rule({
+      name: 'Allow HTTPS',
+      description: 'Internal apps',
+      users: [1],
+      groups: [7],
+      destinations: ['10.0.0.0/24'],
+      protocols: [6],
+      ports: ['443'],
+      all_locations: false,
+      locations: [1, 2],
+    });
+    expect(sourceItems(r, names).map((i) => i.label)).toEqual(['Alice', 'Engineering']);
+    expect(destinationItems(r).map((i) => i.label)).toEqual(['10.0.0.0/24']);
+    expect(serviceItems(r).map((i) => i.label)).toEqual(['TCP', '443']);
+    expect(locationItems(r, names).map((i) => i.label)).toEqual(['Office', 'Cloud']);
+    const search = ruleSearchText(r, names);
+    expect(search).toContain('allow https');
+    expect(search).toContain('engineering');
+    expect(search).toContain('10.0.0.0/24');
+    expect(search).toContain('443');
+    expect(search).toContain('tcp');
+  });
+
+  it('indexes compiled location policies by location and rule', () => {
+    const policy1: FirewallLocationPolicy = {
+      revision: 'rev-1',
+      default_action: 'Drop',
+      rules: [
+        {
+          id: 10,
+          action: 'Accept',
+          source_ranges: 2,
+          destination_ranges: 1,
+          protocols: [6],
+          ports: ['443'],
+        },
+      ],
+      snat_bindings: 1,
+    };
+    const { byLocation, ruleLocations } = indexPolicies(
+      [{ id: 1 }, { id: 2 }],
+      [policy1, null],
+    );
+    expect(byLocation.get(1)).toBe(policy1);
+    expect(byLocation.get(2)).toBeNull();
+    expect(ruleLocations.get(10)).toEqual([1]);
+    expect(ruleLocations.get(99)).toBeUndefined();
   });
 });

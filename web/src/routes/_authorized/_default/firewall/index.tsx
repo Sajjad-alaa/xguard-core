@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { FirewallPage } from '../../../pages/FirewallPage/FirewallPage';
+import z from 'zod';
+import { FirewallPage } from '../../../../pages/FirewallPage/FirewallPage';
+import { FirewallPageTab } from '../../../../pages/FirewallPage/tabs';
 import {
   getFirewallRulesQueryOptions,
   getGroupsInfoQueryOptions,
@@ -7,9 +9,14 @@ import {
   getNetworkDevicesQueryOptions,
   getSnatBindingsQueryOptions,
   getUsersQueryOptions,
-} from '../../../shared/query';
+} from '../../../../shared/query';
 
-export const Route = createFileRoute('/_authorized/_default/firewall')({
+const searchSchema = z.object({
+  tab: z.enum(FirewallPageTab).optional().catch(undefined),
+});
+
+export const Route = createFileRoute('/_authorized/_default/firewall/')({
+  validateSearch: searchSchema,
   component: FirewallPage,
   loader: ({ context }) =>
     Promise.all([

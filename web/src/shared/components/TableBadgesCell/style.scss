@@ -1,0 +1,32 @@
+.table-cell.table-badges-cell {
+  column-gap: var(--spacing-xs);
+
+  & > .badge {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  & > .empty {
+    color: var(--fg-muted);
+  }
+
+  & > .more {
+    flex: none;
+    display: inline-flex;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: var(--badge-border-radius);
+    background-color: transparent;
+    cursor: pointer;
+
+    &:hover .badge {
+      --color: var(--fg-action);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--border-action);
+      outline-offset: 1px;
+    }
+  }
+}

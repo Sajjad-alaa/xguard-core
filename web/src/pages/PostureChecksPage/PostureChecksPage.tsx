@@ -1,3 +1,4 @@
+import './style.scss';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { m } from '../../paraglide/messages';
@@ -37,12 +38,12 @@ export const PostureChecksPage = () => {
   return (
     <>
       <Page id="posture-checks-page" title={m.posture_checks_page_title()}>
-        <SizedBox height={ThemeSpacing.Md} />
-        <p className="posture-checks-description">
-          {m.posture_checks_page_description()}
-        </p>
         <SizedBox height={ThemeSpacing.Xl2} />
         <TablePageLayout>
+          <p className="posture-checks-description">
+            {m.posture_checks_page_description()}
+          </p>
+          <SizedBox height={ThemeSpacing.Xl} />
           <PostureChecksTable postures={postures} locationNames={locationNames} />
         </TablePageLayout>
       </Page>

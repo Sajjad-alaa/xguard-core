@@ -65,6 +65,7 @@ import type {
   EnableMfaMethodResponse,
   ExternalOpenIdProvider,
   ExternalOpenIdProviderInput,
+  FirewallLocationPolicy,
   FirewallRule,
   FirewallRuleInput,
   Gateway,
@@ -327,6 +328,10 @@ const api = {
     editRule: ({ id, ...data }: FirewallRuleInput & { id: number }) =>
       client.put<FirewallRule>(`/firewall/rule/${id}`, data),
     deleteRule: (id: number) => client.delete(`/firewall/rule/${id}`),
+    getLocationPolicy: (locationId: number) =>
+      client.get<FirewallLocationPolicy | null>(
+        `/firewall/location/${locationId}/policy`,
+      ),
     getSnatBindings: () => client.get<SnatBinding[]>('/firewall/snat'),
     addSnatBinding: (data: SnatBindingInput) =>
       client.post<SnatBinding>('/firewall/snat', data),

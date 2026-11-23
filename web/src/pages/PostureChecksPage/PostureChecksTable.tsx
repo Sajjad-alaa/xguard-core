@@ -1,29 +1,55 @@
 import { useMutation } from '@tanstack/react-query';
 import {
+  type ColumnFiltersState,
   createColumnHelper,
+  type FilterFn,
   getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { m } from '../../paraglide/messages';
 import api from '../../shared/api/api';
-import type { ApiDevicePosture } from '../../shared/api/types';
+import type { ApiDevicePosture, DevicePostureOsType } from '../../shared/api/types';
+import type { SelectionOption } from '../../shared/components/SelectionSection/type';
+import { TableBadgesCell } from '../../shared/components/TableBadgesCell/TableBadgesCell';
 import { openModal } from '../../shared/hooks/modalControls/modalsSubjects';
 import { ModalName } from '../../shared/hooks/modalControls/modalTypes';
 import { Button } from '../../shared/xguard-ui/components/Button/Button';
 import type { ButtonProps } from '../../shared/xguard-ui/components/Button/types';
 import { EmptyStateFlexible } from '../../shared/xguard-ui/components/EmptyStateFlexible/EmptyStateFlexible';
 import type { MenuItemsGroup } from '../../shared/xguard-ui/components/Menu/types';
+import { Search } from '../../shared/xguard-ui/components/Search/Search';
 import { tableEditColumnSize } from '../../shared/xguard-ui/components/table/consts';
 import { TableBody } from '../../shared/xguard-ui/components/table/TableBody/TableBody';
 import { TableCell } from '../../shared/xguard-ui/components/table/TableCell/TableCell';
 import { TableEditCell } from '../../shared/xguard-ui/components/table/TableEditCell/TableEditCell';
 import { TableTop } from '../../shared/xguard-ui/components/table/TableTop/TableTop';
+import type { TableFilterMessages } from '../../shared/xguard-ui/components/table/types';
 import { Snackbar } from '../../shared/xguard-ui/providers/snackbar/snackbar';
-import { clientSummary, locationsSummary, systemsSummary } from './summary';
+import {
+  ALL_OS_TYPES,
+  clientItems,
+  locationItems,
+  osName,
+  postureSearchText,
+  systemItems,
+} from './summary';
 
 const columnHelper = createColumnHelper<ApiDevicePosture>();
 const invalidate = [['device-posture'], ['network']];
+
+const matchesSelectedOs: FilterFn<ApiDevicePosture> = (
+  row,
+  _columnId,
+  selected: unknown,
+) => {
+  if (!Array.isArray(selected) || selected.length === 0) return true;
+  const rules = row.original.os_rules;
+  if (rules.length === 0) return true;
+  return rules.some((rule) => selected.includes(rule.os_type));
+};
 
 type Props = {
   postures: ApiDevicePosture[];
@@ -31,6 +57,9 @@ type Props = {
 };
 
 export const PostureChecksTable = ({ postures, locationNames }: Props) => {
+  const [search, setSearch] = useState('');
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
   const { mutate: duplicate } = useMutation({
     mutationFn: api.devicePosture.duplicateDevicePosture,
     meta: { invalidate },
@@ -48,53 +77,88 @@ export const PostureChecksTable = ({ postures, locationNames }: Props) => {
     [],
   );
 
+  const filterMessages: TableFilterMessages = useMemo(
+    () => ({
+      searchPlaceholder: m.controls_search(),
+      clearButton: m.controls_reset(),
+      applyButton: m.controls_submit(),
+      emptyState: m.search_empty_common_title(),
+    }),
+    [],
+  );
+
+  const osOptions = useMemo(
+    (): SelectionOption<DevicePostureOsType>[] =>
+      ALL_OS_TYPES.map((os) => ({ id: os, label: osName(os) })),
+    [],
+  );
+
+  const visiblePostures = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return postures;
+    return postures.filter((p) => postureSearchText(p, locationNames).includes(query));
+  }, [postures, locationNames, search]);
+
   const columns = useMemo(
     () => [
       columnHelper.accessor('name', {
         header: m.posture_checks_col_name(),
-        minSize: 180,
-        cell: (info) => (
-          <TableCell>
-            <span>{info.getValue()}</span>
-          </TableCell>
-        ),
+        minSize: 220,
+        enableSorting: true,
+        sortingFn: 'text',
+        meta: { flex: true },
+        cell: (info) => {
+          const posture = info.row.original;
+          return (
+            <TableCell className="posture-name-cell">
+              <div className="posture-name" title={posture.description || posture.name}>
+                <span className="name">{posture.name}</span>
+                {posture.description && (
+                  <span className="description">{posture.description}</span>
+                )}
+              </div>
+            </TableCell>
+          );
+        },
       }),
-      columnHelper.display({
+      columnHelper.accessor((p) => p.os_rules.map((r) => r.os_type), {
         id: 'systems',
         header: m.posture_checks_col_systems(),
+        size: 260,
         minSize: 200,
-        meta: { flex: true },
+        enableColumnFilter: true,
+        filterFn: matchesSelectedOs,
+        meta: { filterOptions: osOptions },
         cell: (info) => (
-          <TableCell>
-            <span>{systemsSummary(info.row.original)}</span>
-          </TableCell>
+          <TableBadgesCell items={systemItems(info.row.original)} limit={3} />
         ),
       }),
       columnHelper.display({
         id: 'client',
         header: m.posture_checks_col_client(),
-        minSize: 140,
+        size: 240,
+        minSize: 180,
         cell: (info) => (
-          <TableCell>
-            <span>{clientSummary(info.row.original)}</span>
-          </TableCell>
+          <TableBadgesCell items={clientItems(info.row.original)} limit={3} />
         ),
       }),
       columnHelper.display({
         id: 'locations',
         header: m.posture_checks_col_locations(),
-        minSize: 200,
-        meta: { flex: true },
+        size: 220,
+        minSize: 180,
         cell: (info) => (
-          <TableCell>
-            <span>{locationsSummary(info.row.original, locationNames)}</span>
-          </TableCell>
+          <TableBadgesCell
+            items={locationItems(info.row.original, locationNames)}
+            emptyText={m.posture_checks_no_locations()}
+          />
         ),
       }),
       columnHelper.display({
         id: 'edit',
         header: '',
         size: tableEditColumnSize,
+        enableResizing: false,
         cell: (info) => {
           const posture = info.row.original;
           const menuItems: MenuItemsGroup[] = [
@@ -108,7 +172,7 @@ export const PostureChecksTable = ({ postures, locationNames }: Props) => {
                 },
                 {
                   text: m.posture_checks_menu_duplicate(),
-                  icon: 'copy',
+                  icon: 'duplicate',
                   testId: 'duplicate',
                   onClick: () => duplicate(posture.id),
                 },
@@ -143,15 +207,22 @@ export const PostureChecksTable = ({ postures, locationNames }: Props) => {
         },
       }),
     ],
-    [duplicate, locationNames],
+    [duplicate, locationNames, osOptions],
   );
 
   const table = useReactTable({
+    initialState: { sorting: [{ id: 'name', desc: false }] },
+    state: { columnFilters },
+    meta: { filterMessages },
     columns,
-    data: postures,
-    getCoreRowModel: getCoreRowModel(),
+    data: visiblePostures,
+    getRowId: (posture) => String(posture.id),
     enableRowSelection: false,
     columnResizeMode: 'onChange',
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   });
 
   if (postures.length === 0) {
@@ -165,12 +236,26 @@ export const PostureChecksTable = ({ postures, locationNames }: Props) => {
     );
   }
 
+  const noMatches = table.getRowModel().rows.length === 0;
+
   return (
     <>
       <TableTop text={m.posture_checks_table_title()}>
+        <Search
+          placeholder={m.posture_checks_search()}
+          value={search}
+          onChange={setSearch}
+        />
         <Button {...addButtonProps} />
       </TableTop>
       <TableBody table={table} />
+      {noMatches && (
+        <EmptyStateFlexible
+          icon="search"
+          title={m.search_empty_common_title()}
+          subtitle={m.search_empty_common_subtitle()}
+        />
+      )}
     </>
   );
 };
