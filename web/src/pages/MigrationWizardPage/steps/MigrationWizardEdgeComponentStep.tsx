@@ -19,6 +19,7 @@ type StoreValues = {
   common_name: string;
   ip_or_domain: string;
   grpc_port: number;
+  adoption_token: string;
 };
 
 export const MigrationWizardEdgeComponentStep = () => {
@@ -28,6 +29,7 @@ export const MigrationWizardEdgeComponentStep = () => {
         common_name: s.common_name,
         ip_or_domain: s.ip_or_domain,
         grpc_port: s.grpc_port,
+        adoption_token: s.adoption_token,
       }),
     ),
   );
@@ -52,6 +54,13 @@ export const MigrationWizardEdgeComponentStep = () => {
           .number()
           .min(1, m.edge_setup_component_error_grpc_port_required())
           .max(65535, m.edge_setup_component_error_grpc_port_max()),
+        adoption_token: z
+          .string()
+          .trim()
+          .regex(
+            /^[\x21-\x7e]{0,256}$/,
+            m.edge_setup_component_error_adoption_token_invalid(),
+          ),
       }),
     [],
   );
@@ -120,6 +129,16 @@ export const MigrationWizardEdgeComponentStep = () => {
                 label={m.edge_setup_component_label_grpc_port()}
                 helper={m.edge_setup_component_label_grpc_port_help()}
                 type="number"
+              />
+            )}
+          </form.AppField>
+          <SizedBox height={ThemeSpacing.Xl} />
+          <form.AppField name="adoption_token">
+            {(field) => (
+              <field.FormInput
+                label={m.edge_setup_component_label_adoption_token()}
+                helper={m.edge_setup_component_label_adoption_token_help()}
+                type="password"
               />
             )}
           </form.AppField>

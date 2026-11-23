@@ -47,6 +47,7 @@ export const SetupEdgeAdoptionStep = () => {
       ip_or_domain: edgeComponentWizardStore.ip_or_domain,
       grpc_port: edgeComponentWizardStore.grpc_port,
       common_name: edgeComponentWizardStore.common_name,
+      adoption_token: edgeComponentWizardStore.adoption_token.trim() || null,
     },
     {
       onMessage: handleEvent,

@@ -39,6 +39,7 @@ export const MigrationWizardEdgeAdoptionStep = () => {
       ip_or_domain: migrationWizardStore.ip_or_domain,
       grpc_port: migrationWizardStore.grpc_port,
       common_name: migrationWizardStore.common_name,
+      adoption_token: migrationWizardStore.adoption_token.trim() || null,
     },
     {
       onMessage: handleEvent,

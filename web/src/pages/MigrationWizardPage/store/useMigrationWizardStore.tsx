@@ -45,6 +45,8 @@ interface StoreValues extends MigrationWizardApiState {
   common_name: string;
   ip_or_domain: string;
   grpc_port: number;
+  /** Only kept in memory: never written to session storage. */
+  adoption_token: string;
   edgeAdoptionState: EdgeAdoptionState;
   ldap_migration_required: boolean;
 }
@@ -79,6 +81,7 @@ const defaults: StoreValues = {
   common_name: '',
   ip_or_domain: '',
   grpc_port: edgeDefaultGrpcPort,
+  adoption_token: '',
   edgeAdoptionState: edgeAdoptionStateDefaults,
   ldap_migration_required: false,
 };
@@ -247,6 +250,7 @@ export const useMigrationWizardStore = create<Store>()(
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) =>
         omit(state, [
+          'adoption_token',
           'setState',
           'resetEdgeAdoptionState',
           'setEdgeAdoptionState',

@@ -25,6 +25,7 @@ use tokio::{
 use tokio_stream::StreamExt;
 use tonic::{
     Request, Status,
+    metadata::{Ascii, MetadataValue},
     service::Interceptor,
     transport::{Certificate, ClientTlsConfig, Endpoint},
 };
@@ -91,6 +92,9 @@ pub struct ProxySetupRequest {
     pub ip_or_domain: String,
     pub grpc_port: u16,
     pub common_name: String,
+    /// The Edge's `XGUARD_PROXY_ADOPTION_TOKEN`, when it has one.
+    #[serde(default)]
+    pub adoption_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -136,14 +140,35 @@ pub(crate) enum AdoptionProgress {
     Log(String),
 }
 
+/// Metadata key carrying the Edge's adoption token (`XGUARD_PROXY_ADOPTION_TOKEN`), sent next
+/// to the per-session bearer token.
+pub(crate) const ADOPTION_TOKEN_HEADER: &str = "x-xguard-adoption-token";
+
 #[derive(Clone)]
 struct AuthInterceptor {
     token: String,
+    adoption_token: Option<MetadataValue<Ascii>>,
 }
 
 impl AuthInterceptor {
     const fn new(token: String) -> Self {
-        Self { token }
+        Self {
+            token,
+            adoption_token: None,
+        }
+    }
+
+    /// Adds the Edge adoption token. Fails when it is not a valid header value.
+    fn with_adoption_token(mut self, adoption_token: Option<&str>) -> Result<Self, String> {
+        self.adoption_token = match adoption_token.map(str::trim).filter(|t| !t.is_empty()) {
+            Some(token) => Some(
+                token
+                    .parse()
+                    .map_err(|_| "The adoption token contains characters that cannot be sent")?,
+            ),
+            None => None,
+        };
+        Ok(self)
     }
 }
 
@@ -153,6 +178,11 @@ impl Interceptor for AuthInterceptor {
             "authorization",
             format!("Bearer {}", self.token).parse().unwrap(),
         );
+        if let Some(adoption_token) = &self.adoption_token {
+            request
+                .metadata_mut()
+                .insert(ADOPTION_TOKEN_HEADER, adoption_token.clone());
+        }
         Ok(request)
     }
 }
@@ -400,7 +430,15 @@ pub async fn setup_proxy_tls_stream(
         debug!("Generated secure setup token for Edge authentication");
 
         let version_interceptor = ClientVersionInterceptor::new(version);
-        let auth_interceptor = AuthInterceptor::new(token);
+        let auth_interceptor = match AuthInterceptor::new(token)
+            .with_adoption_token(request.adoption_token.as_deref())
+        {
+            Ok(interceptor) => interceptor,
+            Err(err) => {
+                yield Ok(flow.error(&err));
+                return;
+            }
+        };
         let mut client = ProxySetupClient::with_interceptor(endpoint.connect_lazy(), move |mut req: Request<()>| {
             req = version_interceptor.clone().call(req)?;
             auth_interceptor.clone().call(req)
@@ -1431,6 +1469,38 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn auth_interceptor_sends_adoption_token_separately() {
+        let mut plain = AuthInterceptor::new("session-jwt".into())
+            .with_adoption_token(Some("  "))
+            .unwrap();
+        let request = plain.call(Request::new(())).unwrap();
+        assert_eq!(
+            request.metadata().get("authorization").unwrap(),
+            "Bearer session-jwt"
+        );
+        assert!(request.metadata().get(ADOPTION_TOKEN_HEADER).is_none());
+
+        let mut with_token = AuthInterceptor::new("session-jwt".into())
+            .with_adoption_token(Some(" edge-secret "))
+            .unwrap();
+        let request = with_token.call(Request::new(())).unwrap();
+        assert_eq!(
+            request.metadata().get("authorization").unwrap(),
+            "Bearer session-jwt"
+        );
+        assert_eq!(
+            request.metadata().get(ADOPTION_TOKEN_HEADER).unwrap(),
+            "edge-secret"
+        );
+
+        assert!(
+            AuthInterceptor::new("session-jwt".into())
+                .with_adoption_token(Some("bad\ntoken"))
+                .is_err()
+        );
+    }
 
     #[sqlx::test]
     async fn test_apply_acme_certificate_broadcasts_public_settings(

@@ -207,6 +207,10 @@ pub struct XGuardConfig {
     #[arg(long, env = "XGUARD_ADOPT_EDGE")]
     pub adopt_edge: Option<String>,
 
+    /// The adoption token set on the Edge (`XGUARD_PROXY_ADOPTION_TOKEN`), when it has one.
+    #[arg(long, env = "XGUARD_ADOPT_EDGE_TOKEN", hide_env_values = true)]
+    pub adopt_edge_token: Option<String>,
+
     /// Maximum number of requests per second per client IP before rate limiting kicks in.
     /// Set to 0 to disable rate limiting.
     #[arg(long, env = "XGUARD_RATELIMIT_PERSECOND", default_value_t = 0)]
@@ -400,6 +404,7 @@ impl XGuardConfig {
             grpc_bind_address: None,
             adopt_gateway: None,
             adopt_edge: None,
+            adopt_edge_token: None,
             rate_limit_per_second: 0,
             rate_limit_burst: 0,
         };

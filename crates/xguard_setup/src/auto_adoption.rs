@@ -11,6 +11,7 @@ use sqlx::PgPool;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::{
     Request, Status,
+    metadata::{Ascii, MetadataValue},
     service::Interceptor,
     transport::{Certificate, ClientTlsConfig, Endpoint},
 };
@@ -130,14 +131,32 @@ fn parse_host_port(input: &str) -> Result<(String, u16), anyhow::Error> {
     ))
 }
 
+/// Metadata key carrying the Edge's adoption token (`XGUARD_PROXY_ADOPTION_TOKEN`).
+const ADOPTION_TOKEN_HEADER: &str = "x-xguard-adoption-token";
+
 #[derive(Clone)]
 struct AuthInterceptor {
     token: String,
+    adoption_token: Option<MetadataValue<Ascii>>,
 }
 
 impl AuthInterceptor {
     const fn new(token: String) -> Self {
-        Self { token }
+        Self {
+            token,
+            adoption_token: None,
+        }
+    }
+
+    /// Adds the Edge adoption token. Fails when it is not a valid header value.
+    fn with_adoption_token(mut self, adoption_token: Option<&str>) -> Result<Self, String> {
+        self.adoption_token = match adoption_token.map(str::trim).filter(|t| !t.is_empty()) {
+            Some(token) => Some(token.parse().map_err(|_| {
+                "XGUARD_ADOPT_EDGE_TOKEN contains characters that cannot be sent".to_owned()
+            })?),
+            None => None,
+        };
+        Ok(self)
     }
 }
 
@@ -149,6 +168,11 @@ impl Interceptor for AuthInterceptor {
                 .parse()
                 .expect("failed to parse auth metadata"),
         );
+        if let Some(adoption_token) = &self.adoption_token {
+            request
+                .metadata_mut()
+                .insert(ADOPTION_TOKEN_HEADER, adoption_token.clone());
+        }
         Ok(request)
     }
 }
@@ -216,6 +240,7 @@ async fn run_edge_adoption_attempt(
     pool: &PgPool,
     host: &str,
     port: u16,
+    adoption_token: Option<&str>,
 ) -> (bool, Vec<String>, Option<ComponentAdoptionResult>) {
     let log_buffer = Arc::new(Mutex::new(VecDeque::new()));
     let certs = match Certificates::get_or_default(pool).await {
@@ -237,7 +262,15 @@ async fn run_edge_adoption_attempt(
         return (false, vec![msg], None);
     };
     scope_setup_logs(Arc::clone(&log_buffer), async move {
-        run_edge_adoption_attempt_scoped(host, port, log_buffer, ca_cert_der, ca_key_der).await
+        run_edge_adoption_attempt_scoped(
+            host,
+            port,
+            adoption_token,
+            log_buffer,
+            ca_cert_der,
+            ca_key_der,
+        )
+        .await
     })
     .await
 }
@@ -245,6 +278,7 @@ async fn run_edge_adoption_attempt(
 async fn run_edge_adoption_attempt_scoped(
     host: &str,
     port: u16,
+    adoption_token: Option<&str>,
     log_buffer: SetupLogBuffer,
     ca_cert_der: Vec<u8>,
     ca_key_der: Vec<u8>,
@@ -337,7 +371,10 @@ async fn run_edge_adoption_attempt_scoped(
     debug!("Generated secure setup token for Edge authentication");
 
     let version_interceptor = ClientVersionInterceptor::new(core_version.clone());
-    let auth_interceptor = AuthInterceptor::new(token);
+    let auth_interceptor = match AuthInterceptor::new(token).with_adoption_token(adoption_token) {
+        Ok(interceptor) => interceptor,
+        Err(err) => return merge_failure_logs(err, &log_buffer, &mut log_rx),
+    };
 
     let mut client =
         ProxySetupClient::with_interceptor(endpoint.connect_lazy(), move |mut req: Request<()>| {
@@ -871,11 +908,14 @@ async fn process_startup_auto_adoption(
     pool: &PgPool,
     component: SetupAutoAdoptionComponent,
     endpoint: &str,
+    edge_adoption_token: Option<&str>,
 ) -> Result<(), anyhow::Error> {
     let (host, port) = parse_host_port(endpoint)?;
 
     let (status, logs, cert_info) = match component {
-        SetupAutoAdoptionComponent::Edge => run_edge_adoption_attempt(pool, &host, port).await,
+        SetupAutoAdoptionComponent::Edge => {
+            run_edge_adoption_attempt(pool, &host, port, edge_adoption_token).await
+        }
         SetupAutoAdoptionComponent::Gateway => {
             run_gateway_adoption_attempt(pool, &host, port).await
         }
@@ -1126,9 +1166,13 @@ pub async fn attempt_auto_adoption(
         );
     } else {
         info!("Starting startup auto-adoption for Edge component endpoint={edge_endpoint}");
-        if let Err(err) =
-            process_startup_auto_adoption(pool, SetupAutoAdoptionComponent::Edge, edge_endpoint)
-                .await
+        if let Err(err) = process_startup_auto_adoption(
+            pool,
+            SetupAutoAdoptionComponent::Edge,
+            edge_endpoint,
+            config.adopt_edge_token.as_deref(),
+        )
+        .await
         {
             auto_state.adoption_result.insert(
                 SetupAutoAdoptionComponent::Edge,
@@ -1154,6 +1198,7 @@ pub async fn attempt_auto_adoption(
             pool,
             SetupAutoAdoptionComponent::Gateway,
             gateway_endpoint,
+            None,
         )
         .await
         {

@@ -10,6 +10,8 @@ type StoreValues = {
   common_name: string;
   ip_or_domain: string;
   grpc_port: number;
+  /** Only kept in memory: never written to session storage. */
+  adoption_token: string;
   edgeAdoptionState: EdgeAdoptionState;
 };
 
@@ -37,6 +39,7 @@ const defaults: StoreValues = {
   common_name: '',
   ip_or_domain: '',
   grpc_port: edgeDefaultGrpcPort,
+  adoption_token: '',
   edgeAdoptionState: edgeAdoptionStateDefaults,
 };
 
@@ -67,6 +70,7 @@ export const useEdgeWizardStore = create<StoreMethods & StoreValues>()(
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) =>
         omit(state, [
+          'adoption_token',
           'reset',
           'start',
           'setActiveStep',
