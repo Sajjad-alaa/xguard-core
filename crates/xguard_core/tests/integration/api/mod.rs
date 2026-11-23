@@ -1,3 +1,4 @@
+mod acl_allowed_ips;
 mod activity_log;
 mod api_tokens;
 mod auth;

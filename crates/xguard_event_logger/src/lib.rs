@@ -786,6 +786,21 @@ fn map_to_activity_log_event(message: EventLoggerMessage) -> ActivityLogEvent<No
                     )
                     .ok(),
                 ),
+                ApiEventType::LocationAclAllowedIpsChanged {
+                    location_id,
+                    location_name,
+                    enabled,
+                } => (
+                    EventType::LocationAclAllowedIpsChanged,
+                    serde_json::to_value(
+                        xguard_core::db::models::activity_log::metadata::LocationAclAllowedIpsMetadata {
+                            location_id,
+                            location_name,
+                            enabled,
+                        },
+                    )
+                    .ok(),
+                ),
             };
 
             let module = api_event_module(&event_type);

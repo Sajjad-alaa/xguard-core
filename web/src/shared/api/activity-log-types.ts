@@ -150,6 +150,7 @@ export const ActivityLogEventType = {
   MfaFlowDeleted: 'mfa_flow_deleted',
   LocationMfaFlowsAssigned: 'location_mfa_flows_assigned',
   LocationGroupMtusChanged: 'location_group_mtus_changed',
+  LocationAclAllowedIpsChanged: 'location_acl_allowed_ips_changed',
   DevicePostureCheckPassed: 'device_posture_check_passed',
   DevicePostureCheckFailed: 'device_posture_check_failed',
 

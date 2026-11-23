@@ -408,6 +408,12 @@ pub enum ApiEventType {
         before: Vec<xguard_common::db::models::wireguard::GroupClientMtu>,
         after: Vec<xguard_common::db::models::wireguard::GroupClientMtu>,
     },
+    /// "Allowed IPs from firewall rules" switched on or off for a location.
+    LocationAclAllowedIpsChanged {
+        location_id: Id,
+        location_name: String,
+        enabled: bool,
+    },
     DevicePostureCreated {
         posture: crate::posture::policy::ApiDevicePosture,
     },

@@ -1336,6 +1336,17 @@ fn api_event_cases() -> Vec<EventTestCase> {
             description_contains: Some("group MTU"),
         },
         EventTestCase {
+            name: "LocationAclAllowedIpsChanged",
+            message: api_message(ApiEventType::LocationAclAllowedIpsChanged {
+                location_id: location.id,
+                location_name: location.name.clone(),
+                enabled: true,
+            }),
+            event_type: EventType::LocationAclAllowedIpsChanged,
+            module: ActivityLogModule::XGuard,
+            description_contains: Some("from firewall rules"),
+        },
+        EventTestCase {
             name: "DevicePostureCreated",
             message: api_message(ApiEventType::DevicePostureCreated {
                 posture: sample_posture(),

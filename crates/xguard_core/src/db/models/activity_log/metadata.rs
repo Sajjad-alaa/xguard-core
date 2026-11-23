@@ -708,6 +708,13 @@ pub struct LocationGroupMtusMetadata {
 }
 
 #[derive(Serialize)]
+pub struct LocationAclAllowedIpsMetadata {
+    pub location_id: Id,
+    pub location_name: String,
+    pub enabled: bool,
+}
+
+#[derive(Serialize)]
 pub struct DevicePostureMetadata {
     pub posture: crate::posture::policy::ApiDevicePosture,
 }

@@ -19,12 +19,14 @@ use xguard_common::{
         },
     },
     device_config_gen::create_wireguard_config,
+    firewall::effective_allowed_ips,
 };
 
 /// Build a `DeviceConfig` for a device already assigned to a network.
 ///
-/// Uses the location's configured AllowedIPs and generates the WireGuard
-/// config string. The client MTU is the user's lowest group override for this location, else the
+/// Uses the location's configured AllowedIPs, or the ones derived from its firewall rules when
+/// the location has "Allowed IPs from firewall rules" on, and generates the WireGuard config
+/// string. The client MTU is the user's lowest group override for this location, else the
 /// location's `client_mtu`. When building configs for several locations, load the overrides once
 /// with [`WireguardNetwork::group_client_mtus_for_user`] and use
 /// [`build_device_config_with_group_mtus`].
@@ -60,7 +62,12 @@ async fn build_config(
     user: &User<Id>,
     mtu: Option<i32>,
 ) -> Result<DeviceConfig, DeviceError> {
-    let effective_ips = network.allowed_ips.clone();
+    // The location's static list, or (with "Allowed IPs from firewall rules") what the
+    // firewall rules let this device reach.
+    let effective_ips =
+        effective_allowed_ips(&mut *conn, network, wireguard_network_device.device_id)
+            .await
+            .map_err(|err| DeviceError::Unexpected(err.to_string()))?;
 
     let config = create_wireguard_config(network, wireguard_network_device, &effective_ips, mtu);
 

@@ -341,6 +341,15 @@ pub fn get_api_event_description(event: &ApiEventType) -> Option<String> {
             "Set {} group MTU override(s) for location '{location_name}'",
             after.len()
         )),
+        ApiEventType::LocationAclAllowedIpsChanged {
+            location_name,
+            enabled,
+            ..
+        } => Some(if *enabled {
+            format!("Location '{location_name}' now derives AllowedIPs from firewall rules")
+        } else {
+            format!("Location '{location_name}' now uses its static allowed IPs")
+        }),
         ApiEventType::DevicePostureCreated { posture } => {
             Some(format!("Created posture policy '{}'", posture.name))
         }
