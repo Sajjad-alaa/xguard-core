@@ -5,13 +5,17 @@
 //! - An operating system without a rule in a policy is not allowed by it. A policy without
 //!   rules allows every operating system.
 //! - A fact needed by a rule that is missing or malformed fails that rule ("could not be
-//!   determined"): missing facts are never compliant.
+//!   determined"): missing facts are never compliant. When the client predates the facts
+//!   revision that added the fact on its platform, the failure says the client is too old to
+//!   report it, so the user knows to update instead of fixing the device.
 
 use chrono::NaiveDate;
-use xguard_common::db::models::device_posture::{DevicePostureOsRule, DevicePostureWithRules};
+use xguard_common::db::models::device_posture::{
+    DevicePostureOsRule, DevicePostureWithRules, OsType,
+};
 
 use super::{
-    facts::PostureFacts,
+    facts::{FACTS_REVISION_ALL_PLATFORMS, PostureFacts},
     version::{DottedVersion, client_meets_minimum, dotted_meets_minimum, parse_client_version},
 };
 
@@ -140,19 +144,36 @@ fn required(flag: Option<bool>) -> bool {
     flag == Some(true)
 }
 
+/// How a missing fact is reported.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Missing {
+    /// The client knows the fact but could not determine it.
+    Unknown,
+    /// The client predates the fact on this platform.
+    ClientTooOld,
+}
+
+fn too_old(what: &str) -> String {
+    format!("this XGuard client is too old to report {what}; update the client")
+}
+
 fn require_true(
     needed: Option<bool>,
     actual: Option<bool>,
     what: &str,
+    missing: Missing,
     failures: &mut Vec<String>,
 ) {
     if !required(needed) {
         return;
     }
-    match actual {
-        Some(true) => {}
-        Some(false) => failures.push(format!("{what} is required")),
-        None => failures.push(format!("{what} status could not be determined")),
+    match (actual, missing) {
+        (Some(true), _) => {}
+        (Some(false), _) => failures.push(format!("{what} is required")),
+        (None, Missing::Unknown) => {
+            failures.push(format!("{what} status could not be determined"));
+        }
+        (None, Missing::ClientTooOld) => failures.push(too_old(&format!("{what} status"))),
     }
 }
 
@@ -184,17 +205,19 @@ fn require_max_age(
     max_days: Option<i32>,
     age_days: Option<i64>,
     what: &str,
+    missing: Missing,
     failures: &mut Vec<String>,
 ) {
     let Some(max_days) = max_days else {
         return;
     };
-    match age_days {
-        Some(age) if age <= i64::from(max_days) => {}
-        Some(age) => failures.push(format!(
+    match (age_days, missing) {
+        (Some(age), _) if age <= i64::from(max_days) => {}
+        (Some(age), _) => failures.push(format!(
             "{what} is {age} days old (at most {max_days} allowed)"
         )),
-        None => failures.push(format!("{what} could not be determined")),
+        (None, Missing::Unknown) => failures.push(format!("{what} could not be determined")),
+        (None, Missing::ClientTooOld) => failures.push(too_old(what)),
     }
 }
 
@@ -205,6 +228,19 @@ fn evaluate_rule(
     failures: &mut Vec<String>,
 ) {
     let os_name = rule.os_type.display_name();
+    // Antivirus, directory membership and update age were Windows only before facts revision 2.
+    let added_in_revision_2 = if matches!(rule.os_type, OsType::Macos | OsType::Linux)
+        && facts.predates(FACTS_REVISION_ALL_PLATFORMS)
+    {
+        Missing::ClientTooOld
+    } else {
+        Missing::Unknown
+    };
+    let directory = if rule.os_type == OsType::Windows {
+        "Active Directory domain membership"
+    } else {
+        "directory domain membership"
+    };
     require_version(
         rule.min_os_version.as_deref(),
         facts.os_version.as_deref(),
@@ -221,42 +257,49 @@ fn evaluate_rule(
         rule.disk_encryption_required,
         facts.disk_encrypted,
         "disk encryption",
+        Missing::Unknown,
         failures,
     );
     require_true(
         rule.firewall_required,
         facts.firewall_enabled,
         "firewall",
+        Missing::Unknown,
         failures,
     );
     require_true(
         rule.screen_lock_required,
         facts.screen_lock_enabled,
         "screen lock",
+        Missing::Unknown,
         failures,
     );
     require_true(
         rule.antivirus_required,
         facts.antivirus_enabled,
         "antivirus",
+        added_in_revision_2,
         failures,
     );
     require_true(
         rule.ad_domain_joined_required,
         facts.domain_joined,
-        "Active Directory domain membership",
+        directory,
+        added_in_revision_2,
         failures,
     );
     require_true(
         rule.device_integrity_required,
         facts.device_integrity,
         "device integrity protection",
+        Missing::Unknown,
         failures,
     );
     require_max_age(
-        rule.windows_security_update_max_age,
+        rule.security_update_max_age,
         facts.security_update_age_days.map(i64::from),
         "the last security update",
+        added_in_revision_2,
         failures,
     );
     require_max_age(
@@ -265,6 +308,7 @@ fn evaluate_rule(
             .security_patch_date
             .map(|date| (today - date).num_days().max(0)),
         "the security patch level",
+        Missing::Unknown,
         failures,
     );
 }

@@ -81,6 +81,15 @@ pub enum ApiOsRule {
         screen_lock_required: Option<bool>,
         #[serde(default)]
         device_integrity_required: Option<bool>,
+        /// An antivirus or EDR agent is running (XProtect alone does not count).
+        #[serde(default)]
+        antivirus_required: Option<bool>,
+        /// Bound to an Active Directory or LDAP (Open Directory) domain.
+        #[serde(default)]
+        ad_domain_joined_required: Option<bool>,
+        /// Maximum age in days of the last installed macOS security update.
+        #[serde(default)]
+        security_update_max_age: Option<i32>,
     },
     Linux {
         #[serde(default)]
@@ -92,11 +101,26 @@ pub enum ApiOsRule {
         firewall_required: Option<bool>,
         #[serde(default)]
         screen_lock_required: Option<bool>,
+        /// ClamAV or a known EDR agent is running.
+        #[serde(default)]
+        antivirus_required: Option<bool>,
+        /// Joined to a domain through realmd/SSSD or winbind.
+        #[serde(default)]
+        ad_domain_joined_required: Option<bool>,
+        /// Maximum age in days of the last package update (dnf/yum, apt, zypper, pacman).
+        #[serde(default)]
+        security_update_max_age: Option<i32>,
     },
     Ios {
         #[serde(default)]
         #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
         min_os_version: Option<VersionInput>,
+        /// A passcode is set.
+        #[serde(default)]
+        screen_lock_required: Option<bool>,
+        /// Data Protection is on, which iOS ties to the passcode.
+        #[serde(default)]
+        disk_encryption_required: Option<bool>,
     },
     Android {
         #[serde(default)]
@@ -106,6 +130,12 @@ pub enum ApiOsRule {
         device_integrity_required: Option<bool>,
         #[serde(default)]
         android_security_patch_level_max_age: Option<i32>,
+        /// A secure lock screen (PIN, pattern or password) is set.
+        #[serde(default)]
+        screen_lock_required: Option<bool>,
+        /// Storage is encrypted with a key protected by the lock screen credential.
+        #[serde(default)]
+        disk_encryption_required: Option<bool>,
     },
 }
 
@@ -265,7 +295,7 @@ impl ApiOsRule {
                 rule.screen_lock_required = screen_lock_required;
                 rule.antivirus_required = antivirus_required;
                 rule.ad_domain_joined_required = ad_domain_joined_required;
-                rule.windows_security_update_max_age =
+                rule.security_update_max_age =
                     validate_age(windows_security_update_max_age, "The security update age")?;
             }
             Self::Macos {
@@ -274,6 +304,9 @@ impl ApiOsRule {
                 firewall_required,
                 screen_lock_required,
                 device_integrity_required,
+                antivirus_required,
+                ad_domain_joined_required,
+                security_update_max_age,
             } => {
                 rule.min_os_version =
                     validate_version(min_os_version.as_ref(), os, "The macOS version")?;
@@ -281,27 +314,46 @@ impl ApiOsRule {
                 rule.firewall_required = firewall_required;
                 rule.screen_lock_required = screen_lock_required;
                 rule.device_integrity_required = device_integrity_required;
+                rule.antivirus_required = antivirus_required;
+                rule.ad_domain_joined_required = ad_domain_joined_required;
+                rule.security_update_max_age =
+                    validate_age(security_update_max_age, "The security update age")?;
             }
             Self::Linux {
                 min_kernel_version,
                 disk_encryption_required,
                 firewall_required,
                 screen_lock_required,
+                antivirus_required,
+                ad_domain_joined_required,
+                security_update_max_age,
             } => {
                 rule.min_kernel_version =
                     validate_version(min_kernel_version.as_ref(), os, "The kernel version")?;
                 rule.disk_encryption_required = disk_encryption_required;
                 rule.firewall_required = firewall_required;
                 rule.screen_lock_required = screen_lock_required;
+                rule.antivirus_required = antivirus_required;
+                rule.ad_domain_joined_required = ad_domain_joined_required;
+                rule.security_update_max_age =
+                    validate_age(security_update_max_age, "The security update age")?;
             }
-            Self::Ios { min_os_version } => {
+            Self::Ios {
+                min_os_version,
+                screen_lock_required,
+                disk_encryption_required,
+            } => {
                 rule.min_os_version =
                     validate_version(min_os_version.as_ref(), os, "The iOS version")?;
+                rule.screen_lock_required = screen_lock_required;
+                rule.disk_encryption_required = disk_encryption_required;
             }
             Self::Android {
                 min_os_version,
                 device_integrity_required,
                 android_security_patch_level_max_age,
+                screen_lock_required,
+                disk_encryption_required,
             } => {
                 rule.min_os_version =
                     validate_version(min_os_version.as_ref(), os, "The Android version")?;
@@ -310,6 +362,8 @@ impl ApiOsRule {
                     android_security_patch_level_max_age,
                     "The security patch age",
                 )?;
+                rule.screen_lock_required = screen_lock_required;
+                rule.disk_encryption_required = disk_encryption_required;
             }
         }
         Ok(rule)
@@ -326,7 +380,7 @@ impl ApiOsRule {
                 screen_lock_required: rule.screen_lock_required,
                 antivirus_required: rule.antivirus_required,
                 ad_domain_joined_required: rule.ad_domain_joined_required,
-                windows_security_update_max_age: rule.windows_security_update_max_age,
+                windows_security_update_max_age: rule.security_update_max_age,
             },
             OsType::Macos => Self::Macos {
                 min_os_version: version(&rule.min_os_version),
@@ -334,20 +388,30 @@ impl ApiOsRule {
                 firewall_required: rule.firewall_required,
                 screen_lock_required: rule.screen_lock_required,
                 device_integrity_required: rule.device_integrity_required,
+                antivirus_required: rule.antivirus_required,
+                ad_domain_joined_required: rule.ad_domain_joined_required,
+                security_update_max_age: rule.security_update_max_age,
             },
             OsType::Linux => Self::Linux {
                 min_kernel_version: version(&rule.min_kernel_version),
                 disk_encryption_required: rule.disk_encryption_required,
                 firewall_required: rule.firewall_required,
                 screen_lock_required: rule.screen_lock_required,
+                antivirus_required: rule.antivirus_required,
+                ad_domain_joined_required: rule.ad_domain_joined_required,
+                security_update_max_age: rule.security_update_max_age,
             },
             OsType::Ios => Self::Ios {
                 min_os_version: version(&rule.min_os_version),
+                screen_lock_required: rule.screen_lock_required,
+                disk_encryption_required: rule.disk_encryption_required,
             },
             OsType::Android => Self::Android {
                 min_os_version: version(&rule.min_os_version),
                 device_integrity_required: rule.device_integrity_required,
                 android_security_patch_level_max_age: rule.android_security_patch_level_max_age,
+                screen_lock_required: rule.screen_lock_required,
+                disk_encryption_required: rule.disk_encryption_required,
             },
         }
     }
@@ -426,7 +490,14 @@ const fn opt(value: &'static str, label: &'static str) -> VersionOption {
     VersionOption { value, label }
 }
 
-/// Suggested versions for the web UI. Any dotted version is accepted; these are shortcuts.
+/// XGuard desktop client releases offered as a minimum version. Add new releases at the end.
+const DESKTOP_CLIENT_RELEASES: &[&str] = &["2.2.0", "2.3.0", "2.3.1"];
+/// XGuard mobile app releases offered as a minimum version. Add new releases at the end.
+const MOBILE_CLIENT_RELEASES: &[&str] = &["2.2.0", "2.3.0", "2.3.1"];
+
+/// Suggested versions for the web UI, shown as dropdown choices. Any valid version is still
+/// accepted (the web form has a "Custom" choice); these are shortcuts. Every `value` is in the
+/// canonical form core stores, so a stored requirement matches its catalog entry.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct VersionCatalog {
@@ -435,6 +506,17 @@ pub struct VersionCatalog {
     pub ios: Vec<VersionOption>,
     pub android: Vec<VersionOption>,
     pub linux_kernel: Vec<VersionOption>,
+    /// XGuard desktop client releases.
+    pub desktop_client: Vec<VersionOption>,
+    /// XGuard mobile app releases.
+    pub mobile_client: Vec<VersionOption>,
+}
+
+fn client_releases(releases: &'static [&'static str]) -> Vec<VersionOption> {
+    releases
+        .iter()
+        .map(|&release| opt(release, release))
+        .collect()
 }
 
 impl VersionCatalog {
@@ -476,6 +558,8 @@ impl VersionCatalog {
                 opt("6.6", "6.6 LTS"),
                 opt("6.12", "6.12 LTS"),
             ],
+            desktop_client: client_releases(DESKTOP_CLIENT_RELEASES),
+            mobile_client: client_releases(MOBILE_CLIENT_RELEASES),
         }
     }
 }
@@ -569,6 +653,94 @@ mod tests {
         assert!(validate_description(Some("bell\u{7}")).is_err());
         assert_eq!(validate_description(Some("   ")).unwrap(), None);
         assert!(validate_client_version(Some("2.2"), "v").is_err());
+    }
+
+    #[test]
+    fn new_platform_checks_round_trip() {
+        let policy = edit(json!([
+            {"os_type": "macos", "antivirus_required": true, "ad_domain_joined_required": true,
+             "security_update_max_age": 30},
+            {"os_type": "linux", "antivirus_required": true, "ad_domain_joined_required": true,
+             "security_update_max_age": 14},
+            {"os_type": "ios", "screen_lock_required": true, "disk_encryption_required": true},
+            {"os_type": "android", "screen_lock_required": true,
+             "disk_encryption_required": true, "android_security_patch_level_max_age": 90},
+            {"os_type": "windows", "windows_security_update_max_age": 7},
+        ]))
+        .unwrap();
+        let [windows, macos, linux, ios, android] = policy.os_rules.as_slice() else {
+            panic!("five rules expected");
+        };
+        assert_eq!(windows.security_update_max_age, Some(7));
+        assert_eq!(macos.antivirus_required, Some(true));
+        assert_eq!(macos.ad_domain_joined_required, Some(true));
+        assert_eq!(macos.security_update_max_age, Some(30));
+        assert_eq!(linux.antivirus_required, Some(true));
+        assert_eq!(linux.ad_domain_joined_required, Some(true));
+        assert_eq!(linux.security_update_max_age, Some(14));
+        assert_eq!(ios.screen_lock_required, Some(true));
+        assert_eq!(ios.disk_encryption_required, Some(true));
+        assert_eq!(android.screen_lock_required, Some(true));
+        assert_eq!(android.disk_encryption_required, Some(true));
+        assert_eq!(android.android_security_patch_level_max_age, Some(90));
+        for rule in &policy.os_rules {
+            assert_eq!(
+                ApiOsRule::from_db_rule(rule).into_db_rule(0).unwrap(),
+                *rule
+            );
+        }
+        // The Windows field keeps its API name.
+        let api = serde_json::to_value(ApiOsRule::from_db_rule(windows)).unwrap();
+        assert_eq!(api["windows_security_update_max_age"], 7);
+
+        assert!(edit(json!([{"os_type": "macos", "security_update_max_age": 0}])).is_err());
+        assert!(edit(json!([{"os_type": "linux", "security_update_max_age": 4000}])).is_err());
+        // Each OS only takes its own fields.
+        for case in [
+            json!({"os_type": "ios", "firewall_required": true}),
+            json!({"os_type": "android", "antivirus_required": true}),
+            json!({"os_type": "macos", "windows_security_update_max_age": 3}),
+            json!({"os_type": "linux", "device_integrity_required": true}),
+        ] {
+            assert!(
+                serde_json::from_value::<ApiOsRule>(case.clone()).is_err(),
+                "{case}"
+            );
+        }
+    }
+
+    #[test]
+    fn catalog_values_are_canonical() {
+        let catalog = VersionCatalog::new();
+        for options in [
+            &catalog.windows,
+            &catalog.macos,
+            &catalog.ios,
+            &catalog.android,
+            &catalog.linux_kernel,
+        ] {
+            assert!(!options.is_empty());
+            for option in options {
+                let parsed = DottedVersion::parse_strict(option.value).unwrap();
+                assert_eq!(parsed.canonical(), option.value);
+                assert!(!option.label.is_empty());
+            }
+        }
+        for options in [&catalog.desktop_client, &catalog.mobile_client] {
+            let values: Vec<&str> = options.iter().map(|o| o.value).collect();
+            assert_eq!(values, ["2.2.0", "2.3.0", "2.3.1"]);
+            for option in options {
+                assert_eq!(
+                    validate_client_version(Some(option.value), "v")
+                        .unwrap()
+                        .as_deref(),
+                    Some(option.value)
+                );
+            }
+        }
+        let json = serde_json::to_value(&catalog).unwrap();
+        assert_eq!(json["desktop_client"][2]["value"], "2.3.1");
+        assert_eq!(json["mobile_client"][0]["label"], "2.2.0");
     }
 
     #[test]

@@ -37,6 +37,9 @@ const posture: ApiDevicePosture = {
       disk_encryption_required: true,
       firewall_required: null,
       screen_lock_required: true,
+      antivirus_required: null,
+      ad_domain_joined_required: null,
+      security_update_max_age: null,
     },
   ],
   locations: [1, 2],
@@ -61,6 +64,7 @@ describe('posture policy form', () => {
     form.name = '  Office ';
     form.description = '   ';
     form.macos = true;
+    form.macos_version_choice = 'custom';
     form.macos_version = ' 14.5 ';
     form.macos_firewall = true;
     form.linux_disk_encryption = true; // ignored: Linux is not enabled
@@ -75,6 +79,9 @@ describe('posture policy form', () => {
         firewall_required: true,
         screen_lock_required: null,
         device_integrity_required: null,
+        antivirus_required: null,
+        ad_domain_joined_required: null,
+        security_update_max_age: null,
       },
     ]);
   });
@@ -83,11 +90,13 @@ describe('posture policy form', () => {
     const valid = { ...emptyForm(), name: 'Valid' };
     expect(formSchema.safeParse(valid).success).toBe(true);
     for (const bad of [
-      { windows_version: '11 23H2' },
-      { linux_kernel: '6.x' },
-      { min_desktop_client_version: '2.2' },
-      { windows_update_age: 0 },
-      { android_patch_age: 4000 },
+      { windows_version_choice: 'custom', windows_version: '11 23H2' },
+      { linux_kernel_choice: 'custom', linux_kernel: '6.x' },
+      { min_desktop_client_version_choice: 'custom', min_desktop_client_version: '2.2' },
+      { windows_update_age_choice: 'custom', windows_update_age: 0 },
+      { android_patch_age_choice: 'custom', android_patch_age: 4000 },
+      { macos_update_age_choice: 'custom', macos_update_age: null },
+      { ios_version_choice: 'custom', ios_version: '  ' },
       { name: '' },
     ]) {
       expect(
@@ -96,8 +105,19 @@ describe('posture policy form', () => {
       ).toBe(false);
     }
     expect(
-      formSchema.safeParse({ ...valid, min_desktop_client_version: '2.3.0-beta1' })
-        .success,
+      formSchema.safeParse({
+        ...valid,
+        min_desktop_client_version_choice: 'custom',
+        min_desktop_client_version: '2.3.0-beta1',
+      }).success,
+    ).toBe(true);
+    // A leftover custom value is ignored once another choice is picked.
+    expect(
+      formSchema.safeParse({
+        ...valid,
+        windows_version_choice: 'any',
+        windows_version: 'garbage',
+      }).success,
     ).toBe(true);
   });
 
@@ -119,7 +139,17 @@ describe('device posture facts', () => {
     expect(byLabel['Disk encryption']).toBe('Yes');
     expect(byLabel.Firewall).toBe('Unknown');
     expect(byLabel.Kernel).toBe('6.8.0');
-    expect(byLabel.Antivirus).toBeUndefined();
+    // Linux reports antivirus, domain and update age too now.
+    expect(byLabel.Antivirus).toBe('Unknown');
+    const ios = factRows({ os: 'ios', screen_lock_enabled: true, disk_encrypted: true });
+    const iosLabels = ios.map((row) => row.label);
+    expect(iosLabels).not.toContain('Firewall');
+    expect(iosLabels).not.toContain('Antivirus');
+    expect(ios.find((row) => row.label === 'Screen lock')?.value).toBe('Yes');
+    const android = factRows({ os: 'android', security_patch_date: '2026-10-05' });
+    expect(android.find((row) => row.label === 'Security patch level')?.value).toBe(
+      '2026-10-05',
+    );
     const windows = factRows({ os: 'windows', antivirus_enabled: false });
     expect(windows.find((row) => row.label === 'Antivirus')?.value).toBe('No');
   });

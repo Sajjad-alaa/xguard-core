@@ -26,12 +26,16 @@ import { SizedBox } from '../../../../shared/xguard-ui/components/SizedBox/Sized
 import { Snackbar } from '../../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../../shared/xguard-ui/types';
 import { isPresent } from '../../../../shared/xguard-ui/utils/isPresent';
+import { ageOptions, CHOICE_CUSTOM, versionOptions } from './choices';
 import {
+  type AgeField,
   emptyForm,
   type FormFields,
   formSchema,
   formToRequest,
+  MAX_AGE_DAYS,
   postureToForm,
+  type VersionField,
 } from './form';
 
 const modalName = ModalName.CEPostureCheck;
@@ -80,14 +84,6 @@ const errorMessage = (error: unknown) =>
     ? error.response.data.msg
     : m.posture_checks_save_failed();
 
-const examples = (options: DevicePostureVersionOption[]) =>
-  m.posture_checks_form_helper_versions({
-    examples: options
-      .slice(-3)
-      .map((option) => `${option.value} (${option.label})`)
-      .join(', '),
-  });
-
 type BoolField =
   | 'windows_disk_encryption'
   | 'windows_firewall'
@@ -98,10 +94,18 @@ type BoolField =
   | 'macos_firewall'
   | 'macos_screen_lock'
   | 'macos_integrity'
+  | 'macos_antivirus'
+  | 'macos_domain'
   | 'linux_disk_encryption'
   | 'linux_firewall'
   | 'linux_screen_lock'
-  | 'android_integrity';
+  | 'linux_antivirus'
+  | 'linux_domain'
+  | 'ios_screen_lock'
+  | 'ios_disk_encryption'
+  | 'android_integrity'
+  | 'android_screen_lock'
+  | 'android_disk_encryption';
 
 const ModalContent = ({
   posture,
@@ -109,8 +113,10 @@ const ModalContent = ({
   versions,
 }: OpenCEPostureCheckModal & Props) => {
   const [createdId, setCreatedId] = useState<number | null>(null);
+  // Built once per opened modal: a catalog refetch must not reset what the admin typed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above
   const defaultValues = useMemo(
-    (): FormFields => (posture ? postureToForm(posture) : emptyForm()),
+    (): FormFields => (posture ? postureToForm(posture, versions) : emptyForm()),
     [posture],
   );
 
@@ -165,12 +171,88 @@ const ModalContent = ({
     ios: s.values.ios,
     android: s.values.android,
   }));
+  // Only the dropdown choices decide which custom inputs are shown.
+  const values = useStore(form.store, (s) => ({
+    min_desktop_client_version_choice: s.values.min_desktop_client_version_choice,
+    min_mobile_client_version_choice: s.values.min_mobile_client_version_choice,
+    windows_version_choice: s.values.windows_version_choice,
+    macos_version_choice: s.values.macos_version_choice,
+    linux_kernel_choice: s.values.linux_kernel_choice,
+    ios_version_choice: s.values.ios_version_choice,
+    android_version_choice: s.values.android_version_choice,
+    windows_update_age_choice: s.values.windows_update_age_choice,
+    macos_update_age_choice: s.values.macos_update_age_choice,
+    linux_update_age_choice: s.values.linux_update_age_choice,
+    android_patch_age_choice: s.values.android_patch_age_choice,
+  }));
 
   const checkbox = (name: BoolField, text: string) => (
     <form.AppField name={name}>
       {(field) => <field.FormCheckbox text={text} />}
     </form.AppField>
   );
+  const choiceLabels = {
+    any: m.posture_checks_version_any(),
+    custom: m.posture_checks_form_choice_custom(),
+  };
+  const ageLabels = {
+    any: m.posture_checks_form_choice_any_age(),
+    custom: m.posture_checks_form_choice_custom(),
+    days: (days: number) => m.posture_checks_form_choice_days({ days }),
+  };
+  /** A version dropdown; "Custom…" reveals a text input for a version not in the list. */
+  const versionSelect = (
+    field: VersionField,
+    label: string,
+    options: DevicePostureVersionOption[] | undefined,
+    customHelper: string,
+  ) => (
+    <div className="choice-field">
+      <form.AppField name={`${field}_choice`}>
+        {(choice) => (
+          <choice.FormSelect
+            label={label}
+            options={versionOptions(options ?? [], choiceLabels)}
+          />
+        )}
+      </form.AppField>
+      {values[`${field}_choice`] === CHOICE_CUSTOM && (
+        <form.AppField name={field}>
+          {(custom) => (
+            <custom.FormInput
+              label={m.posture_checks_form_label_custom_version()}
+              helper={customHelper}
+            />
+          )}
+        </form.AppField>
+      )}
+    </div>
+  );
+  /** A day-count dropdown; "Custom…" reveals a number input. */
+  const ageSelect = (field: AgeField, label: string) => (
+    <div className="choice-field">
+      <form.AppField name={`${field}_choice`}>
+        {(choice) => <choice.FormSelect label={label} options={ageOptions(ageLabels)} />}
+      </form.AppField>
+      {values[`${field}_choice`] === CHOICE_CUSTOM && (
+        <form.AppField name={field}>
+          {(custom) => (
+            <custom.FormInput
+              type="number"
+              label={m.posture_checks_form_label_custom_days()}
+              helper={m.posture_checks_form_helper_custom_days({ max: MAX_AGE_DAYS })}
+            />
+          )}
+        </form.AppField>
+      )}
+    </div>
+  );
+  const help = (text: string) => <p className="os-rule-help">{text}</p>;
+  const clientHelper = m.posture_checks_form_helper_custom_client_version();
+  const osHelper = m.posture_checks_form_helper_custom_version();
+  const antivirus = m.posture_checks_condition_antivirus_edr();
+  const directory = m.posture_checks_condition_directory();
+  const updateAge = m.posture_checks_form_label_update_age();
   const disk = m.posture_checks_wizard_operating_systems_condition_disk_encryption();
   const firewall = m.posture_checks_condition_firewall();
   const screenLock = m.posture_checks_condition_screen_lock();
@@ -205,22 +287,18 @@ const ModalContent = ({
         <DescriptionBlock title={m.posture_checks_form_section_client()} />
         <SizedBox height={ThemeSpacing.Lg} />
         <div className="row">
-          <form.AppField name="min_desktop_client_version">
-            {(field) => (
-              <field.FormInput
-                label={m.posture_checks_form_label_desktop_version()}
-                helper={m.posture_checks_form_helper_client_version()}
-              />
-            )}
-          </form.AppField>
-          <form.AppField name="min_mobile_client_version">
-            {(field) => (
-              <field.FormInput
-                label={m.posture_checks_form_label_mobile_version()}
-                helper={m.posture_checks_form_helper_client_version()}
-              />
-            )}
-          </form.AppField>
+          {versionSelect(
+            'min_desktop_client_version',
+            m.posture_checks_form_label_desktop_version(),
+            versions.desktop_client,
+            clientHelper,
+          )}
+          {versionSelect(
+            'min_mobile_client_version',
+            m.posture_checks_form_label_mobile_version(),
+            versions.mobile_client,
+            clientHelper,
+          )}
         </div>
         <SizedBox height={ThemeSpacing.Lg} />
         <form.AppField name="allow_prerelease_client">
@@ -240,14 +318,12 @@ const ModalContent = ({
         </form.AppField>
         {enabled.windows && (
           <div className="os-rule">
-            <form.AppField name="windows_version">
-              {(field) => (
-                <field.FormInput
-                  label={m.posture_checks_form_label_os_version()}
-                  helper={examples(versions.windows)}
-                />
-              )}
-            </form.AppField>
+            {versionSelect(
+              'windows_version',
+              m.posture_checks_form_label_os_version(),
+              versions.windows,
+              osHelper,
+            )}
             {checkbox('windows_disk_encryption', disk)}
             {checkbox('windows_firewall', firewall)}
             {checkbox('windows_screen_lock', screenLock)}
@@ -259,14 +335,7 @@ const ModalContent = ({
               'windows_domain',
               m.posture_checks_wizard_operating_systems_condition_active_directory(),
             )}
-            <form.AppField name="windows_update_age">
-              {(field) => (
-                <field.FormInput
-                  type="number"
-                  label={m.posture_checks_form_label_update_age()}
-                />
-              )}
-            </form.AppField>
+            {ageSelect('windows_update_age', updateAge)}
           </div>
         )}
 
@@ -276,18 +345,20 @@ const ModalContent = ({
         </form.AppField>
         {enabled.macos && (
           <div className="os-rule">
-            <form.AppField name="macos_version">
-              {(field) => (
-                <field.FormInput
-                  label={m.posture_checks_form_label_os_version()}
-                  helper={examples(versions.macos)}
-                />
-              )}
-            </form.AppField>
+            {versionSelect(
+              'macos_version',
+              m.posture_checks_form_label_os_version(),
+              versions.macos,
+              osHelper,
+            )}
             {checkbox('macos_disk_encryption', disk)}
             {checkbox('macos_firewall', firewall)}
             {checkbox('macos_screen_lock', screenLock)}
             {checkbox('macos_integrity', integrity)}
+            {checkbox('macos_antivirus', antivirus)}
+            {checkbox('macos_domain', directory)}
+            {ageSelect('macos_update_age', updateAge)}
+            {help(m.posture_checks_form_help_macos())}
           </div>
         )}
 
@@ -297,17 +368,22 @@ const ModalContent = ({
         </form.AppField>
         {enabled.linux && (
           <div className="os-rule">
-            <form.AppField name="linux_kernel">
-              {(field) => (
-                <field.FormInput
-                  label={m.posture_checks_form_label_kernel_version()}
-                  helper={examples(versions.linux_kernel)}
-                />
-              )}
-            </form.AppField>
+            {versionSelect(
+              'linux_kernel',
+              m.posture_checks_form_label_kernel_version(),
+              versions.linux_kernel,
+              osHelper,
+            )}
             {checkbox('linux_disk_encryption', disk)}
             {checkbox('linux_firewall', firewall)}
             {checkbox('linux_screen_lock', screenLock)}
+            {checkbox('linux_antivirus', antivirus)}
+            {checkbox('linux_domain', directory)}
+            {ageSelect(
+              'linux_update_age',
+              m.posture_checks_form_label_linux_update_age(),
+            )}
+            {help(m.posture_checks_form_help_linux())}
           </div>
         )}
 
@@ -317,14 +393,18 @@ const ModalContent = ({
         </form.AppField>
         {enabled.ios && (
           <div className="os-rule">
-            <form.AppField name="ios_version">
-              {(field) => (
-                <field.FormInput
-                  label={m.posture_checks_form_label_os_version()}
-                  helper={examples(versions.ios)}
-                />
-              )}
-            </form.AppField>
+            {versionSelect(
+              'ios_version',
+              m.posture_checks_form_label_os_version(),
+              versions.ios,
+              osHelper,
+            )}
+            {checkbox('ios_screen_lock', m.posture_checks_condition_ios_passcode())}
+            {checkbox(
+              'ios_disk_encryption',
+              m.posture_checks_condition_ios_data_protection(),
+            )}
+            {help(m.posture_checks_form_help_ios())}
           </div>
         )}
 
@@ -334,23 +414,20 @@ const ModalContent = ({
         </form.AppField>
         {enabled.android && (
           <div className="os-rule">
-            <form.AppField name="android_version">
-              {(field) => (
-                <field.FormInput
-                  label={m.posture_checks_form_label_os_version()}
-                  helper={examples(versions.android)}
-                />
-              )}
-            </form.AppField>
+            {versionSelect(
+              'android_version',
+              m.posture_checks_form_label_os_version(),
+              versions.android,
+              osHelper,
+            )}
+            {checkbox('android_screen_lock', m.posture_checks_condition_android_lock())}
+            {checkbox(
+              'android_disk_encryption',
+              m.posture_checks_condition_android_encryption(),
+            )}
             {checkbox('android_integrity', integrity)}
-            <form.AppField name="android_patch_age">
-              {(field) => (
-                <field.FormInput
-                  type="number"
-                  label={m.posture_checks_form_label_patch_age()}
-                />
-              )}
-            </form.AppField>
+            {ageSelect('android_patch_age', m.posture_checks_form_label_patch_age())}
+            {help(m.posture_checks_form_help_android())}
           </div>
         )}
 

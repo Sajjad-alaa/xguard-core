@@ -189,7 +189,7 @@ fn client_version_rules() {
 #[test]
 fn update_and_patch_ages() {
     let mut windows = rule(OsType::Windows);
-    windows.windows_security_update_max_age = Some(30);
+    windows.security_update_max_age = Some(30);
     let mut facts = PostureFacts {
         os: Some(OsType::Windows),
         client_version: Some("2.2.0".into()),
@@ -248,4 +248,165 @@ fn broken_stored_requirement_fails_closed() {
     invalid_client_policy.posture.min_desktop_client_version = Some("not-a-semver".into());
     let result = evaluate(&[invalid_client_policy], Some(&linux_facts()), today());
     assert!(failures(&result).contains("version requirement is invalid"));
+}
+
+/// Facts of a current client (facts revision 2) on `os`.
+fn current_facts(os: OsType) -> PostureFacts {
+    PostureFacts {
+        os: Some(os),
+        client_version: Some("2.4.0".into()),
+        facts_revision: Some(super::facts::FACTS_REVISION_ALL_PLATFORMS),
+        ..Default::default()
+    }
+}
+
+fn desktop_rule(os: OsType) -> DevicePostureOsRule {
+    let mut rule = rule(os);
+    rule.antivirus_required = Some(true);
+    rule.ad_domain_joined_required = Some(true);
+    rule.security_update_max_age = Some(30);
+    rule
+}
+
+#[test]
+fn macos_and_linux_antivirus_directory_and_update_age() {
+    for os in [OsType::Macos, OsType::Linux] {
+        let policies = [policy("p", vec![desktop_rule(os)])];
+
+        // Pass.
+        let mut facts = current_facts(os);
+        facts.antivirus_enabled = Some(true);
+        facts.domain_joined = Some(true);
+        facts.security_update_age_days = Some(30);
+        assert!(
+            evaluate(&policies, Some(&facts), today()).is_pass(),
+            "{os:?}"
+        );
+
+        // Fail.
+        facts.antivirus_enabled = Some(false);
+        facts.domain_joined = Some(false);
+        facts.security_update_age_days = Some(45);
+        let result = evaluate(&policies, Some(&facts), today());
+        assert_eq!(
+            result.failures(),
+            [
+                "antivirus is required",
+                "directory domain membership is required",
+                "the last security update is 45 days old (at most 30 allowed)",
+            ],
+            "{os:?}"
+        );
+
+        // A current client that could not tell.
+        let facts = current_facts(os);
+        let result = evaluate(&policies, Some(&facts), today());
+        assert_eq!(
+            result.failures(),
+            [
+                "antivirus status could not be determined",
+                "directory domain membership status could not be determined",
+                "the last security update could not be determined",
+            ],
+            "{os:?}"
+        );
+
+        // An old client (no facts revision) does not report the new facts.
+        let mut old = current_facts(os);
+        old.facts_revision = None;
+        old.client_version = Some("2.3.1".into());
+        let result = evaluate(&policies, Some(&old), today());
+        assert_eq!(
+            result.failures(),
+            [
+                "this XGuard client is too old to report antivirus status; update the client",
+                "this XGuard client is too old to report directory domain membership status; \
+                 update the client",
+                "this XGuard client is too old to report the last security update; \
+                 update the client",
+            ],
+            "{os:?}"
+        );
+        // ... but a fact it does send is still evaluated.
+        old.antivirus_enabled = Some(true);
+        old.domain_joined = Some(true);
+        old.security_update_age_days = Some(1);
+        assert!(evaluate(&policies, Some(&old), today()).is_pass(), "{os:?}");
+    }
+}
+
+#[test]
+fn old_clients_pass_when_new_checks_are_not_enabled() {
+    for os in [OsType::Macos, OsType::Linux] {
+        let mut rule = rule(os);
+        rule.antivirus_required = Some(false);
+        rule.disk_encryption_required = Some(true);
+        let facts = PostureFacts {
+            os: Some(os),
+            client_version: Some("2.3.1".into()),
+            disk_encrypted: Some(true),
+            ..Default::default()
+        };
+        assert!(evaluate(&[policy("p", vec![rule])], Some(&facts), today()).is_pass());
+    }
+}
+
+#[test]
+fn windows_messages_are_unchanged_for_old_clients() {
+    let policies = [policy("p", vec![desktop_rule(OsType::Windows)])];
+    let facts = PostureFacts {
+        os: Some(OsType::Windows),
+        client_version: Some("2.3.1".into()),
+        ..Default::default()
+    };
+    let result = evaluate(&policies, Some(&facts), today());
+    assert_eq!(
+        result.failures(),
+        [
+            "antivirus status could not be determined",
+            "Active Directory domain membership status could not be determined",
+            "the last security update could not be determined",
+        ]
+    );
+}
+
+#[test]
+fn mobile_screen_lock_and_encryption() {
+    for os in [OsType::Ios, OsType::Android] {
+        let mut mobile = rule(os);
+        mobile.screen_lock_required = Some(true);
+        mobile.disk_encryption_required = Some(true);
+        let policies = [policy("p", vec![mobile])];
+
+        let mut facts = current_facts(os);
+        facts.screen_lock_enabled = Some(true);
+        facts.disk_encrypted = Some(true);
+        assert!(
+            evaluate(&policies, Some(&facts), today()).is_pass(),
+            "{os:?}"
+        );
+
+        facts.screen_lock_enabled = Some(false);
+        facts.disk_encrypted = Some(false);
+        let result = evaluate(&policies, Some(&facts), today());
+        assert_eq!(
+            result.failures(),
+            ["disk encryption is required", "screen lock is required"],
+            "{os:?}"
+        );
+
+        // Mobile apps without a facts revision already reported both facts, so a missing one
+        // is "could not be determined".
+        let mut old = current_facts(os);
+        old.facts_revision = None;
+        let result = evaluate(&policies, Some(&old), today());
+        assert_eq!(
+            result.failures(),
+            [
+                "disk encryption status could not be determined",
+                "screen lock status could not be determined",
+            ],
+            "{os:?}"
+        );
+    }
 }

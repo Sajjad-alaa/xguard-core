@@ -1,6 +1,7 @@
 import { m } from '../../paraglide/messages';
 import type { ApiDevicePosture } from '../api/types';
 import { IconKind } from '../xguard-ui/components/Icon';
+import { isPresent } from '../xguard-ui/utils/isPresent';
 
 type OsDetailRow = {
   label: string;
@@ -34,7 +35,7 @@ export const getWindowsSection = (
   if (rule.windows_security_update_max_age !== null) {
     rows.push({
       label: 'Update',
-      value: `Minimum ${rule.windows_security_update_max_age} month update`,
+      value: `Within ${rule.windows_security_update_max_age} days`,
     });
   }
   if (otherItems.length > 0) {
@@ -52,6 +53,8 @@ export const getMacosSection = (
   if (rule.firewall_required) otherItems.push('Firewall enabled');
   if (rule.screen_lock_required) otherItems.push('Screen lock enabled');
   if (rule.device_integrity_required) otherItems.push('Device integrity');
+  if (rule.antivirus_required) otherItems.push('Antivirus or EDR running');
+  if (rule.ad_domain_joined_required) otherItems.push('Joined to a directory domain');
 
   const rows: OsDetailRow[] = [];
   rows.push({
@@ -61,6 +64,9 @@ export const getMacosSection = (
         ? m.posture_checks_version_any()
         : `macOS ${rule.min_os_version} and higher`,
   });
+  if (isPresent(rule.security_update_max_age)) {
+    rows.push({ label: 'Update', value: `Within ${rule.security_update_max_age} days` });
+  }
   if (otherItems.length > 0) {
     rows.push({ label: 'Other', value: otherItems });
   }
@@ -75,6 +81,8 @@ export const getLinuxSection = (
   if (rule.disk_encryption_required) otherItems.push('Disk encryption enabled');
   if (rule.firewall_required) otherItems.push('Firewall enabled');
   if (rule.screen_lock_required) otherItems.push('Screen lock enabled');
+  if (rule.antivirus_required) otherItems.push('Antivirus or EDR running');
+  if (rule.ad_domain_joined_required) otherItems.push('Joined to a directory domain');
 
   const rows: OsDetailRow[] = [];
   rows.push({
@@ -84,6 +92,9 @@ export const getLinuxSection = (
         ? m.posture_checks_version_any()
         : `Kernel ${rule.min_kernel_version} and higher`,
   });
+  if (isPresent(rule.security_update_max_age)) {
+    rows.push({ label: 'Update', value: `Within ${rule.security_update_max_age} days` });
+  }
   if (otherItems.length > 0) {
     rows.push({ label: 'Other', value: otherItems });
   }
@@ -102,6 +113,12 @@ export const getIosSection = (
         ? m.posture_checks_version_any()
         : `iOS ${rule.min_os_version}+`,
   });
+  const otherItems: string[] = [];
+  if (rule.screen_lock_required) otherItems.push('Passcode set');
+  if (rule.disk_encryption_required) otherItems.push('Data protection on');
+  if (otherItems.length > 0) {
+    rows.push({ label: 'Other', value: otherItems });
+  }
 
   return { icon: IconKind.AppStore, name: 'iOS', rows };
 };
@@ -111,6 +128,8 @@ export const getAndroidSection = (
 ): OsSection => {
   const otherItems: string[] = [];
   if (rule.device_integrity_required) otherItems.push('Device integrity');
+  if (rule.screen_lock_required) otherItems.push('Secure lock screen set');
+  if (rule.disk_encryption_required) otherItems.push('Storage encrypted');
 
   const rows: OsDetailRow[] = [];
   rows.push({
