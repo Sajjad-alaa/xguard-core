@@ -59,8 +59,30 @@ fn validation() {
         "ftp://logs.example.org",
         "not a url",
         "https://user:pass@logs.example.org",
+        "http://169.254.169.254/latest/meta-data/",
+        "https://169.254.169.254/latest/meta-data/",
+        "http://[fe80::1]/ingest",
+        "http://[::ffff:169.254.169.254]/ingest",
+        "http://0.0.0.0:8080/ingest",
+        "http://metadata.google.internal/computeMetadata/v1/",
     ] {
         assert!(input(bad).into_config(None).is_err(), "{bad}");
+    }
+    for bad_syslog in [
+        "udp://169.254.169.254:514",
+        "tcp://0.0.0.0:514",
+        "tls://[fe80::1]:6514",
+        "udp://metadata.google.internal:514",
+    ] {
+        assert!(
+            StreamInput {
+                stream_type: StreamType::Syslog,
+                ..input(bad_syslog)
+            }
+            .into_config(None)
+            .is_err(),
+            "{bad_syslog}"
+        );
     }
     // Credentials only over HTTPS, or to this machine.
     let with_credentials = |url: &str| StreamInput {
@@ -261,7 +283,10 @@ async fn syslog_udp_tcp_and_tls_delivery() {
         },
     )
     .unwrap();
-    udp_out.send_batch(&[entry.clone()]).await.unwrap();
+    udp_out
+        .send_batch(std::slice::from_ref(&entry))
+        .await
+        .unwrap();
     let mut buf = [0u8; 4096];
     let (n, _) = udp_sock.recv_from(&mut buf).await.unwrap();
     let received = std::str::from_utf8(&buf[..n]).unwrap();
@@ -291,7 +316,10 @@ async fn syslog_udp_tcp_and_tls_delivery() {
             },
         )
         .unwrap();
-        tcp_out.send_batch(&[entry.clone()]).await.unwrap();
+        tcp_out
+            .send_batch(std::slice::from_ref(&entry))
+            .await
+            .unwrap();
     }
     let tcp_data = tcp_task.await.unwrap();
     let tcp_text = String::from_utf8(tcp_data).unwrap();
@@ -374,9 +402,11 @@ async fn syslog_udp_tcp_and_tls_delivery() {
 
 #[tokio::test]
 async fn http_json_and_splunk_hec_delivery() {
+    type CapturedRequest = (String, Option<String>, Option<String>, String);
+
     #[derive(Clone, Default)]
     struct Capture {
-        requests: Arc<Mutex<Vec<(String, Option<String>, Option<String>, String)>>>,
+        requests: Arc<Mutex<Vec<CapturedRequest>>>,
     }
 
     async fn handle(

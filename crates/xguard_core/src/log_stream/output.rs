@@ -14,7 +14,7 @@ use super::{
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub enum Output {
-    Http(HttpOutput),
+    Http(Box<HttpOutput>),
     Syslog(Box<SyslogSender>),
 }
 
@@ -27,7 +27,7 @@ pub struct HttpOutput {
 impl Output {
     pub fn from_target(stream_type: StreamType, config: StoredConfig) -> Result<Self, String> {
         if stream_type.is_http() {
-            Ok(Self::Http(HttpOutput::new(stream_type, config)?))
+            Ok(Self::Http(Box::new(HttpOutput::new(stream_type, config)?)))
         } else {
             Ok(Self::Syslog(Box::new(SyslogSender::new(&config)?)))
         }

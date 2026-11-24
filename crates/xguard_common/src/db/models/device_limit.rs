@@ -390,17 +390,10 @@ mod tests {
         options: PgConnectOptions,
     ) {
         let pool = setup_pool(options).await;
-        let user = User::new(
-            "alice",
-            Some("pass".into()),
-            "A",
-            "B",
-            "alice@example.com",
-            None,
-        )
-        .save(&pool)
-        .await
-        .unwrap();
+        let user = User::new("alice", Some("pass"), "A", "B", "alice@example.com", None)
+            .save(&pool)
+            .await
+            .unwrap();
 
         let mut tx = pool.begin().await.unwrap();
         DeviceLimitSettings {
@@ -494,17 +487,10 @@ mod tests {
     #[sqlx::test]
     async fn test_simultaneous_connection_limit(_: PgPoolOptions, options: PgConnectOptions) {
         let pool = setup_pool(options).await;
-        let user = User::new(
-            "bob",
-            Some("pass".into()),
-            "B",
-            "C",
-            "bob@example.com",
-            None,
-        )
-        .save(&pool)
-        .await
-        .unwrap();
+        let user = User::new("bob", Some("pass"), "B", "C", "bob@example.com", None)
+            .save(&pool)
+            .await
+            .unwrap();
         let dev1 = Device::new(
             "d1".into(),
             "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=".into(),

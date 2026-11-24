@@ -1,3 +1,4 @@
+import './style.scss';
 import { useMutation } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
@@ -85,6 +86,15 @@ export const LoginRadius = () => {
                 : m.login_radius_challenge_prompt())
             }
           />
+          {challenge.push && (
+            <>
+              <SizedBox height={ThemeSpacing.Sm} />
+              <div className="radius-push-status" role="status" aria-live="polite">
+                <span className="pulse-dot" aria-hidden="true" />
+                <span>{m.login_radius_polling_active()}</span>
+              </div>
+            </>
+          )}
           <SizedBox height={ThemeSpacing.Md} />
         </>
       )}
@@ -105,13 +115,29 @@ export const LoginRadius = () => {
           onChange={(val) => setCode(val == null ? '' : String(val))}
         />
         <SizedBox height={ThemeSpacing.Lg} />
-        <Button
-          type="submit"
-          size="big"
-          loading={isPending}
-          text={m.controls_submit()}
-          data-testid="submit-radius"
-        />
+        <div className="radius-actions">
+          <Button
+            type="submit"
+            size="big"
+            loading={isPending}
+            text={m.controls_submit()}
+            data-testid="submit-radius"
+          />
+          {!challenge?.push && (
+            <Button
+              type="button"
+              variant="outlined"
+              size="big"
+              disabled={isPending}
+              text={m.login_radius_send_challenge()}
+              data-testid="trigger-radius-challenge"
+              onClick={() => {
+                setErrorMsg(null);
+                mutate({ code: '' });
+              }}
+            />
+          )}
+        </div>
       </form>
       <MfaLinks />
     </LoginPage>

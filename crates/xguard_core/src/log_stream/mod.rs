@@ -435,7 +435,11 @@ struct Secrets {
 
 impl Secrets {
     /// A new secret: `None` keeps the stored one, an empty string removes it.
-    fn pick(&mut self, new: Option<String>, stored: fn(&StoredConfig) -> &Option<String>) -> Option<String> {
+    fn pick(
+        &mut self,
+        new: Option<String>,
+        stored: fn(&StoredConfig) -> &Option<String>,
+    ) -> Option<String> {
         match new {
             Some(value) if value.trim().is_empty() => None,
             Some(value) => Some(value.trim().to_owned()),
@@ -541,6 +545,36 @@ impl StreamInput {
             return Err(invalid(
                 "Put credentials in the username and password fields, not in the URL.",
             ));
+        }
+        // Block cloud metadata / link-local / unspecified destinations (SSRF hardening).
+        // Note: `url::Url` only parses IP literals into `Host::Ipv4` for special schemes
+        // (http/https), whereas syslog schemes (`udp`, `tcp`, `tls`) yield `Host::Domain`.
+        if let Some(host) = url.host() {
+            let is_blocked_ip = |ip: std::net::IpAddr| match ip {
+                std::net::IpAddr::V4(v4) => v4.is_link_local() || v4.is_unspecified(),
+                std::net::IpAddr::V6(v6) => {
+                    v6.is_unspecified()
+                        || (v6.segments()[0] & 0xffc0) == 0xfe80
+                        || v6
+                            .to_ipv4_mapped()
+                            .is_some_and(|v4| v4.is_link_local() || v4.is_unspecified())
+                }
+            };
+            let blocked = match host {
+                url::Host::Ipv4(ip) => is_blocked_ip(std::net::IpAddr::V4(ip)),
+                url::Host::Ipv6(ip) => is_blocked_ip(std::net::IpAddr::V6(ip)),
+                url::Host::Domain(domain) => {
+                    let bare = domain.trim_start_matches('[').trim_end_matches(']');
+                    bare.eq_ignore_ascii_case("metadata.google.internal")
+                        || bare.eq_ignore_ascii_case("metadata.goog")
+                        || bare.parse::<std::net::IpAddr>().is_ok_and(is_blocked_ip)
+                }
+            };
+            if blocked {
+                return Err(invalid(
+                    "Link-local, unspecified, and cloud metadata addresses are not allowed.",
+                ));
+            }
         }
         if stream_type == StreamType::SplunkHec && matches!(url.path(), "" | "/") {
             url.set_path(SPLUNK_EVENT_PATH);
@@ -683,20 +717,20 @@ impl StreamInput {
                 return Err(invalid("The syslog facility is a number from 0 to 23."));
             }
             options.app_name = non_empty(options.app_name);
-            if let Some(app_name) = &options.app_name {
-                if app_name.len() > MAX_APP_NAME_BYTES || !is_print_ascii(app_name) {
-                    return Err(invalid(
-                        "Use an app name of up to 48 ASCII characters without spaces.",
-                    ));
-                }
+            if let Some(app_name) = &options.app_name
+                && (app_name.len() > MAX_APP_NAME_BYTES || !is_print_ascii(app_name))
+            {
+                return Err(invalid(
+                    "Use an app name of up to 48 ASCII characters without spaces.",
+                ));
             }
             options.hostname = non_empty(options.hostname);
-            if let Some(hostname) = &options.hostname {
-                if hostname.len() > MAX_HOSTNAME_BYTES || !is_print_ascii(hostname) {
-                    return Err(invalid(
-                        "Use a host name of up to 255 ASCII characters without spaces.",
-                    ));
-                }
+            if let Some(hostname) = &options.hostname
+                && (hostname.len() > MAX_HOSTNAME_BYTES || !is_print_ascii(hostname))
+            {
+                return Err(invalid(
+                    "Use a host name of up to 255 ASCII characters without spaces.",
+                ));
             }
             Some(options)
         } else {

@@ -1114,25 +1114,35 @@ pub async fn radius_code(
     };
 
     let username = user.username.clone();
-    let should_charge = !data.poll && !data.code.is_empty();
+    // Charge every non-poll RADIUS submission (including empty-code SMS/push challenge triggers)
+    // so an authenticated password session cannot flood the upstream RADIUS server or SMS gateway.
+    let should_charge = !data.poll;
     if should_charge {
         charge_login_attempt(&appstate.pool, &username).await?;
     }
 
-    let pending =
-        xguard_common::db::models::radius::WebRadiusChallenge::find_active(&appstate.pool, &session.id)
-            .await?;
+    let pending = xguard_common::db::models::radius::WebRadiusChallenge::find_active(
+        &appstate.pool,
+        &session.id,
+    )
+    .await?;
     if data.poll && (!settings.push_enabled || pending.is_none()) {
         return Err(WebError::BadRequest(
             "No active RADIUS push challenge for this session".into(),
         ));
     }
+    if data.poll && !crate::radius::poll_guard::allow_poll(&format!("web:{}", session.id)) {
+        return Err(WebError::Http(StatusCode::TOO_MANY_REQUESTS));
+    }
 
-    let radius_user = settings.username_format.resolve(&user.username, &user.email);
+    let radius_user = settings
+        .username_format
+        .resolve(&user.username, &user.email);
     let password = if data.poll { "" } else { data.code.as_str() };
     let state_bytes = pending.as_ref().map(|c| c.state.as_slice());
 
-    match crate::radius::client::authenticate(&client_cfg, radius_user, password, state_bytes).await {
+    match crate::radius::client::authenticate(&client_cfg, radius_user, password, state_bytes).await
+    {
         Ok(crate::radius::client::RadiusOutcome::Accept { .. }) => {
             let _ = xguard_common::db::models::radius::WebRadiusChallenge::delete(
                 &appstate.pool,
@@ -1199,7 +1209,9 @@ pub async fn radius_code(
                 chrono::Duration::minutes(5),
             )
             .await?;
-            if should_charge {
+            // Only refund the throttle slot on Challenge when the user actually provided a code;
+            // empty-code challenge triggers keep their charge to rate-limit SMS/push bombing.
+            if should_charge && !data.code.is_empty() {
                 refund_login_attempt(&appstate.pool, &username).await?;
             }
             Ok((
