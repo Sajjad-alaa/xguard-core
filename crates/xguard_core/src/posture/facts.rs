@@ -14,6 +14,12 @@ use super::version::{DottedVersion, MAX_VERSION_LEN, parse_client_version};
 const MAX_NAME_LEN: usize = 128;
 /// Ten years: a larger update age is nonsense and is dropped.
 const MAX_AGE_DAYS: u32 = 3650;
+/// Highest facts revision a client can claim; larger values are dropped.
+const MAX_FACTS_REVISION: u32 = 1000;
+
+/// The facts revision of clients that report every fact their platform can detect: antivirus,
+/// directory membership and update age on macOS and Linux as well as Windows.
+pub const FACTS_REVISION_ALL_PLATFORMS: u32 = 2;
 
 /// Validated posture facts, also the JSON stored in `device_posture_snapshot.facts`.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
@@ -34,6 +40,10 @@ pub struct PostureFacts {
     pub security_patch_date: Option<NaiveDate>,
     /// When the client says it collected the facts (Unix seconds, client clock).
     pub collected_at: Option<i64>,
+    /// Which set of facts the client knows how to report; `None` for older clients (and for
+    /// snapshots stored before the field existed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub facts_revision: Option<u32>,
 }
 
 /// Keeps a version-like string only when it is short, printable ASCII and starts with a number.
@@ -95,7 +105,17 @@ impl PostureFacts {
                 .filter(|days| *days <= MAX_AGE_DAYS),
             security_patch_date,
             collected_at,
+            facts_revision: (1..=MAX_FACTS_REVISION)
+                .contains(&facts.facts_revision)
+                .then_some(facts.facts_revision),
         }
+    }
+
+    /// Whether the client predates `revision`, so a missing fact means "too old to report it"
+    /// rather than "could not be determined".
+    #[must_use]
+    pub fn predates(&self, revision: u32) -> bool {
+        self.facts_revision.unwrap_or(1) < revision
     }
 
     /// The facts as stored JSON.
@@ -131,6 +151,7 @@ mod tests {
             security_update_age_days: Some(4),
             security_patch_date: Some("2026-10-05".into()),
             collected_at: 1_790_000_000,
+            facts_revision: 2,
         }
     }
 
@@ -147,6 +168,8 @@ mod tests {
             facts.security_patch_date,
             NaiveDate::from_ymd_opt(2026, 10, 5)
         );
+        assert_eq!(facts.facts_revision, Some(2));
+        assert!(!facts.predates(FACTS_REVISION_ALL_PLATFORMS));
         let json = facts.to_json();
         assert_eq!(PostureFacts::from_json(&json), Some(facts));
         assert!(json.to_string().len() < 1024);
@@ -163,7 +186,10 @@ mod tests {
         raw.security_update_age_days = Some(u32::MAX);
         raw.security_patch_date = Some("2026-13-40".into());
         raw.collected_at = -5;
+        raw.facts_revision = u32::MAX;
         let facts = PostureFacts::from_proto(&raw);
+        assert_eq!(facts.facts_revision, None);
+        assert!(facts.predates(FACTS_REVISION_ALL_PLATFORMS));
         assert_eq!(facts.os, None);
         assert_eq!(facts.os_version, None);
         assert_eq!(facts.kernel_version, None);
@@ -175,5 +201,21 @@ mod tests {
         assert!(name.starts_with("Evil"));
         assert!(name.chars().count() <= MAX_NAME_LEN);
         assert!(!name.chars().any(char::is_control));
+    }
+
+    #[test]
+    fn old_clients_and_snapshots_have_no_revision() {
+        let mut raw = proto();
+        raw.facts_revision = 0;
+        let facts = PostureFacts::from_proto(&raw);
+        assert_eq!(facts.facts_revision, None);
+        assert!(facts.predates(FACTS_REVISION_ALL_PLATFORMS));
+        // Stored without the field: still readable, and the JSON does not grow.
+        let json = facts.to_json();
+        assert!(json.get("facts_revision").is_none());
+        let stored = serde_json::json!({"os": "macos", "client_version": "2.3.1"});
+        let facts = PostureFacts::from_json(&stored).unwrap();
+        assert_eq!(facts.facts_revision, None);
+        assert_eq!(facts.os, Some(OsType::Macos));
     }
 }

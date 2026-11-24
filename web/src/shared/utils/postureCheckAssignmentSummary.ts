@@ -26,6 +26,22 @@ const getOsLine = (
   }
 };
 
+const line = (
+  show: boolean | null | undefined,
+  text: () => string,
+): SummaryLine | null => (show ? { text: String(text()) } : null);
+
+const updateLine = (days: number | null | undefined): SummaryLine | null =>
+  days === null || days === undefined
+    ? null
+    : {
+        text: String(
+          m.posture_checks_wizard_operating_systems_windows_security_updates_within_days({
+            days,
+          }),
+        ),
+      };
+
 export const getPostureCheckAssignmentSummarySections = (
   postureCheck: ApiDevicePosture,
 ): SummarySection[] => {
@@ -113,6 +129,9 @@ export const getPostureCheckAssignmentSummarySections = (
                 ),
               }
             : null,
+          line(rule.antivirus_required, m.posture_checks_condition_antivirus_edr),
+          line(rule.ad_domain_joined_required, m.posture_checks_condition_directory),
+          updateLine(rule.security_update_max_age),
         ].filter((line): line is SummaryLine => line !== null);
 
         if (lines.length > 0) {
@@ -143,6 +162,9 @@ export const getPostureCheckAssignmentSummarySections = (
                 text: String(m.posture_checks_condition_screen_lock()),
               }
             : null,
+          line(rule.antivirus_required, m.posture_checks_condition_antivirus_edr),
+          line(rule.ad_domain_joined_required, m.posture_checks_condition_directory),
+          updateLine(rule.security_update_max_age),
         ].filter((line): line is SummaryLine => line !== null);
 
         if (lines.length > 0) {
@@ -154,7 +176,14 @@ export const getPostureCheckAssignmentSummarySections = (
         break;
       }
       case 'ios': {
-        const lines = [getOsLine(rule.os_type, rule.min_os_version)];
+        const lines = [
+          getOsLine(rule.os_type, rule.min_os_version),
+          line(rule.screen_lock_required, m.posture_checks_condition_ios_passcode),
+          line(
+            rule.disk_encryption_required,
+            m.posture_checks_condition_ios_data_protection,
+          ),
+        ].filter((line): line is SummaryLine => line !== null);
 
         if (lines.length > 0) {
           sections.push({
@@ -174,6 +203,11 @@ export const getPostureCheckAssignmentSummarySections = (
                 ),
               }
             : null,
+          line(rule.screen_lock_required, m.posture_checks_condition_android_lock),
+          line(
+            rule.disk_encryption_required,
+            m.posture_checks_condition_android_encryption,
+          ),
         ].filter((line): line is SummaryLine => line !== null);
 
         if (lines.length > 0) {

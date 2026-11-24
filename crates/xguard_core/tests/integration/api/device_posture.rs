@@ -106,7 +106,7 @@ async fn test_device_posture_api(_: PgPoolOptions, options: PgConnectOptions) {
     let response = client
         .post("/api/v1/device-posture")
         .json(
-            &json!({"name": "ok", "os_rules": [{"os_type": "linux", "antivirus_required": true}]}),
+            &json!({"name": "ok", "os_rules": [{"os_type": "linux", "device_integrity_required": true}]}),
         )
         .send()
         .await;
@@ -322,6 +322,106 @@ async fn test_device_posture_api(_: PgPoolOptions, options: PgConnectOptions) {
         .send()
         .await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test]
+async fn test_device_posture_all_platform_checks(_: PgPoolOptions, options: PgConnectOptions) {
+    let pool = setup_pool(options).await;
+    let (mut client, _state) = make_test_client(pool.clone()).await;
+    authenticate_admin(&mut client).await;
+
+    // The catalog offers client releases for the dropdowns.
+    let response = client.get("/api/v1/device-posture/versions").send().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let catalog: Value = response.json().await;
+    for list in ["desktop_client", "mobile_client"] {
+        let values: Vec<&str> = catalog[list]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|option| option["value"].as_str().unwrap())
+            .collect();
+        assert_eq!(values, ["2.2.0", "2.3.0", "2.3.1"], "{list}");
+    }
+    assert_eq!(catalog["windows"][0]["label"], "Windows 10 22H2");
+
+    let body = json!({
+        "name": "Everywhere",
+        "min_mobile_client_version": "2.3.1",
+        "os_rules": [
+            {"os_type": "windows", "windows_security_update_max_age": 30, "antivirus_required": true},
+            {"os_type": "macos", "antivirus_required": true, "ad_domain_joined_required": true,
+             "security_update_max_age": 60},
+            {"os_type": "linux", "antivirus_required": true, "ad_domain_joined_required": true,
+             "security_update_max_age": 14},
+            {"os_type": "ios", "screen_lock_required": true, "disk_encryption_required": true},
+            {"os_type": "android", "screen_lock_required": true, "disk_encryption_required": true,
+             "android_security_patch_level_max_age": 90},
+        ],
+    });
+    let response = client
+        .post("/api/v1/device-posture")
+        .json(&body)
+        .send()
+        .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let created: Value = response.json().await;
+    let id = created["id"].as_i64().unwrap();
+
+    let response = client
+        .get(format!("/api/v1/device-posture/{id}"))
+        .send()
+        .await;
+    let stored: Value = response.json().await;
+    let rule = |os: &str| {
+        stored["os_rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|rule| rule["os_type"] == os)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(rule("windows")["windows_security_update_max_age"], 30);
+    assert!(rule("windows").get("security_update_max_age").is_none());
+    for os in ["macos", "linux"] {
+        assert_eq!(rule(os)["antivirus_required"], true, "{os}");
+        assert_eq!(rule(os)["ad_domain_joined_required"], true, "{os}");
+    }
+    assert_eq!(rule("macos")["security_update_max_age"], 60);
+    assert_eq!(rule("linux")["security_update_max_age"], 14);
+    for os in ["ios", "android"] {
+        assert_eq!(rule(os)["screen_lock_required"], true, "{os}");
+        assert_eq!(rule(os)["disk_encryption_required"], true, "{os}");
+    }
+    assert_eq!(rule("android")["android_security_patch_level_max_age"], 90);
+
+    // Stored in the renamed column, which keeps the 1-3650 day range.
+    let ages: Vec<(String, Option<i32>)> = sqlx::query_as(
+        "SELECT os_type::text, security_update_max_age FROM device_posture_os_rule \
+         WHERE posture_id = $1 ORDER BY device_posture_os_rule.os_type",
+    )
+    .bind(id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        ages,
+        [
+            ("windows".into(), Some(30)),
+            ("macos".into(), Some(60)),
+            ("linux".into(), Some(14)),
+            ("ios".into(), None),
+            ("android".into(), None),
+        ]
+    );
+    let out_of_range = sqlx::query(
+        "UPDATE device_posture_os_rule SET security_update_max_age = 0 WHERE posture_id = $1",
+    )
+    .bind(id)
+    .execute(&pool)
+    .await;
+    assert!(out_of_range.is_err());
 }
 
 #[sqlx::test]

@@ -15,6 +15,9 @@ const text = (value: string | number | null | undefined) =>
     ? m.posture_device_fact_unknown()
     : String(value);
 
+const isDesktop = (os: DevicePostureFacts['os'] | undefined) =>
+  os === 'windows' || os === 'macos' || os === 'linux';
+
 /** Readable rows for the facts a client reported. */
 export const factRows = (facts: Partial<DevicePostureFacts>): FactRow[] => [
   { label: m.posture_device_fact_os(), value: text(facts.os_name ?? facts.os) },
@@ -24,9 +27,11 @@ export const factRows = (facts: Partial<DevicePostureFacts>): FactRow[] => [
     : []),
   { label: m.posture_device_fact_client(), value: text(facts.client_version) },
   { label: m.posture_device_fact_disk(), value: flag(facts.disk_encrypted) },
-  { label: m.posture_device_fact_firewall(), value: flag(facts.firewall_enabled) },
+  ...(facts.os === 'ios' || facts.os === 'android'
+    ? []
+    : [{ label: m.posture_device_fact_firewall(), value: flag(facts.firewall_enabled) }]),
   { label: m.posture_device_fact_screen_lock(), value: flag(facts.screen_lock_enabled) },
-  ...(facts.os === 'windows'
+  ...(isDesktop(facts.os)
     ? [
         {
           label: m.posture_device_fact_antivirus(),
@@ -41,5 +46,13 @@ export const factRows = (facts: Partial<DevicePostureFacts>): FactRow[] => [
     : []),
   ...(facts.os === 'macos' || facts.os === 'android'
     ? [{ label: m.posture_device_fact_integrity(), value: flag(facts.device_integrity) }]
+    : []),
+  ...(facts.os === 'android'
+    ? [
+        {
+          label: m.posture_device_fact_patch_date(),
+          value: text(facts.security_patch_date),
+        },
+      ]
     : []),
 ];

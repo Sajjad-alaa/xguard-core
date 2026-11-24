@@ -93,8 +93,8 @@ pub struct DevicePostureOsRule {
     pub antivirus_required: Option<bool>,
     pub ad_domain_joined_required: Option<bool>,
     pub device_integrity_required: Option<bool>,
-    /// Maximum age in days of the last Windows security update.
-    pub windows_security_update_max_age: Option<i32>,
+    /// Maximum age in days of the last OS security update (Windows, macOS, Linux).
+    pub security_update_max_age: Option<i32>,
     /// Maximum age in days of the Android security patch level.
     pub android_security_patch_level_max_age: Option<i32>,
 }
@@ -113,7 +113,7 @@ macro_rules! os_rule_columns {
         "posture_id, os_type, min_os_version, min_kernel_version, disk_encryption_required, \
          firewall_required, screen_lock_required, antivirus_required, \
          ad_domain_joined_required, device_integrity_required, \
-         windows_security_update_max_age, android_security_patch_level_max_age"
+         security_update_max_age, android_security_patch_level_max_age"
     };
 }
 
@@ -235,7 +235,7 @@ impl DevicePosture<Id> {
                 "INSERT INTO device_posture_os_rule (posture_id, os_type, min_os_version, \
                  min_kernel_version, disk_encryption_required, firewall_required, \
                  screen_lock_required, antivirus_required, ad_domain_joined_required, \
-                 device_integrity_required, windows_security_update_max_age, \
+                 device_integrity_required, security_update_max_age, \
                  android_security_patch_level_max_age) \
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
             )
@@ -249,7 +249,7 @@ impl DevicePosture<Id> {
             .bind(rule.antivirus_required)
             .bind(rule.ad_domain_joined_required)
             .bind(rule.device_integrity_required)
-            .bind(rule.windows_security_update_max_age)
+            .bind(rule.security_update_max_age)
             .bind(rule.android_security_patch_level_max_age)
             .execute(&mut *conn)
             .await?;

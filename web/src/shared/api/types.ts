@@ -1215,6 +1215,9 @@ export type ApiDevicePostureOsRule =
       firewall_required: boolean | null;
       screen_lock_required: boolean | null;
       device_integrity_required: boolean | null;
+      antivirus_required?: boolean | null;
+      ad_domain_joined_required?: boolean | null;
+      security_update_max_age?: number | null;
     }
   | {
       os_type: 'linux';
@@ -1222,16 +1225,23 @@ export type ApiDevicePostureOsRule =
       disk_encryption_required: boolean | null;
       firewall_required: boolean | null;
       screen_lock_required: boolean | null;
+      antivirus_required?: boolean | null;
+      ad_domain_joined_required?: boolean | null;
+      security_update_max_age?: number | null;
     }
   | {
       os_type: 'ios';
       min_os_version: string | null;
+      screen_lock_required?: boolean | null;
+      disk_encryption_required?: boolean | null;
     }
   | {
       os_type: 'android';
       min_os_version: string | null;
       device_integrity_required: boolean | null;
       android_security_patch_level_max_age: number | null;
+      screen_lock_required?: boolean | null;
+      disk_encryption_required?: boolean | null;
     };
 
 export type DevicePostureOsType = ApiDevicePostureOsRule['os_type'];
@@ -1270,6 +1280,10 @@ export interface DevicePostureVersionCatalog {
   ios: DevicePostureVersionOption[];
   android: DevicePostureVersionOption[];
   linux_kernel: DevicePostureVersionOption[];
+  /** XGuard desktop client releases. */
+  desktop_client?: DevicePostureVersionOption[];
+  /** XGuard mobile app releases. */
+  mobile_client?: DevicePostureVersionOption[];
 }
 
 /** Facts a client reported about its device: an attestation, not proof. */
@@ -1288,6 +1302,8 @@ export interface DevicePostureFacts {
   security_update_age_days: number | null;
   security_patch_date: string | null;
   collected_at: number | null;
+  /** Which set of facts the client knows how to report; missing for older clients. */
+  facts_revision?: number | null;
 }
 
 export interface DevicePostureSnapshot {
