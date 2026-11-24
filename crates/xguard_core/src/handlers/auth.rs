@@ -1131,6 +1131,9 @@ pub async fn radius_code(
             "No active RADIUS push challenge for this session".into(),
         ));
     }
+    if data.poll && !crate::radius::poll_guard::allow_poll(&format!("web:{}", session.id)) {
+        return Err(WebError::Http(StatusCode::TOO_MANY_REQUESTS));
+    }
 
     let radius_user = settings
         .username_format

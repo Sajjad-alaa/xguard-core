@@ -586,6 +586,12 @@ impl MfaEngine {
                     });
                 }
             };
+            if is_poll
+                && !crate::radius::poll_guard::allow_poll(&format!("vpn:{}", session.id))
+            {
+                // Too soon after the previous poll: still waiting, without asking RADIUS again.
+                return Ok(FinishOutcome::AwaitingExternal);
+            }
 
             let radius_user = settings
                 .username_format

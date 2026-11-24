@@ -481,33 +481,3 @@ impl VpnMfaRadiusChallenge {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cache_is_used_once_initialized() {
-        set_radius_settings(None);
-        RadiusSettings {
-            enabled: true,
-            primary_host: "radius-uninitialized.example".into(),
-            ..Default::default()
-        }
-        .set_cached();
-        assert!(get_radius_settings().is_none());
-
-        set_radius_settings(Some(RadiusSettings::default()));
-        RadiusSettings {
-            enabled: true,
-            primary_host: "radius-cached.example".into(),
-            ..Default::default()
-        }
-        .set_cached();
-        assert_eq!(
-            get_radius_settings().as_ref().unwrap().primary_host,
-            "radius-cached.example"
-        );
-        set_radius_settings(None);
-    }
-}

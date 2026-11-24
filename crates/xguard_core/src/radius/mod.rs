@@ -2,6 +2,7 @@
 
 pub mod client;
 pub mod packet;
+pub(crate) mod poll_guard;
 
 #[cfg(test)]
 mod tests;
