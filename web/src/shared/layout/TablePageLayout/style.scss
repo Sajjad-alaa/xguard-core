@@ -1,4 +1,12 @@
 .table-page-layout {
+  // Every direct child spans the full width. Without this, anything that isn't one of the
+  // classes below (a page description, a summary card, a second table) lands in the first of
+  // the 12 grid columns and is squeezed to a twelfth of the page.
+  & > * {
+    grid-column: 1 / 13;
+    min-width: 0;
+  }
+
   .table-skeleton-wrapper,
   .flexible-empty-state,
   .table-top,
