@@ -453,9 +453,7 @@ impl MfaEngine {
                     | VpnClientMfaMethod::Radius
             ) | (
                 Some(StepCredential::Code(_)),
-                VpnClientMfaMethod::Totp
-                    | VpnClientMfaMethod::Email
-                    | VpnClientMfaMethod::Radius,
+                VpnClientMfaMethod::Totp | VpnClientMfaMethod::Email | VpnClientMfaMethod::Radius,
             ) | (
                 Some(StepCredential::BiometricSignature(_)),
                 VpnClientMfaMethod::Biometric
@@ -478,6 +476,26 @@ impl MfaEngine {
         {
             debug!("Throttled a poll of MFA session {}", session.id);
             return Ok(FinishOutcome::AwaitingExternal);
+        }
+
+        let is_empty_radius_trigger = method == VpnClientMfaMethod::Radius
+            && matches!(credential.as_ref(), Some(StepCredential::Code(c)) if c.is_empty());
+        if is_empty_radius_trigger {
+            let init_key = throttle_key(session.location_id, session.device_id);
+            if !ThrottleScope::VpnMfaInitiate
+                .hit(&self.pool, &init_key)
+                .await
+                .map_err(|err| {
+                    error!("Failed to charge a RADIUS challenge trigger: {err}");
+                    StepFinishError::Internal
+                })?
+            {
+                warn!(
+                    "User {} exceeded RADIUS challenge trigger limit for device {} at location {}",
+                    ctx.user.username, ctx.device.id, ctx.location.name
+                );
+                return Err(StepFinishError::AttemptLimit);
+            }
         }
 
         let charge_key = ((is_code_method(method)
@@ -533,21 +551,23 @@ impl MfaEngine {
                     error!("Failed to load RADIUS settings: {err}");
                     StepFinishError::Internal
                 })?;
-            let Some(client_cfg) = crate::radius::client::RadiusClientConfig::from_settings(&settings)
-                .filter(|_| settings.is_vpn_mfa_ready())
+            let Some(client_cfg) =
+                crate::radius::client::RadiusClientConfig::from_settings(&settings)
+                    .filter(|_| settings.is_vpn_mfa_ready())
             else {
                 return Err(StepFinishError::Unauthorized);
             };
-            let pending = xguard_common::db::models::radius::VpnMfaRadiusChallenge::find_for_attempt(
-                &self.pool,
-                session.id,
-                &attempt_id,
-            )
-            .await
-            .map_err(|err| {
-                error!("Failed to load pending RADIUS challenge: {err}");
-                StepFinishError::Internal
-            })?;
+            let pending =
+                xguard_common::db::models::radius::VpnMfaRadiusChallenge::find_for_attempt(
+                    &self.pool,
+                    session.id,
+                    &attempt_id,
+                )
+                .await
+                .map_err(|err| {
+                    error!("Failed to load pending RADIUS challenge: {err}");
+                    StepFinishError::Internal
+                })?;
 
             let is_poll = credential.is_none();
             let password = match &credential {
@@ -572,13 +592,17 @@ impl MfaEngine {
                 .resolve(&ctx.user.username, &ctx.user.email);
             let state_bytes = pending.as_ref().map(|c| c.state.as_slice());
 
-            match crate::radius::client::authenticate(&client_cfg, radius_user, password, state_bytes)
-                .await
+            match crate::radius::client::authenticate(
+                &client_cfg,
+                radius_user,
+                password,
+                state_bytes,
+            )
+            .await
             {
                 Ok(crate::radius::client::RadiusOutcome::Accept { .. }) => {
                     let _ = xguard_common::db::models::radius::VpnMfaRadiusChallenge::delete(
-                        &self.pool,
-                        session.id,
+                        &self.pool, session.id,
                     )
                     .await;
                     if let Some(key) = &charge_key {
@@ -616,8 +640,7 @@ impl MfaEngine {
                 }
                 Ok(crate::radius::client::RadiusOutcome::Reject { .. }) => {
                     let _ = xguard_common::db::models::radius::VpnMfaRadiusChallenge::delete(
-                        &self.pool,
-                        session.id,
+                        &self.pool, session.id,
                     )
                     .await;
                     Verdict::Failed {
@@ -625,7 +648,10 @@ impl MfaEngine {
                     }
                 }
                 Err(err) => {
-                    warn!("RADIUS verification failed for {}: {err}", ctx.user.username);
+                    warn!(
+                        "RADIUS verification failed for {}: {err}",
+                        ctx.user.username
+                    );
                     Verdict::Failed {
                         message: "RADIUS server unreachable",
                     }

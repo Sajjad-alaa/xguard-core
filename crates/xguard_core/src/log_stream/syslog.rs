@@ -221,6 +221,19 @@ impl ServerCertVerifier for NoCertVerifier {
     }
 }
 
+fn default_root_cert_store() -> Arc<RootCertStore> {
+    static ROOTS: OnceLock<Arc<RootCertStore>> = OnceLock::new();
+    Arc::clone(ROOTS.get_or_init(|| {
+        let mut store = RootCertStore::empty();
+        let native = rustls_native_certs::load_native_certs();
+        for cert in native.certs {
+            let _ = store.add(cert);
+        }
+        store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        Arc::new(store)
+    }))
+}
+
 fn build_tls_config(config: &StoredConfig) -> Result<Arc<ClientConfig>, String> {
     let provider = Arc::new(ring::default_provider());
     let builder = ClientConfig::builder_with_provider(provider)
@@ -241,13 +254,7 @@ fn build_tls_config(config: &StoredConfig) -> Result<Arc<ClientConfig>, String> 
         }
         builder.with_root_certificates(store)
     } else {
-        let mut store = RootCertStore::empty();
-        let native = rustls_native_certs::load_native_certs();
-        for cert in native.certs {
-            let _ = store.add(cert);
-        }
-        store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        builder.with_root_certificates(store)
+        builder.with_root_certificates(default_root_cert_store())
     };
 
     let client_config = match (&config.client_cert, &config.client_key) {
@@ -272,7 +279,7 @@ enum Transport {
     Tls {
         connector: TlsConnector,
         server_name: ServerName<'static>,
-        stream: Option<TlsStream<TcpStream>>,
+        stream: Option<Box<TlsStream<TcpStream>>>,
     },
 }
 
@@ -444,7 +451,7 @@ impl SyslogSender {
                     .await
                     .map_err(|_| "timed out during syslog TLS handshake".to_owned())?
                     .map_err(|err| format!("syslog TLS handshake failed: {err}"))?;
-                *stream = Some(tls);
+                *stream = Some(Box::new(tls));
             }
             let conn = stream.as_mut().unwrap();
             let res = timeout(IO_TIMEOUT, async {

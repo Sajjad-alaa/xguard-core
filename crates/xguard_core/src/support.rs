@@ -36,20 +36,31 @@ pub(crate) async fn dump_config(conn: &mut PgConnection) -> Result<Value, serde_
         Ok(None) => json!({"error": "Settings not found"}),
         Err(err) => json!({"error": err.to_string()}),
     };
-    // Networks
+    // Networks (batch-load all network-device mappings in one query to avoid N+1).
     let (networks, devices) = match WireguardNetwork::all(&mut *conn).await {
         Ok(networks) => {
-            // Devices for each network
-            let mut devices = HashMap::<Id, Value>::new();
-            for network in &networks {
-                devices.insert(
-                    network.id,
-                    unwrap_json(
-                        WireguardNetworkDevice::all_for_network(&mut *conn, network.id).await,
-                    )?,
-                );
-            }
-            (to_value(networks)?, to_value(devices)?)
+            let devices = match WireguardNetworkDevice::all(&mut *conn).await {
+                Ok(all_devices) => {
+                    let mut grouped: HashMap<Id, Vec<WireguardNetworkDevice>> =
+                        networks.iter().map(|n| (n.id, Vec::new())).collect();
+                    for item in all_devices {
+                        grouped
+                            .entry(item.wireguard_network_id)
+                            .or_default()
+                            .push(item);
+                    }
+                    to_value(grouped)?
+                }
+                Err(err) => {
+                    let mut map = HashMap::<Id, Value>::new();
+                    let err_val = json!({"error": err.to_string()});
+                    for network in &networks {
+                        map.insert(network.id, err_val.clone());
+                    }
+                    to_value(map)?
+                }
+            };
+            (to_value(networks)?, devices)
         }
         Err(err) => (json!({"error": err.to_string()}), Value::Null),
     };

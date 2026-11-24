@@ -7,8 +7,11 @@ import {
   ContextualHelpKey,
   ContextualHelpSidebar,
 } from '../../../../shared/components/ContextualHelp';
+import { SettingsCard } from '../../../../shared/components/SettingsCard/SettingsCard';
 import { SettingsLayout } from '../../../../shared/components/SettingsLayout/SettingsLayout';
 import { Button } from '../../../../shared/xguard-ui/components/Button/Button';
+import { EvenSplit } from '../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
+import { InfoBanner } from '../../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
 import { Input } from '../../../../shared/xguard-ui/components/Input/Input';
 import { MarkedSection } from '../../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
 import { MarkedSectionHeader } from '../../../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
@@ -88,37 +91,46 @@ export const SettingsGeneralTab = () => {
         />
       </Link>
       <SizedBox height={ThemeSpacing.Xl} />
-      <MarkedSection icon="settings">
-        <MarkedSectionHeader
-          title={m.settings_device_limits_title()}
-          description={m.settings_device_limits_description()}
-        />
-        <SizedBox height={ThemeSpacing.Lg} />
-        <form onSubmit={handleSave}>
-          <Input
-            type="number"
-            label={m.settings_device_limits_max_devices()}
-            helper={m.settings_device_limits_helper_zero()}
-            value={maxDevices}
-            onChange={(val) => setMaxDevices(val == null ? '' : String(val))}
+      <SettingsCard>
+        <MarkedSection icon="settings">
+          <MarkedSectionHeader
+            title={m.settings_device_limits_title()}
+            description={m.settings_device_limits_description()}
           />
           <SizedBox height={ThemeSpacing.Md} />
-          <Input
-            type="number"
-            label={m.settings_device_limits_max_connections()}
-            helper={m.settings_device_limits_helper_zero()}
-            value={maxConnections}
-            onChange={(val) => setMaxConnections(val == null ? '' : String(val))}
+          <InfoBanner
+            variant="info"
+            icon="info-outlined"
+            text={m.settings_device_limits_precedence_note()}
           />
           <SizedBox height={ThemeSpacing.Lg} />
-          <Button
-            type="submit"
-            text={m.controls_save_changes()}
-            loading={isPending}
-            data-testid="save-device-limits"
-          />
-        </form>
-      </MarkedSection>
+          <form onSubmit={handleSave}>
+            <EvenSplit>
+              <Input
+                type="number"
+                label={m.settings_device_limits_max_devices()}
+                helper={m.settings_device_limits_helper_zero()}
+                value={maxDevices}
+                onChange={(val) => setMaxDevices(val == null ? '' : String(val))}
+              />
+              <Input
+                type="number"
+                label={m.settings_device_limits_max_connections()}
+                helper={m.settings_device_limits_helper_zero()}
+                value={maxConnections}
+                onChange={(val) => setMaxConnections(val == null ? '' : String(val))}
+              />
+            </EvenSplit>
+            <SizedBox height={ThemeSpacing.Lg} />
+            <Button
+              type="submit"
+              text={m.controls_save_changes()}
+              loading={isPending}
+              data-testid="save-device-limits"
+            />
+          </form>
+        </MarkedSection>
+      </SettingsCard>
     </SettingsLayout>
   );
 };

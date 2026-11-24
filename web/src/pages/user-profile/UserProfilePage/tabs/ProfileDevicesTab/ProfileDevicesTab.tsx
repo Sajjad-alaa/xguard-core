@@ -11,7 +11,10 @@ import { EditUserDeviceModal } from '../../../../../shared/components/modals/Edi
 import { UserDeviceConfigModal } from '../../../../../shared/components/modals/UserDeviceConfigModal/UserDeviceConfigModal';
 import { useAuth } from '../../../../../shared/hooks/useAuth';
 import { Badge } from '../../../../../shared/xguard-ui/components/Badge/Badge';
+import { BadgeVariant } from '../../../../../shared/xguard-ui/components/Badge/types';
 import { Button } from '../../../../../shared/xguard-ui/components/Button/Button';
+import { Divider } from '../../../../../shared/xguard-ui/components/Divider/Divider';
+import { EvenSplit } from '../../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
 import { Input } from '../../../../../shared/xguard-ui/components/Input/Input';
 import { MarkedSection } from '../../../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
 import { MarkedSectionHeader } from '../../../../../shared/xguard-ui/components/MarkedSectionHeader/MarkedSectionHeader';
@@ -63,72 +66,130 @@ export const ProfileDevicesTab = () => {
     return Number.isNaN(parsed) || parsed < 0 ? null : parsed;
   };
 
+  const quotaPct =
+    limitInfo && limitInfo.effective_max_devices > 0
+      ? Math.min(
+          100,
+          Math.round((limitInfo.device_count / limitInfo.effective_max_devices) * 100),
+        )
+      : null;
+
+  const quotaStatus =
+    quotaPct == null
+      ? null
+      : quotaPct >= 100
+        ? 'exceeded'
+        : quotaPct >= 80
+          ? 'warning'
+          : 'healthy';
+
   return (
     <>
       <LayoutGrid id="profile-devices-tab">
         {limitInfo && (
-          <MarkedSection icon="settings">
-            <MarkedSectionHeader
-              title={m.settings_device_limits_title()}
-              description={
-                limitInfo.effective_max_devices > 0
-                  ? m.settings_device_limits_usage_limited({
-                      count: limitInfo.device_count,
-                      limit: limitInfo.effective_max_devices,
-                    })
-                  : m.settings_device_limits_usage_unlimited({
-                      count: limitInfo.device_count,
-                    })
-              }
-            />
-            <SizedBox height={ThemeSpacing.Sm} />
-            <Badge
-              variant="default"
-              text={m.settings_device_limits_effective_connections({
-                limit:
-                  limitInfo.effective_max_connections > 0
-                    ? String(limitInfo.effective_max_connections)
-                    : m.settings_device_limits_unlimited_label(),
-              })}
-            />
-            {isAdmin && (
-              <>
-                <SizedBox height={ThemeSpacing.Md} />
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    saveOverride({
-                      max_devices: parseOptional(maxDevices),
-                      max_connections: parseOptional(maxConnections),
-                    });
-                  }}
+          <div className="device-limits-card">
+            <MarkedSection icon="settings">
+              <div className="quota-header-row">
+                <MarkedSectionHeader
+                  title={m.settings_device_limits_title()}
+                  description={
+                    limitInfo.effective_max_devices > 0
+                      ? m.settings_device_limits_usage_limited({
+                          count: limitInfo.device_count,
+                          limit: limitInfo.effective_max_devices,
+                        })
+                      : m.settings_device_limits_usage_unlimited({
+                          count: limitInfo.device_count,
+                        })
+                  }
+                />
+                <div className="quota-badges">
+                  {quotaStatus && (
+                    <Badge
+                      variant={
+                        quotaStatus === 'exceeded'
+                          ? BadgeVariant.Critical
+                          : quotaStatus === 'warning'
+                            ? BadgeVariant.Warning
+                            : BadgeVariant.Success
+                      }
+                      text={
+                        quotaStatus === 'exceeded'
+                          ? m.settings_device_limits_quota_exceeded()
+                          : quotaStatus === 'warning'
+                            ? m.settings_device_limits_quota_warning()
+                            : m.settings_device_limits_quota_healthy()
+                      }
+                      showIcon
+                    />
+                  )}
+                  <Badge
+                    variant={BadgeVariant.Default}
+                    text={m.settings_device_limits_effective_connections({
+                      limit:
+                        limitInfo.effective_max_connections > 0
+                          ? String(limitInfo.effective_max_connections)
+                          : m.settings_device_limits_unlimited_label(),
+                    })}
+                  />
+                </div>
+              </div>
+              {quotaPct != null && quotaStatus && (
+                <div
+                  className="quota-bar-track"
+                  role="progressbar"
+                  aria-valuenow={limitInfo.device_count}
+                  aria-valuemin={0}
+                  aria-valuemax={limitInfo.effective_max_devices}
                 >
-                  <Input
-                    type="number"
-                    label={m.settings_device_limits_max_devices()}
-                    helper={m.settings_device_limits_helper_override()}
-                    value={maxDevices}
-                    onChange={(val) => setMaxDevices(val == null ? '' : String(val))}
+                  <div
+                    className={`quota-bar-fill status-${quotaStatus}`}
+                    style={{ width: `${quotaPct}%` }}
                   />
-                  <SizedBox height={ThemeSpacing.Sm} />
-                  <Input
-                    type="number"
-                    label={m.settings_device_limits_max_connections()}
-                    helper={m.settings_device_limits_helper_override()}
-                    value={maxConnections}
-                    onChange={(val) => setMaxConnections(val == null ? '' : String(val))}
-                  />
-                  <SizedBox height={ThemeSpacing.Md} />
-                  <Button
-                    type="submit"
-                    text={m.controls_save_changes()}
-                    loading={isPending}
-                    data-testid="save-user-device-limits"
-                  />
-                </form>
-              </>
-            )}
-          </MarkedSection>
+                </div>
+              )}
+              {isAdmin && (
+                <>
+                  <Divider spacing={ThemeSpacing.Lg} />
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      saveOverride({
+                        max_devices: parseOptional(maxDevices),
+                        max_connections: parseOptional(maxConnections),
+                      });
+                    }}
+                  >
+                    <EvenSplit>
+                      <Input
+                        type="number"
+                        label={m.settings_device_limits_max_devices()}
+                        helper={m.settings_device_limits_helper_override()}
+                        value={maxDevices}
+                        onChange={(val) => setMaxDevices(val == null ? '' : String(val))}
+                      />
+                      <Input
+                        type="number"
+                        label={m.settings_device_limits_max_connections()}
+                        helper={m.settings_device_limits_helper_override()}
+                        value={maxConnections}
+                        onChange={(val) =>
+                          setMaxConnections(val == null ? '' : String(val))
+                        }
+                      />
+                    </EvenSplit>
+                    <SizedBox height={ThemeSpacing.Md} />
+                    <Button
+                      type="submit"
+                      text={m.controls_save_changes()}
+                      loading={isPending}
+                      data-testid="save-user-device-limits"
+                    />
+                  </form>
+                </>
+              )}
+            </MarkedSection>
+          </div>
         )}
         <ProfileDevicesTable />
       </LayoutGrid>

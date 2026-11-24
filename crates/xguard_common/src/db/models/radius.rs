@@ -10,7 +10,21 @@ use chrono::{Duration, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgExecutor, Row};
 
-use crate::{db::Id, secret::SecretStringWrapper};
+use crate::{db::Id, global_value, secret::SecretStringWrapper};
+
+global_value!(
+    RADIUS_SETTINGS,
+    Option<RadiusSettings>,
+    None,
+    set_radius_settings,
+    get_radius_settings
+);
+
+/// Loads the RADIUS settings into the in-memory cache at program start.
+pub async fn initialize_radius_settings<'e, E: PgExecutor<'e>>(executor: E) -> sqlx::Result<()> {
+    set_radius_settings(Some(RadiusSettings::load(executor).await?));
+    Ok(())
+}
 
 /// How the XGuard user identifier is formatted into the RADIUS `User-Name` attribute.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -143,8 +157,19 @@ impl RadiusSettings {
         }
     }
 
-    /// Loads the singleton RADIUS settings row, returning defaults if not yet seeded.
+    /// Returns the cached RADIUS settings when initialized, or loads them directly from PostgreSQL.
+    ///
+    /// Before [`initialize_radius_settings`] has run (for instance in isolated `#[sqlx::test]`
+    /// databases) this always reads from the database so separate test databases never share state.
     pub async fn get<'e, E: PgExecutor<'e>>(executor: E) -> sqlx::Result<Self> {
+        if let Some(settings) = get_radius_settings().clone() {
+            return Ok(settings);
+        }
+        Self::load(executor).await
+    }
+
+    /// Loads the singleton RADIUS settings row directly from PostgreSQL, returning defaults if not yet seeded.
+    pub async fn load<'e, E: PgExecutor<'e>>(executor: E) -> sqlx::Result<Self> {
         let row = sqlx::query(
             r#"
             SELECT enabled, web_login_enabled, vpn_mfa_enabled,
@@ -272,7 +297,18 @@ impl RadiusSettings {
         .execute(executor)
         .await?;
 
+        self.clone().set_cached();
         Ok(())
+    }
+
+    /// Updates the in-memory RADIUS settings cache if it has been initialized.
+    pub fn set_cached(self) {
+        let mut cache = RADIUS_SETTINGS
+            .write()
+            .expect("Failed to acquire RADIUS_SETTINGS RwLock for write");
+        if cache.is_some() {
+            *cache = Some(self);
+        }
     }
 }
 
@@ -443,5 +479,35 @@ impl VpnMfaRadiusChallenge {
             .execute(executor)
             .await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_is_used_once_initialized() {
+        set_radius_settings(None);
+        RadiusSettings {
+            enabled: true,
+            primary_host: "radius-uninitialized.example".into(),
+            ..Default::default()
+        }
+        .set_cached();
+        assert!(get_radius_settings().is_none());
+
+        set_radius_settings(Some(RadiusSettings::default()));
+        RadiusSettings {
+            enabled: true,
+            primary_host: "radius-cached.example".into(),
+            ..Default::default()
+        }
+        .set_cached();
+        assert_eq!(
+            get_radius_settings().as_ref().unwrap().primary_host,
+            "radius-cached.example"
+        );
+        set_radius_settings(None);
     }
 }

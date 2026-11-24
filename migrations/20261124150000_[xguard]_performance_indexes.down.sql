@@ -1,0 +1,17 @@
+DROP INDEX IF EXISTS idx_device_login_event_user_id;
+DROP INDEX IF EXISTS idx_api_token_user_id;
+DROP INDEX IF EXISTS idx_firewall_rule_device_device_id;
+DROP INDEX IF EXISTS idx_firewall_rule_group_group_id;
+DROP INDEX IF EXISTS idx_firewall_rule_user_user_id;
+DROP INDEX IF EXISTS idx_token_device_id;
+DROP INDEX IF EXISTS idx_token_user_id;
+DROP INDEX IF EXISTS idx_device_posture_location_location_id;
+DROP INDEX IF EXISTS idx_gateway_location_id;
+DROP INDEX IF EXISTS idx_biometric_auth_pub_key;
+DROP INDEX IF EXISTS idx_webauthn_user_id;
+DROP INDEX IF EXISTS idx_session_expires;
+DROP INDEX IF EXISTS idx_session_user_id;
+DROP INDEX IF EXISTS idx_group_user_user_id;
+DROP INDEX IF EXISTS idx_pollingtoken_device_id;
+DROP INDEX IF EXISTS idx_pollingtoken_token;
+DROP INDEX IF EXISTS idx_device_wireguard_pubkey;

@@ -1,4 +1,6 @@
+import './style.scss';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import type { AxiosError } from 'axios';
 import { useEffect, useState } from 'react';
 import { m } from '../../../paraglide/messages';
@@ -8,9 +10,22 @@ import type {
   RadiusUsernameFormat,
   TestRadiusResponse,
 } from '../../../shared/api/types';
+import { Breadcrumbs } from '../../../shared/components/Breadcrumbs/Breadcrumbs';
+import {
+  ContextualHelpKey,
+  ContextualHelpSidebar,
+} from '../../../shared/components/ContextualHelp';
+import { Page } from '../../../shared/components/Page/Page';
+import { SettingsCard } from '../../../shared/components/SettingsCard/SettingsCard';
+import { SettingsHeader } from '../../../shared/components/SettingsHeader/SettingsHeader';
+import { SettingsLayout } from '../../../shared/components/SettingsLayout/SettingsLayout';
+import { Badge } from '../../../shared/xguard-ui/components/Badge/Badge';
+import { BadgeVariant } from '../../../shared/xguard-ui/components/Badge/types';
 import { Button } from '../../../shared/xguard-ui/components/Button/Button';
 import { Checkbox } from '../../../shared/xguard-ui/components/Checkbox/Checkbox';
 import { Divider } from '../../../shared/xguard-ui/components/Divider/Divider';
+import { EvenSplit } from '../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
+import { IconKind } from '../../../shared/xguard-ui/components/Icon';
 import { InfoBanner } from '../../../shared/xguard-ui/components/InfoBanner/InfoBanner';
 import { Input } from '../../../shared/xguard-ui/components/Input/Input';
 import { MarkedSection } from '../../../shared/xguard-ui/components/MarkedSection/MarkedSection';
@@ -18,6 +33,21 @@ import { MarkedSectionHeader } from '../../../shared/xguard-ui/components/Marked
 import { SizedBox } from '../../../shared/xguard-ui/components/SizedBox/SizedBox';
 import { Snackbar } from '../../../shared/xguard-ui/providers/snackbar/snackbar';
 import { ThemeSpacing } from '../../../shared/xguard-ui/types';
+
+const breadcrumbsLinks = [
+  <Link
+    key={0}
+    to="/settings"
+    search={{
+      tab: 'identity',
+    }}
+  >
+    {m.settings_breadcrumb_identity_providers()}
+  </Link>,
+  <Link key={1} to="/settings/radius">
+    {m.settings_radius_title()}
+  </Link>,
+];
 
 export const SettingsRadiusPage = () => {
   const { data: stored } = useQuery({
@@ -130,183 +160,251 @@ export const SettingsRadiusPage = () => {
     });
   };
 
+  const isConfigured = Boolean(
+    stored?.enabled && stored.primary_host && stored.primary_secret_set,
+  );
+
   return (
-    <div id="settings-radius-page">
-      <MarkedSection icon="settings">
-        <MarkedSectionHeader
+    <Page id="settings-radius-page" title={m.settings_page_title()}>
+      <Breadcrumbs links={breadcrumbsLinks} />
+      <SettingsLayout
+        suggestion={
+          <ContextualHelpSidebar pageKey={ContextualHelpKey.SettingsIdentity} />
+        }
+      >
+        <SettingsHeader
+          icon={IconKind.Servers}
           title={m.settings_radius_title()}
-          description={m.settings_radius_subtitle()}
+          subtitle={m.settings_radius_subtitle()}
         />
-        <form onSubmit={handleSave}>
-          <Checkbox
-            text={m.settings_radius_enable()}
-            active={enabled}
-            onClick={() => setEnabled((v) => !v)}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Checkbox
-            text={m.settings_radius_web_login()}
-            active={webLoginEnabled}
-            onClick={() => setWebLoginEnabled((v) => !v)}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Checkbox
-            text={m.settings_radius_vpn_mfa()}
-            active={vpnMfaEnabled}
-            onClick={() => setVpnMfaEnabled((v) => !v)}
-          />
-          <Divider spacing={ThemeSpacing.Lg} />
-          <Input
-            label={m.settings_radius_primary_host()}
-            value={primaryHost}
-            onChange={(val) => setPrimaryHost(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Input
-            type="number"
-            label={m.settings_radius_primary_port()}
-            value={primaryPort}
-            onChange={(val) => setPrimaryPort(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Input
-            type="password"
-            label={m.settings_radius_primary_secret()}
-            helper={
-              stored?.primary_secret_set
-                ? m.settings_radius_secret_configured()
-                : m.settings_radius_secret_required()
+
+        <div className="radius-status-strip">
+          <Badge
+            variant={isConfigured ? BadgeVariant.Success : BadgeVariant.Neutral}
+            text={
+              isConfigured
+                ? m.settings_radius_status_active()
+                : m.settings_radius_status_inactive()
             }
-            value={primarySecret}
-            onChange={(val) => setPrimarySecret(val == null ? '' : String(val))}
+            showIcon
           />
-          <Divider spacing={ThemeSpacing.Lg} />
-          <Input
-            label={m.settings_radius_secondary_host()}
-            value={secondaryHost}
-            onChange={(val) => setSecondaryHost(val == null ? '' : String(val))}
+          <Badge
+            variant={BadgeVariant.Default}
+            text={m.settings_radius_security_badge()}
           />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Input
-            type="number"
-            label={m.settings_radius_secondary_port()}
-            value={secondaryPort}
-            onChange={(val) => setSecondaryPort(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Input
-            type="password"
-            label={m.settings_radius_secondary_secret()}
-            helper={
-              stored?.secondary_secret_set
-                ? m.settings_radius_secret_configured()
-                : m.settings_radius_secondary_secret_helper()
-            }
-            value={secondarySecret}
-            onChange={(val) => setSecondarySecret(val == null ? '' : String(val))}
-          />
-          <Divider spacing={ThemeSpacing.Lg} />
-          <Input
-            label={m.settings_radius_nas_identifier()}
-            value={nasIdentifier}
-            onChange={(val) => setNasIdentifier(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Input
-            label={m.settings_radius_nas_ip()}
-            value={nasIpAddress}
-            onChange={(val) => setNasIpAddress(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Input
-            type="number"
-            label={m.settings_radius_timeout()}
-            value={timeoutSecs}
-            onChange={(val) => setTimeoutSecs(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Input
-            type="number"
-            label={m.settings_radius_retries()}
-            value={retries}
-            onChange={(val) => setRetries(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Md} />
-          <Checkbox
-            text={m.settings_radius_use_email_username()}
-            active={usernameFormat === 'email'}
-            onClick={() =>
-              setUsernameFormat((f) => (f === 'email' ? 'username' : 'email'))
-            }
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Checkbox
-            text={m.settings_radius_push_enabled()}
-            active={pushEnabled}
-            onClick={() => setPushEnabled((v) => !v)}
-          />
-          {pushEnabled && (
-            <>
-              <SizedBox height={ThemeSpacing.Sm} />
+        </div>
+
+        <SettingsCard>
+          <form onSubmit={handleSave}>
+            <MarkedSection icon="settings">
+              <MarkedSectionHeader title={m.settings_radius_section_scope()} />
+              <SizedBox height={ThemeSpacing.Md} />
+              <div className="radius-checkbox-stack">
+                <Checkbox
+                  text={m.settings_radius_enable()}
+                  active={enabled}
+                  onClick={() => setEnabled((v) => !v)}
+                />
+                <Checkbox
+                  text={m.settings_radius_web_login()}
+                  active={webLoginEnabled}
+                  onClick={() => setWebLoginEnabled((v) => !v)}
+                />
+                <Checkbox
+                  text={m.settings_radius_vpn_mfa()}
+                  active={vpnMfaEnabled}
+                  onClick={() => setVpnMfaEnabled((v) => !v)}
+                />
+              </div>
+            </MarkedSection>
+
+            <Divider spacing={ThemeSpacing.Xl} />
+
+            <MarkedSection icon="servers">
+              <MarkedSectionHeader title={m.settings_radius_section_primary()} />
+              <SizedBox height={ThemeSpacing.Md} />
+              <EvenSplit>
+                <Input
+                  label={m.settings_radius_primary_host()}
+                  value={primaryHost}
+                  onChange={(val) => setPrimaryHost(val == null ? '' : String(val))}
+                />
+                <Input
+                  type="number"
+                  label={m.settings_radius_primary_port()}
+                  value={primaryPort}
+                  onChange={(val) => setPrimaryPort(val == null ? '' : String(val))}
+                />
+              </EvenSplit>
+              <SizedBox height={ThemeSpacing.Md} />
               <Input
-                type="number"
-                label={m.settings_radius_push_interval()}
-                value={pushPollIntervalSecs}
-                onChange={(val) =>
-                  setPushPollIntervalSecs(val == null ? '' : String(val))
+                type="password"
+                label={m.settings_radius_primary_secret()}
+                helper={
+                  stored?.primary_secret_set
+                    ? m.settings_radius_secret_configured()
+                    : m.settings_radius_secret_required()
                 }
+                value={primarySecret}
+                onChange={(val) => setPrimarySecret(val == null ? '' : String(val))}
               />
-            </>
-          )}
-          <SizedBox height={ThemeSpacing.Lg} />
-          <Button
-            type="submit"
-            text={m.controls_save_changes()}
-            loading={isSaving}
-            data-testid="save-radius-settings"
-          />
-        </form>
-      </MarkedSection>
+            </MarkedSection>
 
-      <SizedBox height={ThemeSpacing.Xl} />
+            <Divider spacing={ThemeSpacing.Xl} />
 
-      <MarkedSection icon="settings">
-        <MarkedSectionHeader
-          title={m.settings_radius_test_title()}
-          description={m.settings_radius_test_description()}
-        />
-        {testResult && (
-          <>
-            <InfoBanner
-              variant={testResult.decision === 'accept' ? 'info' : 'warning'}
-              icon="info-outlined"
-              text={`${testResult.decision.toUpperCase()}${testResult.reply_message ? `: ${testResult.reply_message}` : ''}`}
+            <MarkedSection icon="servers">
+              <MarkedSectionHeader title={m.settings_radius_section_secondary()} />
+              <SizedBox height={ThemeSpacing.Md} />
+              <EvenSplit>
+                <Input
+                  label={m.settings_radius_secondary_host()}
+                  value={secondaryHost}
+                  onChange={(val) => setSecondaryHost(val == null ? '' : String(val))}
+                />
+                <Input
+                  type="number"
+                  label={m.settings_radius_secondary_port()}
+                  value={secondaryPort}
+                  onChange={(val) => setSecondaryPort(val == null ? '' : String(val))}
+                />
+              </EvenSplit>
+              <SizedBox height={ThemeSpacing.Md} />
+              <Input
+                type="password"
+                label={m.settings_radius_secondary_secret()}
+                helper={
+                  stored?.secondary_secret_set
+                    ? m.settings_radius_secret_configured()
+                    : m.settings_radius_secondary_secret_helper()
+                }
+                value={secondarySecret}
+                onChange={(val) => setSecondarySecret(val == null ? '' : String(val))}
+              />
+            </MarkedSection>
+
+            <Divider spacing={ThemeSpacing.Xl} />
+
+            <MarkedSection icon="settings">
+              <MarkedSectionHeader title={m.settings_radius_section_advanced()} />
+              <SizedBox height={ThemeSpacing.Md} />
+              <EvenSplit>
+                <Input
+                  label={m.settings_radius_nas_identifier()}
+                  value={nasIdentifier}
+                  onChange={(val) => setNasIdentifier(val == null ? '' : String(val))}
+                />
+                <Input
+                  label={m.settings_radius_nas_ip()}
+                  value={nasIpAddress}
+                  onChange={(val) => setNasIpAddress(val == null ? '' : String(val))}
+                />
+              </EvenSplit>
+              <SizedBox height={ThemeSpacing.Md} />
+              <EvenSplit>
+                <Input
+                  type="number"
+                  label={m.settings_radius_timeout()}
+                  value={timeoutSecs}
+                  onChange={(val) => setTimeoutSecs(val == null ? '' : String(val))}
+                />
+                <Input
+                  type="number"
+                  label={m.settings_radius_retries()}
+                  value={retries}
+                  onChange={(val) => setRetries(val == null ? '' : String(val))}
+                />
+              </EvenSplit>
+              <SizedBox height={ThemeSpacing.Lg} />
+              <div className="radius-checkbox-stack">
+                <Checkbox
+                  text={m.settings_radius_use_email_username()}
+                  active={usernameFormat === 'email'}
+                  onClick={() =>
+                    setUsernameFormat((f) => (f === 'email' ? 'username' : 'email'))
+                  }
+                />
+                <Checkbox
+                  text={m.settings_radius_push_enabled()}
+                  active={pushEnabled}
+                  onClick={() => setPushEnabled((v) => !v)}
+                />
+              </div>
+              {pushEnabled && (
+                <>
+                  <SizedBox height={ThemeSpacing.Md} />
+                  <Input
+                    type="number"
+                    label={m.settings_radius_push_interval()}
+                    value={pushPollIntervalSecs}
+                    onChange={(val) =>
+                      setPushPollIntervalSecs(val == null ? '' : String(val))
+                    }
+                  />
+                </>
+              )}
+            </MarkedSection>
+
+            <Divider spacing={ThemeSpacing.Xl} />
+
+            <div className="radius-form-actions">
+              <Button
+                type="submit"
+                text={m.controls_save_changes()}
+                loading={isSaving}
+                data-testid="save-radius-settings"
+              />
+            </div>
+          </form>
+        </SettingsCard>
+
+        <SizedBox height={ThemeSpacing.Xl} />
+
+        <SettingsCard>
+          <MarkedSection icon="settings">
+            <MarkedSectionHeader
+              title={m.settings_radius_test_title()}
+              description={m.settings_radius_test_description()}
             />
             <SizedBox height={ThemeSpacing.Md} />
-          </>
-        )}
-        <form onSubmit={handleTest}>
-          <Input
-            label={m.settings_radius_test_username()}
-            value={testUsername}
-            onChange={(val) => setTestUsername(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Sm} />
-          <Input
-            type="password"
-            label={m.settings_radius_test_password()}
-            value={testPassword}
-            onChange={(val) => setTestPassword(val == null ? '' : String(val))}
-          />
-          <SizedBox height={ThemeSpacing.Md} />
-          <Button
-            type="submit"
-            text={m.settings_radius_test_button()}
-            loading={isTesting}
-            data-testid="test-radius-settings"
-          />
-        </form>
-      </MarkedSection>
-    </div>
+            {testResult && (
+              <>
+                <InfoBanner
+                  variant={testResult.decision === 'accept' ? 'info' : 'warning'}
+                  icon="info-outlined"
+                  text={`${testResult.decision.toUpperCase()}${testResult.reply_message ? `: ${testResult.reply_message}` : ''}`}
+                />
+                <SizedBox height={ThemeSpacing.Md} />
+              </>
+            )}
+            <form onSubmit={handleTest}>
+              <EvenSplit>
+                <Input
+                  label={m.settings_radius_test_username()}
+                  value={testUsername}
+                  onChange={(val) => setTestUsername(val == null ? '' : String(val))}
+                />
+                <Input
+                  type="password"
+                  label={m.settings_radius_test_password()}
+                  helper={m.settings_radius_test_blank_hint()}
+                  value={testPassword}
+                  onChange={(val) => setTestPassword(val == null ? '' : String(val))}
+                />
+              </EvenSplit>
+              <SizedBox height={ThemeSpacing.Md} />
+              <div className="radius-form-actions">
+                <Button
+                  type="submit"
+                  variant="outlined"
+                  text={m.settings_radius_test_button()}
+                  loading={isTesting}
+                  data-testid="test-radius-settings"
+                />
+              </div>
+            </form>
+          </MarkedSection>
+        </SettingsCard>
+      </SettingsLayout>
+    </Page>
   );
 };

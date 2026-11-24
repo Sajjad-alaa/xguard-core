@@ -363,6 +363,28 @@ pub struct ModifyDevice {
 }
 
 impl WireguardNetworkDevice {
+    /// Returns every `(network, device)` IP assignment in a single query.
+    pub async fn all<'e, E>(executor: E) -> sqlx::Result<Vec<Self>>
+    where
+        E: PgExecutor<'e>,
+    {
+        let rows = query(
+            "SELECT wireguard_network_id, wireguard_ips, device_id \
+             FROM wireguard_network_device",
+        )
+        .fetch_all(executor)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(Self {
+                    wireguard_network_id: row.try_get("wireguard_network_id")?,
+                    wireguard_ips: row.try_get("wireguard_ips")?,
+                    device_id: row.try_get("device_id")?,
+                })
+            })
+            .collect()
+    }
+
     #[must_use]
     pub fn to_device_network_info(
         &self,

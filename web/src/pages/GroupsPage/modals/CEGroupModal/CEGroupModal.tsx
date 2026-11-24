@@ -22,6 +22,7 @@ import { ModalName } from '../../../../shared/hooks/modalControls/modalTypes';
 import type { OpenCEGroupModal } from '../../../../shared/hooks/modalControls/types';
 import { Checkbox } from '../../../../shared/xguard-ui/components/Checkbox/Checkbox';
 import { Divider } from '../../../../shared/xguard-ui/components/Divider/Divider';
+import { EvenSplit } from '../../../../shared/xguard-ui/components/EvenSplit/EvenSplit';
 import { Input } from '../../../../shared/xguard-ui/components/Input/Input';
 import { Modal } from '../../../../shared/xguard-ui/components/Modal/Modal';
 import { ModalControls } from '../../../../shared/xguard-ui/components/ModalControls/ModalControls';
@@ -111,13 +112,10 @@ const UsersStep = ({
     },
   });
 
-  const { mutate: addGroup, isPending: addPending } = useMutation({
+  const { mutateAsync: addGroup, isPending: addPending } = useMutation({
     mutationFn: api.group.addGroup,
     meta: {
-      invalidate: [['group'], ['group-info'], ['user']],
-    },
-    onSuccess: () => {
-      closeModal(modalNameKey);
+      invalidate: [['group'], ['group-info'], ['user'], ['device-limits']],
     },
   });
   const [selected, setSelected] = useState<Set<string>>(
@@ -140,7 +138,18 @@ const UsersStep = ({
         }
         closeModal(modalNameKey);
       } else {
-        addGroup(requestData);
+        await addGroup(requestData);
+        if (
+          limitOverride &&
+          (limitOverride.max_devices !== null || limitOverride.max_connections !== null)
+        ) {
+          const groupsResp = await api.group.getGroupsInfo();
+          const created = groupsResp.data.find((g) => g.name === startForm.name);
+          if (created) {
+            await api.deviceLimits.setGroupLimit(created.id, limitOverride);
+          }
+        }
+        closeModal(modalNameKey);
       }
     }
   };
@@ -255,12 +264,10 @@ const StartStep = ({
               name: value.name,
               is_admin: isAdmin,
             },
-            limitOverride: groupInfo
-              ? {
-                  max_devices: parseOptionalLimit(maxDevices),
-                  max_connections: parseOptionalLimit(maxConnections),
-                }
-              : undefined,
+            limitOverride: {
+              max_devices: parseOptionalLimit(maxDevices),
+              max_connections: parseOptionalLimit(maxConnections),
+            },
           };
         }
         return null;
@@ -300,30 +307,27 @@ const StartStep = ({
             setIsAdmin((s) => !s);
           }}
         />
-        {groupInfo && (
-          <>
-            <Divider spacing={ThemeSpacing.Xl} />
-            <DescriptionBlock title={m.settings_device_limits_title()}>
-              <p>{m.settings_device_limits_description()}</p>
-            </DescriptionBlock>
-            <SizedBox height={ThemeSpacing.Md} />
-            <Input
-              type="number"
-              label={m.settings_device_limits_max_devices()}
-              helper={m.settings_device_limits_helper_override()}
-              value={maxDevices}
-              onChange={(val) => setMaxDevices(val == null ? '' : String(val))}
-            />
-            <SizedBox height={ThemeSpacing.Md} />
-            <Input
-              type="number"
-              label={m.settings_device_limits_max_connections()}
-              helper={m.settings_device_limits_helper_override()}
-              value={maxConnections}
-              onChange={(val) => setMaxConnections(val == null ? '' : String(val))}
-            />
-          </>
-        )}
+        <Divider spacing={ThemeSpacing.Xl} />
+        <DescriptionBlock title={m.settings_device_limits_title()}>
+          <p>{m.settings_device_limits_description()}</p>
+        </DescriptionBlock>
+        <SizedBox height={ThemeSpacing.Md} />
+        <EvenSplit>
+          <Input
+            type="number"
+            label={m.settings_device_limits_max_devices()}
+            helper={m.settings_device_limits_helper_override()}
+            value={maxDevices}
+            onChange={(val) => setMaxDevices(val == null ? '' : String(val))}
+          />
+          <Input
+            type="number"
+            label={m.settings_device_limits_max_connections()}
+            helper={m.settings_device_limits_helper_override()}
+            value={maxConnections}
+            onChange={(val) => setMaxConnections(val == null ? '' : String(val))}
+          />
+        </EvenSplit>
       </form>
       <ModalControls
         cancelProps={{

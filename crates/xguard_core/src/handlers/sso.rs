@@ -35,6 +35,8 @@ use super::{
 };
 #[cfg(feature = "openapi")]
 use crate::handlers::ApiErrorResponse;
+#[cfg(feature = "openapi")]
+use crate::sso::provider::OpenIdProvider;
 use crate::{
     appstate::AppState,
     auth::{AdminRole, SessionInfo},
@@ -43,7 +45,7 @@ use crate::{
     sso::{
         self, LinkError,
         flow::{self, FlowError, PendingLogin},
-        provider::{OpenIdProvider, ProviderConfig, ProviderError, ProviderInput, ProviderKind},
+        provider::{ProviderConfig, ProviderError, ProviderInput, ProviderKind},
     },
 };
 

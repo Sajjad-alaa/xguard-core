@@ -1,0 +1,41 @@
+#mfa-radius-page {
+  .radius-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    width: 100%;
+  }
+
+  .radius-push-status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    background: var(--bg-surface-secondary, rgba(59, 130, 246, 0.08));
+    border: 1px solid var(--border-subtle, rgba(59, 130, 246, 0.25));
+    font: var(--t-body-sm);
+    color: var(--fg-secondary);
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--fg-primary, #3b82f6);
+      flex-shrink: 0;
+      animation: radius-pulse 1.5s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes radius-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}

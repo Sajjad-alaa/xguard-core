@@ -73,6 +73,61 @@ fn default_poll_interval() -> u32 {
     2
 }
 
+const MAX_RADIUS_HOST_LEN: usize = 255;
+const MAX_RADIUS_SECRET_LEN: usize = 256;
+const MAX_RADIUS_NAS_ID_LEN: usize = 255;
+
+fn is_blocked_radius_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_link_local() || v4.is_unspecified(),
+        IpAddr::V6(v6) => {
+            v6.is_unspecified()
+                || (v6.segments()[0] & 0xffc0) == 0xfe80
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| v4.is_link_local() || v4.is_unspecified())
+        }
+    }
+}
+
+fn validate_radius_host(host: &str, label: &str) -> Result<(), WebError> {
+    if host.len() > MAX_RADIUS_HOST_LEN {
+        return Err(WebError::BadRequest(format!(
+            "{label} must be at most {MAX_RADIUS_HOST_LEN} characters"
+        )));
+    }
+    if host.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(WebError::BadRequest(format!(
+            "{label} must not contain whitespace or control characters"
+        )));
+    }
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    if bare.eq_ignore_ascii_case("metadata.google.internal")
+        || bare.eq_ignore_ascii_case("metadata.goog")
+    {
+        return Err(WebError::BadRequest(format!(
+            "{label} cannot target cloud metadata endpoints"
+        )));
+    }
+    if let Ok(ip) = bare.parse::<IpAddr>()
+        && is_blocked_radius_ip(ip)
+    {
+        return Err(WebError::BadRequest(format!(
+            "{label} cannot use a link-local or unspecified IP address"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_radius_secret(secret: &str, label: &str) -> Result<(), WebError> {
+    if secret.len() > MAX_RADIUS_SECRET_LEN {
+        return Err(WebError::BadRequest(format!(
+            "{label} must be at most {MAX_RADIUS_SECRET_LEN} bytes"
+        )));
+    }
+    Ok(())
+}
+
 /// Payload for `POST /api/v1/settings/radius/test`.
 #[derive(Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -142,6 +197,23 @@ pub async fn update_radius_settings(
     let existing = RadiusSettings::get(&appstate.pool).await?;
 
     let primary_host = req.primary_host.trim().to_owned();
+    if !primary_host.is_empty() {
+        validate_radius_host(&primary_host, "Primary RADIUS host")?;
+    }
+    if let Some(secret) = req.primary_secret.as_deref() {
+        validate_radius_secret(secret, "Primary shared secret")?;
+    }
+    if let Some(secret) = req.secondary_secret.as_deref() {
+        validate_radius_secret(secret, "Secondary shared secret")?;
+    }
+    let nas_identifier_trimmed = req.nas_identifier.trim();
+    if nas_identifier_trimmed.len() > MAX_RADIUS_NAS_ID_LEN
+        || nas_identifier_trimmed.chars().any(char::is_control)
+    {
+        return Err(WebError::BadRequest(format!(
+            "NAS-Identifier must be at most {MAX_RADIUS_NAS_ID_LEN} printable characters"
+        )));
+    }
     if req.primary_port == 0 {
         return Err(WebError::BadRequest(
             "Primary port must be between 1 and 65535".into(),
@@ -192,6 +264,9 @@ pub async fn update_radius_settings(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_owned);
+    if let Some(host) = secondary_host.as_deref() {
+        validate_radius_host(host, "Secondary RADIUS host")?;
+    }
 
     let secondary_secret = if req.clear_secondary_secret || secondary_host.is_none() {
         None
@@ -292,6 +367,8 @@ pub async fn test_radius_settings(
             "Primary RADIUS host and shared secret are required to run a test".into(),
         ));
     }
+    validate_radius_host(&primary_host, "Primary RADIUS host")?;
+    validate_radius_secret(&primary_secret, "Primary shared secret")?;
 
     let secondary_host = req
         .secondary_host
@@ -300,6 +377,9 @@ pub async fn test_radius_settings(
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
         .or(stored.secondary_host);
+    if let Some(host) = secondary_host.as_deref() {
+        validate_radius_host(host, "Secondary RADIUS host")?;
+    }
     let secondary_secret = req
         .secondary_secret
         .as_deref()
@@ -372,5 +452,39 @@ pub async fn test_radius_settings(
             StatusCode::OK,
         )),
         Err(err) => Err(WebError::BadRequest(format!("RADIUS test failed: {err}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validates_radius_hosts_and_secrets() {
+        assert!(validate_radius_host("radius.corp.internal", "Primary").is_ok());
+        assert!(validate_radius_host("10.0.1.50", "Primary").is_ok());
+        assert!(validate_radius_host("127.0.0.1", "Primary").is_ok());
+        assert!(validate_radius_host("[::1]", "Primary").is_ok());
+
+        for blocked in [
+            "169.254.169.254",
+            "0.0.0.0",
+            "fe80::1",
+            "[fe80::1]",
+            "::",
+            "::ffff:169.254.169.254",
+            "metadata.google.internal",
+            "metadata.goog",
+            "radius.local host",
+            "radius\n.local",
+        ] {
+            assert!(
+                validate_radius_host(blocked, "Primary").is_err(),
+                "expected {blocked} to be rejected"
+            );
+        }
+        assert!(validate_radius_host(&"a".repeat(256), "Primary").is_err());
+        assert!(validate_radius_secret(&"s".repeat(256), "Secret").is_ok());
+        assert!(validate_radius_secret(&"s".repeat(257), "Secret").is_err());
     }
 }
